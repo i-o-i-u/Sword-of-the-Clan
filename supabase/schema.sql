@@ -1,8 +1,17 @@
 -- مخطط قاعدة بيانات "مكتبة سيف العشيرة"
--- نفّذ هذا الملف في محرر SQL الخاص بمشروع Supabase (SQL Editor)
+-- نفّذ هذا الملف كاملًا في محرر SQL الخاص بمشروع Supabase (SQL Editor)
+--
+-- نموذج الصلاحيات المعتمَد في كل الجداول أدناه:
+--   • القراءة (select) متاحة للجميع، بمن فيهم الزوار غير المسجَّلين (anon)،
+--     لأن تصفّح الفهرس والسجلّات لا يحتاج حسابًا.
+--   • الإضافة/التعديل/الحذف (insert/update/delete) مقصورة على صاحب البيانات
+--     المصادَق عليه فقط (auth.uid() = user_id) — أي مالك المكتبة وحده.
 
 create extension if not exists "pgcrypto";
 
+-- ============================================================
+-- جدول الكتب
+-- ============================================================
 create table if not exists public.books (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
@@ -13,6 +22,7 @@ create table if not exists public.books (
   reading_status text not null default 'لم يُقرأ'
     check (reading_status in ('لم يُقرأ', 'قيد القراءة', 'انتهى')),
   publication_year integer check (publication_year between 0 and 3000),
+  cover_url text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -20,7 +30,6 @@ create table if not exists public.books (
 
 create index if not exists books_user_id_idx on public.books (user_id);
 
--- تحديث updated_at تلقائيًا عند كل تعديل
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -37,16 +46,15 @@ create trigger set_books_updated_at
   for each row
   execute function public.set_updated_at();
 
--- تفعيل Row Level Security: بدون سياسات صريحة، لا يستطيع أي أحد (بما فيه anon)
--- القراءة أو الكتابة إطلاقًا. السياسات أدناه تسمح فقط لصاحب الصف
--- (المستخدم المصادَق عليه الذي أنشأ السجل) بالوصول إلى كتبه الخاصة.
 alter table public.books enable row level security;
 
-drop policy if exists "books_select_own" on public.books;
-create policy "books_select_own"
+drop policy if exists "books_select_public" on public.books;
+create policy "books_select_public"
   on public.books for select
-  to authenticated
-  using (auth.uid() = user_id);
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "books_select_own" on public.books;
 
 drop policy if exists "books_insert_own" on public.books;
 create policy "books_insert_own"
@@ -67,5 +75,101 @@ create policy "books_delete_own"
   to authenticated
   using (auth.uid() = user_id);
 
--- ملاحظة: لا توجد أي سياسة للدور anon، لذلك يُمنع الزوار المجهولون
--- من أي وصول للقراءة أو الكتابة بشكل افتراضي.
+-- ============================================================
+-- جدول سجلّ الزيارات
+-- ============================================================
+create table if not exists public.visits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  visitor_name text not null,
+  visit_date date not null default current_date,
+  purpose text,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists visits_user_id_idx on public.visits (user_id);
+create index if not exists visits_visit_date_idx on public.visits (visit_date desc);
+
+alter table public.visits enable row level security;
+
+drop policy if exists "visits_select_public" on public.visits;
+create policy "visits_select_public"
+  on public.visits for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "visits_insert_own" on public.visits;
+create policy "visits_insert_own"
+  on public.visits for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "visits_update_own" on public.visits;
+create policy "visits_update_own"
+  on public.visits for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "visits_delete_own" on public.visits;
+create policy "visits_delete_own"
+  on public.visits for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ============================================================
+-- جدول سجلّ الاستعارات
+-- ============================================================
+create table if not exists public.borrows (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  book_id uuid references public.books (id) on delete set null,
+  book_title_snapshot text not null,
+  borrower_name text not null,
+  borrow_date date not null default current_date,
+  due_date date,
+  return_date date,
+  status text not null default 'مستعار'
+    check (status in ('مستعار', 'تم الإرجاع')),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists borrows_user_id_idx on public.borrows (user_id);
+create index if not exists borrows_book_id_idx on public.borrows (book_id);
+create index if not exists borrows_status_idx on public.borrows (status);
+
+drop trigger if exists set_borrows_updated_at on public.borrows;
+create trigger set_borrows_updated_at
+  before update on public.borrows
+  for each row
+  execute function public.set_updated_at();
+
+alter table public.borrows enable row level security;
+
+drop policy if exists "borrows_select_public" on public.borrows;
+create policy "borrows_select_public"
+  on public.borrows for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "borrows_insert_own" on public.borrows;
+create policy "borrows_insert_own"
+  on public.borrows for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "borrows_update_own" on public.borrows;
+create policy "borrows_update_own"
+  on public.borrows for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "borrows_delete_own" on public.borrows;
+create policy "borrows_delete_own"
+  on public.borrows for delete
+  to authenticated
+  using (auth.uid() = user_id);

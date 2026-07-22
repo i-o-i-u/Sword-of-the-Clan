@@ -1,11 +1,15 @@
 import { FormEvent, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 
-export default function Login() {
+export default function LoginModal() {
+  const { loginOpen, closeLogin } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  if (!loginOpen) return null
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -16,15 +20,17 @@ export default function Login() {
 
     if (error) {
       setError('فشل تسجيل الدخول: تحقق من البريد الإلكتروني وكلمة المرور.')
+      setLoading(false)
+      return
     }
-    setLoading(false)
+    // نجاح تسجيل الدخول يُغلق النافذة تلقائيًا عبر onAuthStateChange في AuthContext
   }
 
   return (
-    <div className="center-screen">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <h1 className="login-title">📚 مكتبة سيف العشيرة</h1>
-        <p className="login-subtitle">تسجيل الدخول للوصول إلى الفهرس</p>
+    <div className="modal-backdrop" onClick={closeLogin}>
+      <form className="modal-card login-card" onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()}>
+        <h2 className="login-title">تسجيل الدخول</h2>
+        <p className="login-subtitle">التصفّح متاح للجميع دون حساب — الدخول مطلوب فقط لإجراء تعديلات</p>
 
         <label className="field">
           <span>البريد الإلكتروني</span>
@@ -35,6 +41,7 @@ export default function Login() {
             required
             autoComplete="email"
             dir="ltr"
+            autoFocus
           />
         </label>
 
@@ -52,9 +59,14 @@ export default function Login() {
 
         {error && <p className="error-text">{error}</p>}
 
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? '...جاري الدخول' : 'تسجيل الدخول'}
-        </button>
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={closeLogin} disabled={loading}>
+            إلغاء
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? '...جاري الدخول' : 'تسجيل الدخول'}
+          </button>
+        </div>
       </form>
     </div>
   )

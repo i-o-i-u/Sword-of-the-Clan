@@ -16,6 +16,7 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
   const [publicationYear, setPublicationYear] = useState(
     initialBook?.publication_year ? String(initialBook.publication_year) : ''
   )
+  const [coverUrl, setCoverUrl] = useState(initialBook?.cover_url ?? '')
   const [notes, setNotes] = useState(initialBook?.notes ?? '')
   const [saving, setSaving] = useState(false)
 
@@ -30,6 +31,7 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
         shelf_location: shelfLocation.trim() || null,
         reading_status: readingStatus as Book['reading_status'],
         publication_year: publicationYear ? Number(publicationYear) : null,
+        cover_url: coverUrl.trim() || null,
         notes: notes.trim() || null,
       })
     } finally {
@@ -91,6 +93,16 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
             />
           </label>
         </div>
+
+        <label className="field">
+          <span>رابط صورة الغلاف (اختياري)</span>
+          <input
+            value={coverUrl}
+            onChange={(e) => setCoverUrl(e.target.value)}
+            placeholder="https://..."
+            dir="ltr"
+          />
+        </label>
 
         <label className="field">
           <span>ملاحظات</span>
