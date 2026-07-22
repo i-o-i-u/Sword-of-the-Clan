@@ -9,6 +9,11 @@
 
 create extension if not exists "pgcrypto";
 
+-- سياسات RLS وحدها لا تكفي لمنح الوصول: يجب أولًا منح صلاحية استخدام
+-- المخطط (schema) والصلاحيات الأساسية على الجداول لدوري anon وauthenticated،
+-- وإلا ظهر خطأ "permission denied for table ..." قبل أن تُفحَص سياسات RLS أصلًا.
+grant usage on schema public to anon, authenticated;
+
 -- ============================================================
 -- جدول الكتب
 -- ============================================================
@@ -173,3 +178,12 @@ create policy "borrows_delete_own"
   on public.borrows for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ============================================================
+-- صلاحيات الأدوار على مستوى الجدول (Grants)
+-- ============================================================
+-- القراءة لأي زائر (anon) ولأي مستخدم مصادَق عليه (authenticated).
+-- سياسات RLS أعلاه هي ما يحدّد فعليًا أي الصفوف تُقرأ/تُكتب؛ هذه الأسطر
+-- تفتح الباب الأساسي على مستوى الجدول الذي بدونه تُرفض كل العمليات فورًا.
+grant select on public.books, public.visits, public.borrows to anon, authenticated;
+grant insert, update, delete on public.books, public.visits, public.borrows to authenticated;
