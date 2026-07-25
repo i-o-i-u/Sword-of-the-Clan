@@ -14,6 +14,7 @@ interface Stats {
   currentlyReading: number | null
   activeBorrows: number | null
   totalVisits: number | null
+  totalValue: number | null
 }
 
 const CARDS: { view: View; title: string; desc: string; icon: string }[] = [
@@ -29,6 +30,7 @@ export default function Landing({ onNavigate, onAddBook }: Props) {
     currentlyReading: null,
     activeBorrows: null,
     totalVisits: null,
+    totalValue: null,
   })
 
   useEffect(() => {
@@ -36,17 +38,19 @@ export default function Landing({ onNavigate, onAddBook }: Props) {
   }, [])
 
   async function loadStats() {
-    const [books, reading, borrows, visits] = await Promise.all([
+    const [books, reading, borrows, visits, values] = await Promise.all([
       supabase.from('books').select('id', { count: 'exact', head: true }),
       supabase.from('books').select('id', { count: 'exact', head: true }).eq('reading_status', 'قيد القراءة'),
       supabase.from('borrows').select('id', { count: 'exact', head: true }).eq('status', 'مستعار'),
       supabase.from('visits').select('id', { count: 'exact', head: true }),
+      supabase.from('books').select('value'),
     ])
     setStats({
       totalBooks: books.count ?? 0,
       currentlyReading: reading.count ?? 0,
       activeBorrows: borrows.count ?? 0,
       totalVisits: visits.count ?? 0,
+      totalValue: (values.data ?? []).reduce((sum, b) => sum + (b.value ?? 0), 0),
     })
   }
 
@@ -107,6 +111,12 @@ export default function Landing({ onNavigate, onAddBook }: Props) {
         <StatTile label="قيد القراءة الآن" value={stats.currentlyReading} icon="🕮" />
         <StatTile label="استعارة قائمة" value={stats.activeBorrows} icon="🔄" />
         <StatTile label="زيارة مُسجَّلة" value={stats.totalVisits} icon="👣" />
+        <StatTile
+          label="القيمة الإجمالية للمكتبة"
+          value={stats.totalValue}
+          icon="💰"
+          formatValue={(v) => v.toLocaleString('ar')}
+        />
       </section>
 
       <section className="action-cards">
@@ -127,11 +137,21 @@ export default function Landing({ onNavigate, onAddBook }: Props) {
   )
 }
 
-function StatTile({ label, value, icon }: { label: string; value: number | null; icon: string }) {
+function StatTile({
+  label,
+  value,
+  icon,
+  formatValue,
+}: {
+  label: string
+  value: number | null
+  icon: string
+  formatValue?: (v: number) => string
+}) {
   return (
     <div className="stat-tile">
       <span className="stat-icon">{icon}</span>
-      <span className="stat-value">{value ?? '—'}</span>
+      <span className="stat-value">{value != null ? (formatValue ? formatValue(value) : value) : '—'}</span>
       <span className="stat-label">{label}</span>
     </div>
   )

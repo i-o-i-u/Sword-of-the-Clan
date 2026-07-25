@@ -29,9 +29,13 @@ create table if not exists public.books (
   publication_year integer check (publication_year between 0 and 3000),
   cover_url text,
   notes text,
+  value numeric(10, 2) check (value >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- إضافة عمود القيمة لقواعد البيانات المُنشأة قبل إضافته أعلاه
+alter table public.books add column if not exists value numeric(10, 2) check (value >= 0);
 
 create index if not exists books_user_id_idx on public.books (user_id);
 

@@ -13,6 +13,7 @@ export interface Book {
   publication_year: number | null
   cover_url: string | null
   notes: string | null
+  value: number | null
   created_at: string
   updated_at: string
 }

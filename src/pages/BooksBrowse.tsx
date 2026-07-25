@@ -179,6 +179,12 @@ export default function BooksBrowse() {
                       <dd>{book.publication_year}</dd>
                     </div>
                   )}
+                  {book.value != null && (
+                    <div>
+                      <dt>القيمة</dt>
+                      <dd>{book.value.toLocaleString('ar')}</dd>
+                    </div>
+                  )}
                 </dl>
                 {book.notes && <p className="book-card-notes">{book.notes}</p>}
               </div>

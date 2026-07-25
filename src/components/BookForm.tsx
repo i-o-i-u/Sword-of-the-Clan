@@ -18,6 +18,7 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
   )
   const [coverUrl, setCoverUrl] = useState(initialBook?.cover_url ?? '')
   const [notes, setNotes] = useState(initialBook?.notes ?? '')
+  const [value, setValue] = useState(initialBook?.value ? String(initialBook.value) : '')
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
@@ -33,6 +34,7 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
         publication_year: publicationYear ? Number(publicationYear) : null,
         cover_url: coverUrl.trim() || null,
         notes: notes.trim() || null,
+        value: value ? Number(value) : null,
       })
     } finally {
       setSaving(false)
@@ -101,6 +103,17 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
             onChange={(e) => setCoverUrl(e.target.value)}
             placeholder="https://..."
             dir="ltr"
+          />
+        </label>
+
+        <label className="field">
+          <span>القيمة</span>
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            min={0}
+            step="0.01"
           />
         </label>
 
