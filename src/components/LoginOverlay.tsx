@@ -12,6 +12,21 @@ import { CloseButton, Overlay, cardStyle } from './ui'
 
 const MIN_PASSWORD = 6
 
+/**
+ * «البريد أو كلمة السر غير صحيحة» جوابٌ صحيح لبيانات خاطئة، لكنه يضلّل حين
+ * يكون الحساب سليمًا وبريده غير مؤكَّد — وهي حالةٌ شائعة لأن بريد Supabase
+ * المدمج قد لا يصل أصلًا. نفصل الحالتين حتى يعرف صاحبُ المكتبة أين يذهب.
+ */
+function describeSignInError(error: { code?: string; message?: string } | null): string {
+  const code = error?.code ?? ''
+  const message = error?.message ?? ''
+  if (code === 'email_not_confirmed' || /not confirmed/i.test(message)) {
+    return 'الحساب موجود لكن بريده غير مؤكَّد. أكّده من لوحة المشروع '
+      + '(Authentication ← Users)، أو أطفئ «Confirm email» من إعدادات الدخول، ثم أعد المحاولة.'
+  }
+  return 'البريد أو كلمة السر غير صحيحة.'
+}
+
 export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   const { hasOwnerAccount, refreshRole } = useLibrary()
   const firstRun = !hasOwnerAccount
@@ -98,7 +113,7 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
           password,
         })
         if (signInError || !data.session) {
-          setError('البريد أو كلمة السر غير صحيحة.')
+          setError(describeSignInError(signInError))
           return
         }
         // إن كان الحساب أُنشئ ولم تُحجز الملكية بعد فتُحجز الآن
