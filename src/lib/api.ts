@@ -27,13 +27,19 @@ export async function ownerExists(): Promise<boolean> {
 
 export interface OwnerRecord { user_id: string; display_name: string }
 
-/** يعيد صفّ صاحب المكتبة إن كان المستخدم الحالي هو صاحبها، وإلا null */
+/**
+ * يعيد صفّ صاحب المكتبة إن كان المستخدم الحالي هو صاحبها، وإلا null.
+ *
+ * غيابُ الصف ليس خطأ: سياسةُ القراءة تُرجع لا شيء لمن ليس مالكًا. أما خطأ
+ * قاعدة البيانات — كنقص صلاحية الدور على الجدول — فيُرفع ولا يُبتلع، لأن
+ * ابتلاعه يجعل المالك يبدو زائرًا بلا سببٍ ظاهر.
+ */
 export async function fetchOwnerRecord(): Promise<OwnerRecord | null> {
   const { data, error } = await supabase
     .from('library_owner')
     .select('user_id, display_name')
     .maybeSingle()
-  if (error) return null
+  if (error) throw error
   return data as OwnerRecord | null
 }
 

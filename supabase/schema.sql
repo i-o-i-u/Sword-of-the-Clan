@@ -411,6 +411,22 @@ revoke all on public.authors, public.books, public.book_works, public.perks,
                public.library_settings, public.landing_slides
   from anon;
 
+-- صلاحيات الأدوار على مستوى الجدول.
+--
+-- لا تكفي سياسات RLS وحدها: فهي تُرشِّح الصفوف بعد أن يُسمح للدور بالجدول
+-- أصلًا. وهذا المشروع لا يمنح أدوار anon و authenticated صلاحياتٍ تلقائية على
+-- ما يُنشأ في public، فلا بدّ من منحها صراحةً هنا، وإلا رُدّ كل طلبٍ بخطأ
+-- صلاحيات قبل أن تُقرأ السياسات — حتى قراءةُ صاحب المكتبة صفَّه.
+grant usage on schema public to anon, authenticated;
+
+grant select, insert, update, delete on
+  public.authors, public.books, public.book_works, public.perks, public.loans,
+  public.shelves, public.categories, public.library_settings, public.landing_slides
+to authenticated;
+
+-- الملكية تُقرأ وتُحجز وتُحدَّث، ولا تُحذف من الواجهة
+grant select, insert, update on public.library_owner to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 12. العروض العامة: هنا تُطبَّق الخصوصية داخل قاعدة البيانات
 --

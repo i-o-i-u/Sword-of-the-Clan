@@ -115,10 +115,17 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       try { setHasOwnerAccount(await api.ownerExists()) } catch { /* يبقى على حاله */ }
       return
     }
-    const record = await api.fetchOwnerRecord()
-    setIsOwner(!!record)
-    setHasOwnerAccount(record ? true : await api.ownerExists().catch(() => true))
-    if (record) setOwnerName(record.display_name || 'صاحب المكتبة')
+    try {
+      const record = await api.fetchOwnerRecord()
+      setIsOwner(!!record)
+      setHasOwnerAccount(record ? true : await api.ownerExists().catch(() => true))
+      if (record) setOwnerName(record.display_name || 'صاحب المكتبة')
+    } catch (e) {
+      // الدخول نجح لكن تعذّرت قراءة صفّ الملكية. الصمت هنا يُظهر المالكَ
+      // زائرًا بلا تفسير، فيُقال السبب صراحةً.
+      setIsOwner(false)
+      setError('دخلتَ بحسابك، لكن تعذّر التحقّق من ملكية المكتبة: ' + describe(e))
+    }
   }, [])
 
   useEffect(() => {
