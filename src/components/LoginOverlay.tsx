@@ -5,7 +5,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { claimOwnership, ownerExists } from '../lib/api'
+import { claimOwnership, fetchOwnerRecord, ownerExists } from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import { CloseButton, Overlay, cardStyle } from './ui'
@@ -26,6 +26,20 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   useScrollLock()
   useEscapeKey(onClose)
 
+  /**
+   * يحجز ملكية المكتبة، ويتسامح مع كونها محجوزةً لهذا الحساب نفسه (كأن تُضغط
+   * مرتين). فإن كانت لحسابٍ آخر قيل ذلك صراحةً بدل رسالة قاعدة بيانات غامضة.
+   */
+  async function takeOwnership(userId: string, displayName: string) {
+    try {
+      await claimOwnership(userId, displayName)
+    } catch {
+      const record = await fetchOwnerRecord()
+      if (record?.user_id === userId) return
+      throw new Error('ملكية المكتبة محجوزةٌ لحسابٍ آخر.')
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
@@ -41,16 +55,30 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
           email: email.trim(),
           password,
         })
-        if (signUpError) {
-          setError(signUpError.message)
-          return
+
+        // جلسةٌ فورًا: التأكيد مُعطَّل، فتُحجز الملكية الآن
+        if (!signUpError && data.session) {
+          await takeOwnership(data.session.user.id, name.trim())
+        } else {
+          // لا جلسة: إمّا أن التأكيد مفعَّل، وإمّا أن الحساب مُنشأٌ من قبل.
+          // نجرّب الدخول به: فإن نجح فالحساب قائمٌ ومؤكَّد، ولم يبقَ إلا حجز الملكية.
+          const retry = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          })
+          if (retry.data.session) {
+            await takeOwnership(retry.data.session.user.id, name.trim())
+          } else if (signUpError) {
+            setError(signUpError.message)
+            return
+          } else {
+            setNotice(
+              'أُنشئ الحساب ولم يُفعَّل بعد. أكّد بريدك من الرسالة المُرسَلة ثم ادخل من هنا، '
+              + 'أو عطّل تأكيد البريد من إعدادات المشروع ثم أعد المحاولة.',
+            )
+            return
+          }
         }
-        if (!data.session) {
-          // تأكيد البريد مفعَّل في المشروع: يُنشأ الحساب ثم يُدخل بعد التأكيد
-          setNotice('أُنشئ الحساب. أكّد بريدك من الرسالة المُرسَلة ثم ادخل من هنا.')
-          return
-        }
-        await claimOwnership(data.session.user.id, name.trim())
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -60,9 +88,9 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
           setError('البريد أو كلمة السر غير صحيحة.')
           return
         }
-        // إن كان الحساب أُنشئ ولم تُحجز الملكية بعد (تأكيد بريدٍ سابق) فتُحجز الآن
+        // إن كان الحساب أُنشئ ولم تُحجز الملكية بعد فتُحجز الآن
         if (!(await ownerExists())) {
-          await claimOwnership(data.session.user.id, name.trim() || 'صاحب المكتبة')
+          await takeOwnership(data.session.user.id, name.trim() || 'صاحب المكتبة')
         }
       }
       await refreshRole()
