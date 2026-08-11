@@ -33,10 +33,23 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   async function takeOwnership(userId: string, displayName: string) {
     try {
       await claimOwnership(userId, displayName)
-    } catch {
+    } catch (err) {
+      // الصفّ موجودٌ لنا أصلًا (كأن تُضغط مرتين) فلا شيء يُفعل
       const record = await fetchOwnerRecord()
       if (record?.user_id === userId) return
-      throw new Error('ملكية المكتبة محجوزةٌ لحسابٍ آخر.')
+
+      // سياسةُ القراءة تُخفي صفّ غيرنا، فلا يكفي غيابُه للحكم بأن الملكية
+      // محجوزة. owner_exists تتجاوز السياسة، وهي وحدها تفصل بين الحالتين.
+      if (await ownerExists().catch(() => false)) {
+        throw new Error(
+          'ملكية المكتبة محجوزةٌ لحسابٍ آخر. ادخل بالحساب الذي حجزها، '
+          + 'أو حرِّر الملكية من قاعدة البيانات ثم أعد المحاولة.',
+        )
+      }
+      throw new Error(
+        'تعذّر حجز ملكية المكتبة: '
+        + (err instanceof Error ? err.message : String(err)),
+      )
     }
   }
 
