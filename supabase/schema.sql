@@ -28,6 +28,10 @@ drop view if exists public.public_shelves cascade;
 drop view if exists public.public_categories cascade;
 drop view if exists public.public_landing_slides cascade;
 
+-- جداول النسخة السابقة من الموقع، حلّ محلَّها loans و book_works وغيرهما
+drop table if exists public.borrows cascade;
+drop table if exists public.visits cascade;
+
 drop table if exists public.loans cascade;
 drop table if exists public.perks cascade;
 drop table if exists public.book_works cascade;
