@@ -2,31 +2,20 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️📖</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="فهرس مكتبة منزلية شخصية: تصفّح الكتب، سجلّ الزيارات، وسجلّ الاستعارات." />
-    <title>مكتبة سيف العشيرة</title>
-    <script>
-      // تطبيق تفضيلات المظهر/الخط المحفوظة محليًا قبل أول رسم للصفحة، لتفادي وميض الألوان الافتراضية
-      ;(function () {
-        try {
-          var raw = localStorage.getItem('sotc-settings')
-          var s = raw ? JSON.parse(raw) : {}
-          var theme = s.theme || 'auto'
-          var resolved =
-            theme === 'auto'
-              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-              : theme
-          document.documentElement.setAttribute('data-theme', resolved)
-          document.documentElement.setAttribute('data-font', s.font || 'tajawal')
-          document.documentElement.setAttribute('data-font-size', s.fontSize || 'md')
-        } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light')
-          document.documentElement.setAttribute('data-font', 'tajawal')
-          document.documentElement.setAttribute('data-font-size', 'md')
-        }
-      })()
-    </script>
+    <title>مكتبة سيف العشيرة — فهرس المكتبة المنزلية</title>
+    <meta
+      name="description"
+      content="فهرس المكتبة المنزلية: أرففها وتصانيفها وحكاياتها الصغيرة بين الصفحات."
+    />
+    <link rel="icon" type="image/svg+xml" href="./assets/logo.svg" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Markazi+Text:wght@500;700&family=Cairo:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>
