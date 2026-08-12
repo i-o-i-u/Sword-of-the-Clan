@@ -1,10 +1,9 @@
 // دخول صاحب المكتبة (§٥-٨).
-// في النموذج الأوّلي كان الحساب وهميًّا في المتصفح؛ هنا هو مصادقة Supabase
-// حقيقية: أول حسابٍ يُنشأ يَحجز ملكية المكتبة مرةً واحدة، ومن يسجّل بعده
-// لا يملك شيئًا لأن سياسة قاعدة البيانات تمنع حجزها مرتين.
+// المصادقة على Convex: أول حسابٍ يُنشأ يَحجز ملكية المكتبة مرةً واحدة، ولا
+// يُقبل بريدٌ غير OWNER_EMAIL المضبوط على النشر، فلا يُنشأ حسابٌ ثانٍ أصلًا.
 
 import { useState, type FormEvent } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { useAuthActions } from '@convex-dev/auth/react'
 import { claimOwnership, fetchOwnerRecord, ownerExists } from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
@@ -13,21 +12,20 @@ import { CloseButton, Overlay, cardStyle } from './ui'
 const MIN_PASSWORD = 6
 
 /**
- * «البريد أو كلمة السر غير صحيحة» جوابٌ صحيح لبيانات خاطئة، لكنه يضلّل حين
- * يكون الحساب سليمًا وبريده غير مؤكَّد — وهي حالةٌ شائعة لأن بريد Supabase
- * المدمج قد لا يصل أصلًا. نفصل الحالتين حتى يعرف صاحبُ المكتبة أين يذهب.
+ * رسائل خطأ الدخول. رفضُ البريد يأتي من OWNER_EMAIL في الخادم برسالةٍ عربية
+ * مفهومة، فتُمرَّر كما هي؛ وما عداه فبيانات خاطئة.
  */
-function describeSignInError(error: { code?: string; message?: string } | null): string {
-  const code = error?.code ?? ''
-  const message = error?.message ?? ''
-  if (code === 'email_not_confirmed' || /not confirmed/i.test(message)) {
-    return 'الحساب موجود لكن بريده غير مؤكَّد. أكّده من لوحة المشروع '
-      + '(Authentication ← Users)، أو أطفئ «Confirm email» من إعدادات الدخول، ثم أعد المحاولة.'
+function describeSignInError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  if (message.includes('مستخدم واحد')) return 'هذا البريد ليس بريد صاحب المكتبة.'
+  if (message.includes('OWNER_EMAIL')) {
+    return 'إعداد الخادم ناقص: OWNER_EMAIL غير مضبوط على نشر Convex.'
   }
   return 'البريد أو كلمة السر غير صحيحة.'
 }
 
 export default function LoginOverlay({ onClose }: { onClose: () => void }) {
+  const { signIn } = useAuthActions()
   const { hasOwnerAccount, refreshRole } = useLibrary()
   const firstRun = !hasOwnerAccount
 
@@ -45,16 +43,16 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
    * يحجز ملكية المكتبة، ويتسامح مع كونها محجوزةً لهذا الحساب نفسه (كأن تُضغط
    * مرتين). فإن كانت لحسابٍ آخر قيل ذلك صراحةً بدل رسالة قاعدة بيانات غامضة.
    */
-  async function takeOwnership(userId: string, displayName: string) {
+  async function takeOwnership(displayName: string) {
     try {
-      await claimOwnership(userId, displayName)
+      await claimOwnership('', displayName)
     } catch (err) {
-      // الصفّ موجودٌ لنا أصلًا (كأن تُضغط مرتين) فلا شيء يُفعل
+      // الملكية لنا أصلًا (كأن تُضغط مرتين) فلا شيء يُفعل
       const record = await fetchOwnerRecord()
-      if (record?.user_id === userId) return
+      if (record) return
 
-      // سياسةُ القراءة تُخفي صفّ غيرنا، فلا يكفي غيابُه للحكم بأن الملكية
-      // محجوزة. owner_exists تتجاوز السياسة، وهي وحدها تفصل بين الحالتين.
+      // استعلامُ الملكية يُخفي صفّ غيرنا، فلا يكفي غيابُه للحكم بأنها محجوزة.
+      // ownerExists لا يشترط مصادقة، وهي وحدها تفصل بين الحالتين.
       if (await ownerExists().catch(() => false)) {
         throw new Error(
           'ملكية المكتبة محجوزةٌ لحسابٍ آخر. ادخل بالحساب الذي حجزها، '
@@ -79,46 +77,30 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
           setError(`أكمِل الاسم والبريد وكلمةً لا تقل عن ${MIN_PASSWORD} أحرف.`)
           return
         }
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        })
-
-        // جلسةٌ فورًا: التأكيد مُعطَّل، فتُحجز الملكية الآن
-        if (!signUpError && data.session) {
-          await takeOwnership(data.session.user.id, name.trim())
-        } else {
-          // لا جلسة: إمّا أن التأكيد مفعَّل، وإمّا أن الحساب مُنشأٌ من قبل.
-          // نجرّب الدخول به: فإن نجح فالحساب قائمٌ ومؤكَّد، ولم يبقَ إلا حجز الملكية.
-          const retry = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          })
-          if (retry.data.session) {
-            await takeOwnership(retry.data.session.user.id, name.trim())
-          } else if (signUpError) {
-            setError(signUpError.message)
-            return
-          } else {
-            setNotice(
-              'أُنشئ الحساب ولم يُفعَّل بعد. أكّد بريدك من الرسالة المُرسَلة ثم ادخل من هنا، '
-              + 'أو عطّل تأكيد البريد من إعدادات المشروع ثم أعد المحاولة.',
-            )
+        // Convex يُنشئ الحساب ويفتح الجلسة في خطوةٍ واحدة: لا تأكيد بريد،
+        // فلا حاجة إلى محاولة إنقاذٍ بعدها كما كان الحال مع Supabase.
+        try {
+          await signIn('password', { email: email.trim(), password, flow: 'signUp' })
+        } catch (signUpError) {
+          // الحساب مُنشأٌ من قبل: ندخل به ثم نحجز الملكية إن لم تُحجز
+          try {
+            await signIn('password', { email: email.trim(), password, flow: 'signIn' })
+          } catch {
+            setError(describeSignInError(signUpError))
             return
           }
         }
+        await takeOwnership(name.trim())
       } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        })
-        if (signInError || !data.session) {
+        try {
+          await signIn('password', { email: email.trim(), password, flow: 'signIn' })
+        } catch (signInError) {
           setError(describeSignInError(signInError))
           return
         }
         // إن كان الحساب أُنشئ ولم تُحجز الملكية بعد فتُحجز الآن
         if (!(await ownerExists())) {
-          await takeOwnership(data.session.user.id, name.trim() || 'صاحب المكتبة')
+          await takeOwnership(name.trim() || 'صاحب المكتبة')
         }
       }
       await refreshRole()

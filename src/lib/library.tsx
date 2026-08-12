@@ -6,8 +6,8 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabaseClient'
+import { useConvexAuth } from 'convex/react'
+import { useAuthActions } from '@convex-dev/auth/react'
 import * as api from './api'
 import { applyTheme } from './theme'
 import {
@@ -35,7 +35,7 @@ interface LibraryValue {
   setError: (msg: string | null) => void
 
   // الدور
-  session: Session | null
+  isAuthenticated: boolean
   isOwner: boolean
   ownerName: string
   hasOwnerAccount: boolean
@@ -87,7 +87,8 @@ export function useLibrary(): LibraryValue {
 }
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth()
+  const { signOut: authSignOut } = useAuthActions()
   const [isOwner, setIsOwner] = useState(false)
   const [ownerName, setOwnerName] = useState('صاحب المكتبة')
   const [hasOwnerAccount, setHasOwnerAccount] = useState(true)
@@ -108,8 +109,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS)
 
   // ---------------------------------------------------------------- الدور
-  const resolveRole = useCallback(async (current: Session | null) => {
-    if (!current) {
+  const resolveRole = useCallback(async (authed: boolean) => {
+    if (!authed) {
       setIsOwner(false)
       setBrowseOnly(false)
       try { setHasOwnerAccount(await api.ownerExists()) } catch { /* يبقى على حاله */ }
@@ -128,32 +129,23 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // useConvexAuth هو مصدر حالة الجلسة، ويتغيّر وحده عند الدخول والخروج، فلا
+  // حاجة إلى مشترِكٍ يدويّ كما كان في Supabase.
   useEffect(() => {
+    if (authLoading) return
     let alive = true
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!alive) return
-      setSession(data.session)
-      await resolveRole(data.session)
-      if (alive) setRoleReady(true)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
-      setSession(next)
-      await resolveRole(next)
-      setRoleReady(true)
-    })
-    return () => { alive = false; sub.subscription.unsubscribe() }
-  }, [resolveRole])
+    resolveRole(isAuthenticated).finally(() => { if (alive) setRoleReady(true) })
+    return () => { alive = false }
+  }, [authLoading, isAuthenticated, resolveRole])
 
   const refreshRole = useCallback(async () => {
-    const { data } = await supabase.auth.getSession()
-    setSession(data.session)
-    await resolveRole(data.session)
-  }, [resolveRole])
+    await resolveRole(isAuthenticated)
+  }, [isAuthenticated, resolveRole])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    await authSignOut()
     setBrowseOnly(false)
-  }, [])
+  }, [authSignOut])
 
   // ------------------------------------------------------------- التحميل
   const reload = useCallback(async () => {
@@ -246,7 +238,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const value: LibraryValue = {
     loading, error, setError,
-    session, isOwner, ownerName, hasOwnerAccount, browseOnly,
+    isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly: () => setBrowseOnly((v) => !v),
     signOut, refreshRole,

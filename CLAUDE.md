@@ -6,67 +6,66 @@
 
 ## المكدّس والنشر
 
-React 18 + TypeScript + Vite، و[Supabase](https://supabase.com) للقاعدة
-والمصادقة والتخزين. الموقع حيّ على GitHub Pages:
-<https://i-o-i-u.github.io/Sword-of-the-Clan/>، يُبنى وينشر تلقائيًّا من
-`.github/workflows/deploy.yml` عند كل دفع إلى `main`، والمفتاحان في أسرار
-المستودع (`SUPABASE_URL`, `SUPABASE_ANON_KEY`).
+React 18 + TypeScript + Vite، و[Convex](https://convex.dev) للقاعدة والدوال
+والمصادقة والتخزين. الواجهة تُنشر ثابتًا على GitHub Pages:
+<https://i-o-i-u.github.io/Sword-of-the-Clan/>.
 
-للتشغيل محليًّا يلزم ملف `.env` غير محفوظ في جِت — انسخ `.env.example` واملأه.
+`.github/workflows/deploy.yml` ينفّذ `npx convex deploy --cmd 'npm run build'`
+عند كل دفع إلى `main`: يدفع الدوال إلى نشر الإنتاج ثم يبني الواجهة، وهو نفسه
+يضبط `VITE_CONVEX_URL`. يلزمه سرّ `CONVEX_DEPLOY_KEY` في المستودع.
 
 ```bash
 npm install
-npm run dev      # vite على 5173
-npm run build    # tsc -b && vite build
+npx convex dev       # يراقب convex/ ويدفع التعديلات — لازمٌ قبل أي tsc
+npm run dev          # vite على 5173
+npm run build        # tsc -b && vite build
 ```
 
 ## بنية الشيفرة
 
-- `src/lib/library.tsx` — حالة المكتبة كلها في سياق واحد: الدور والبيانات
-  والإعدادات. كل شيء يمرّ من هنا.
-- `src/lib/api.ts` — **الحدّ الوحيد مع Supabase للبيانات** (٣٣ دالة).
-- `src/lib/router.ts` — موجِّه بالتجزئة (`#/browse`, `#/book/:id`, `#/authors`,
-  `#/author/:id`, `#/add`, `#/stats`). بالتجزئة لأن Pages لا يعيد كتابة المسارات.
-- `src/views/` — الصفحات: `Landing`, `Browse`, `BookDetail`, `Authors`,
-  `AddBook`, `Stats`.
-- `src/components/` — `Header`, وطبقات `LoginOverlay` و`SearchOverlay`
-  و`SettingsOverlay`, و`ui.tsx` (عناصر مشتركة), و`HijriDatePicker`, `ImageSlot`.
-- `src/lib/` — `theme.ts` (ثلاثة مظاهر وثلاثة خطوط), `search.ts` (تطبيع عربي),
-  `hijri.ts`, `types.ts`, `useScrollLock.ts`.
-- `supabase/schema.sql` — المخطّط كاملًا: `library_owner`, `books`, `authors`,
-  `book_works`, `perks`, `loans`, `shelves`, `categories`, `library_settings`,
-  `landing_slides`.
+- `convex/schema.ts` — الجداول والفهارس، **مصدر الحقيقة** للنموذج.
+- `convex/privacy.ts` — الخصوصية: هويّة الطالب وحجب ما لا يراه الزائر.
+- `convex/library.ts` — كل دوال القراءة. `books.ts` و`catalog.ts` الكتابة.
+- `convex/auth.ts` — مصادقة كلمة السرّ بقيد `OWNER_EMAIL`.
+- `src/lib/api.ts` — **الحدّ الوحيد مع Convex للبيانات** (٣٣ دالة).
+- `src/lib/library.tsx` — حالة المكتبة كلها في سياق واحد.
+- `src/lib/router.ts` — موجِّه بالتجزئة (`#/browse`, `#/book/:id`, …).
+- `src/views/` — `Landing`, `Browse`, `BookDetail`, `Authors`, `AddBook`, `Stats`.
+- `supabase/schema.sql` — **مرجع تاريخي لا يُنفَّذ**. يبقى لأن تعليقاته تشرح
+  النموذج ونيّة كل حقل.
 
 ## اصطلاحات ثابتة
 
-- **حقول البيانات `snake_case`** مطابقةً لأعمدة Postgres (`author_id`,
-  `series_no`, `year_era`) — لا `camelCase`.
+- **حقول البيانات `snake_case`** (`author_id`, `series_no`, `year_era`). بقيت
+  على حالها بعد الهجرة عمدًا: الواجهة كلها تقرؤها، وتغييرها كان سيحوّل تبديل
+  الخلفية إلى إعادة كتابة.
 - **النصوص العربية في `types.ts` هي نصوص الإنتاج نفسها**، مطابقة لوثيقة
   التسليم: لا تُترجم ولا يُعاد صوغها. ومنها `STATUSES`
-  («لم تُقرأ» / «قيد القراءة» / «تم القراءة») و`ERAS` و`WORK_TYPES` وغيرها.
-- التعديل يُطبَّق محليًّا أوّلًا ثم يُحفظ، فإن أخفق الحفظ ظهرت رسالة وأُعيد
-  التحميل من المصدر.
+  («لم تُقرأ» / «قيد القراءة» / «تم القراءة»).
+- المعرّفات: `_id` في Convex يُعرض للواجهة باسم `id`، و`_creationTime` باسم
+  `created_at` نصًّا ISO. المحوِّل `toClient` في `privacy.ts`.
 
 ## قرارات لها سبب — لا تعكسها بلا نقاش
 
-- **`api.ts` هو الحدّ الوحيد مع Supabase**: لا تستورد `supabaseClient` في ملف
-  جديد. خارج `api.ts` لا يمسّ Supabase إلا `LoginOverlay.tsx` و`library.tsx`
-  للجلسة وحدها. هذا الحدّ النظيف هو ما يجعل تبديل الخلفية لاحقًا نقلًا لملف
-  واحد لا إعادة بناء.
-- **الموجِّه بالتجزئة لا بالمسار**: شرطُ النشر الثابت على Pages.
-- **`base` في `vite.config.ts` = `/Sword-of-the-Clan/` عند البناء فقط**، `/`
-  في التطوير. تغييره يكسر مسارات الأصول على Pages.
-- **خطّ `Kitab` اختياري**: `theme.ts` يشير إلى `public/fonts/Kitab-Regular.ttf`
-  وهو غير موجود في المستودع، فيتراجع إلى Amiri ثم serif. الـ404 في الطرفية
-  متوقَّع، وليس عطلًا.
+- **`api.ts` هو الحدّ الوحيد مع Convex**: لا تستورد `convexClient` في ملف
+  جديد. خارجه لا يمسّ Convex إلا `main.tsx` (المزوِّد) و`library.tsx`
+  و`LoginOverlay.tsx` للجلسة. هذا الحدّ هو ما جعل هجرة الخلفية تبديلَ ملف.
+- **الخصوصية في الخادم لا في المتصفّح**: كل دالة قراءة تسأل `isOwner(ctx)`
+  بنفسها. لا تضف دالةً تعيد بيانات خامًا معتمدةً على ترشيحٍ في الواجهة.
+- **وسيط `owner` في دوال `api.ts` بلا أثر**: أُبقي كي لا تتغيّر مواضع
+  النداء، والخادم لا يصدّق دعوى العميل أنه المالك أصلًا.
+- **ما كانت Postgres تفعله تلقائيًّا يُكتب صراحةً**: الحذف المتسلسل في
+  `books.remove`، ومزامنة `author_name` في `catalog.updateAuthor`. إغفال
+  أحدهما يترك مستنداتٍ يتيمة أو اسمًا قديمًا على الكتب.
+- **الموجِّه بالتجزئة لا بالمسار**، و**`base` = `/Sword-of-the-Clan/` عند
+  البناء**: شرطا النشر الثابت على Pages.
+- **خطّ `Kitab` اختياري**: غير موجود في المستودع فيتراجع إلى Amiri. الـ404
+  في الطرفية متوقَّع.
 
-## تاريخ يمنع اللبس
+## ما لم يُنجز بعد
 
-جرت في ١٢ أغسطس ٢٠٢٦ محاولة هجرة إلى Convex في فرع منفصل. تفرّعت من جذر
-المشروع لا من هذا العمل، فهاجرت نسخةً أقدم ذات جدول واحد وأسقطت الواجهة
-كلها، ولم تُشغَّل قطّ. حُفظت في الوسم `convex-attempt` ثم حُذف فرعها، وصار
-المستودع فرعًا واحدًا `main`.
-
-الدافع إليها كان حقيقيًّا: أربعة من آخر خمسة التزامات هنا كانت إطفاء حرائق
-في `GRANT` و`RLS` والمصادقة، وهو عبء ثقيل لمكتبة مستخدمها واحد. فإن عاد ذلك
-الوجع فالهجرة واردة، لكن **نقلًا لطبقة `api.ts`** لا إعادة بناء للتطبيق.
+- **ترحيل البيانات من Supabase**: الشيفرة كلها على Convex، ونشر التطوير
+  مزروعٌ بالافتراضيّات، لكن كتب المكتبة القديمة لم تُنقل بعد.
+- **الحيوية (reactivity)**: `api.ts` بقي نداءاتٍ إجرائية بـ `convex.query`
+  حفاظًا على `library.tsx` كما هو. الانتقال إلى `useQuery` يجعل الصفحات
+  تتحدّث وحدها، وهو تحسينٌ لاحقٌ لا شرطٌ للهجرة.

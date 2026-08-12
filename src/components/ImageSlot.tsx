@@ -1,6 +1,6 @@
 // موضع صورة: يعرضها إن وُجدت، ويستقبل رفعها لصاحب المكتبة نقرًا أو إفلاتًا.
 // هذا بديل image-slot.js الذي كان في النموذج الأوّلي؛ هنا يُرفَع الملف فعلًا
-// إلى مخزن Supabase ويُحفَظ رابطه في قاعدة البيانات.
+// إلى مخزن Convex ويُحفَظ رابطه في قاعدة البيانات.
 
 import { useRef, useState, type CSSProperties } from 'react'
 import { uploadImage } from '../lib/api'

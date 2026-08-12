@@ -1,0 +1,145 @@
+// الخصوصية: منقولة عن عروض public_* في supabase/schema.sql.
+//
+// المبدأ الذي لا يُتنازل عنه: ما أخفاه صاحب المكتبة **لا يغادر الخادم**. كل
+// استعلامٍ يقرأ هويّة الطالب أوّلًا، فإن لم يكن صاحب المكتبة مرّت البيانات من
+// هنا قبل أن تُرسل. لا تُخفِ شيئًا في المتصفّح.
+
+import type { Doc } from './_generated/dataModel'
+import type { QueryCtx, MutationCtx } from './_generated/server'
+import { getAuthUserId } from '@convex-dev/auth/server'
+
+type Ctx = QueryCtx | MutationCtx
+
+export const DEFAULT_VISIBILITY = {
+  status: true, ratings: true, notes: false, blurb: true, perks: true,
+  loans: false, value: false, stats: true, authors: true, advSearch: true,
+}
+
+/** الإعدادات كما في المخطّط، بلا حقول النظام — فتبقى مشتقّةً منه لا مكرَّرة */
+export type Settings = Omit<Doc<'library_settings'>, '_id' | '_creationTime'>
+
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'warm',
+  font: 'kitab',
+  ui_scale: 100,
+  show_status_dots: true,
+  show_ratings: true,
+  default_view: 'grid',
+  currency: 'ريال',
+  landing_title: 'مكتبة سيف العشيرة',
+  landing_tagline: 'فهرسٌ حيّ لكل كتابٍ في البيت',
+  landing_intro:
+    'كل كتابٍ اقتنيناه له مكانه، وكل قراءةٍ لها أثرها. هنا فهرس المكتبة المنزلية: '
+    + 'أرففها وتصانيفها وحكاياتها الصغيرة بين الصفحات.',
+  show_landing_stats: true,
+  show_landing_quote: true,
+  auto_rotate: true,
+  rotate_seconds: 6,
+  visibility: DEFAULT_VISIBILITY,
+  hidden_fields: [],
+  hidden_categories: [],
+  hidden_book_ids: [],
+}
+
+/** إعدادات المكتبة، أو الافتراضيّات قبل أوّل حفظ */
+export async function loadSettings(ctx: Ctx): Promise<Settings> {
+  const row = await ctx.db.query('library_settings').first()
+  return row ? { ...DEFAULT_SETTINGS, ...stripSystem(row) } : DEFAULT_SETTINGS
+}
+
+/** هل الطالب هو صاحب المكتبة؟ بديل is_owner() في SQL */
+export async function isOwner(ctx: Ctx): Promise<boolean> {
+  const userId = await getAuthUserId(ctx)
+  if (userId === null) return false
+  const owner = await ctx.db.query('library_owner').first()
+  return owner !== null && owner.user_id === userId
+}
+
+/** يرفع الطلب إن لم يكن الطالب صاحب المكتبة. تُصدَّر للمُحوِّلات. */
+export async function requireOwner(ctx: Ctx): Promise<void> {
+  if (!(await isOwner(ctx))) {
+    throw new Error('هذا الإجراء لصاحب المكتبة وحده.')
+  }
+}
+
+function stripSystem<T extends { _id: unknown; _creationTime: number }>(doc: T) {
+  const { _id, _creationTime, ...rest } = doc
+  return rest
+}
+
+/** يحوّل مستند Convex إلى ما تنتظره الواجهة: id نصّي وتاريخ إنشاء ISO */
+export function toClient<T extends { _id: unknown; _creationTime: number }>(doc: T) {
+  const { _id, _creationTime, ...rest } = doc
+  return {
+    ...rest,
+    id: _id as string,
+    created_at: new Date(_creationTime).toISOString(),
+  }
+}
+
+/**
+ * الكتب الظاهرة للزائر: ناقصةَ المخفيّة بعينها، وناقصةَ ما كان في تصنيفٍ مخفيّ.
+ * (شرط WHERE في public_books)
+ */
+export function bookIsPublic(book: Doc<'books'>, s: Settings): boolean {
+  if (s.hidden_book_ids.includes(book._id)) return false
+  if (s.hidden_categories.includes(book.category ?? '')) return false
+  return true
+}
+
+/**
+ * يحجب حقول الكتاب حسب قائمة «حقول بيانات الكتاب» (§٦-ب) ومفاتيح «ما يراه
+ * الزوار» (§٦-أ). مطابقٌ لتعبيرات CASE في العرض public_books — ومفاتيح
+ * hidden_fields تُكتب كما هي هناك (`seriesNo`, `yearLabel`, `volumePagesText`,
+ * `shelfNo`, `acquired`) فلا تُغيَّر صياغتها.
+ */
+export function redactBook(book: Doc<'books'>, s: Settings) {
+  const hidden = (key: string) => s.hidden_fields.includes(key)
+  const vis = s.visibility
+
+  return {
+    ...toClient(book),
+
+    subtitle:   hidden('subtitle')   ? '' : book.subtitle,
+    verifier:   hidden('verifier')   ? '' : book.verifier,
+    translator: hidden('translator') ? '' : book.translator,
+    presenter:  hidden('presenter')  ? '' : book.presenter,
+    series:     hidden('series')     ? '' : book.series,
+    series_no:  hidden('seriesNo')   ? '' : book.series_no,
+    publisher:  hidden('publisher')  ? '' : book.publisher,
+    place:      hidden('place')      ? '' : book.place,
+    year:       hidden('yearLabel')  ? null : book.year,
+    year_era:   hidden('yearLabel')  ? '' : book.year_era,
+    edition:    hidden('edition')    ? '' : book.edition,
+    parts:      hidden('parts')      ? null : book.parts,
+    volumes:    hidden('volumes')    ? null : book.volumes,
+    pages:      hidden('pages')      ? null : book.pages,
+    volume_pages: hidden('volumePagesText') ? [] : book.volume_pages,
+    size:       hidden('size')       ? '' : book.size,
+    isbn:       hidden('isbn')       ? '' : book.isbn,
+    language:   hidden('language')   ? '' : book.language,
+    shelf_no:   hidden('shelfNo')    ? '' : book.shelf_no,
+    binding:    hidden('binding')    ? '' : book.binding,
+    condition:  hidden('condition')  ? '' : book.condition,
+    source:     hidden('source')     ? '' : book.source,
+    acquired_day:   hidden('acquired') ? null : book.acquired_day,
+    acquired_month: hidden('acquired') ? null : book.acquired_month,
+    acquired_year:  hidden('acquired') ? null : book.acquired_year,
+    topic:      hidden('topic')      ? '' : book.topic,
+
+    value:  vis.value   ? book.value  : null,
+    rating: vis.ratings ? book.rating : 0,
+    status: vis.status  ? book.status : '',
+    blurb:  vis.blurb   ? book.blurb  : '',
+    notes:  vis.notes   ? book.notes  : '',
+  }
+}
+
+/**
+ * الإعدادات كما يراها الزائر: قوائم المخفيّ لا تُنشر، فلا يعرف الزائر حتى أنّ
+ * هناك ما هو مخفيّ. (العرض public_settings)
+ */
+export function redactSettings(s: Settings) {
+  const { hidden_fields, hidden_categories, hidden_book_ids, ...rest } = s
+  return { ...rest, hidden_fields: [], hidden_categories: [], hidden_book_ids: [] }
+}
