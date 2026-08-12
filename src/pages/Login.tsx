@@ -1,7 +1,8 @@
 import { FormEvent, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { useAuthActions } from '@convex-dev/auth/react'
 
 export default function Login() {
+  const { signIn } = useAuthActions()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -12,12 +13,13 @@ export default function Login() {
     setError(null)
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) {
+    try {
+      await signIn('password', { email, password, flow: 'signIn' })
+    } catch {
+      // رسالة واحدة لكل أسباب الفشل: لا نكشف إن كان البريد مسجّلًا أصلًا.
       setError('فشل تسجيل الدخول: تحقق من البريد الإلكتروني وكلمة المرور.')
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (

@@ -1,19 +1,11 @@
-export type ReadingStatus = 'لم يُقرأ' | 'قيد القراءة' | 'انتهى'
+import type { Doc } from '../../convex/_generated/dataModel'
 
-export const READING_STATUSES: ReadingStatus[] = ['لم يُقرأ', 'قيد القراءة', 'انتهى']
+export { READING_STATUSES } from '../../convex/constants'
 
-export interface Book {
-  id: string
-  user_id: string
-  title: string
-  author: string | null
-  category: string | null
-  shelf_location: string | null
-  reading_status: ReadingStatus
-  publication_year: number | null
-  notes: string | null
-  created_at: string
-  updated_at: string
-}
+/** صفّ كتاب كما يعود من Convex (بحقلي النظام _id و _creationTime). */
+export type Book = Doc<'books'>
 
-export type BookInput = Omit<Book, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+/** الحقول التي يرسلها نموذج الإضافة/التعديل. */
+export type BookInput = Omit<Book, '_id' | '_creationTime' | 'ownerId'>
+
+export type ReadingStatus = Book['readingStatus']

@@ -11,10 +11,12 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(initialBook?.title ?? '')
   const [author, setAuthor] = useState(initialBook?.author ?? '')
   const [category, setCategory] = useState(initialBook?.category ?? '')
-  const [shelfLocation, setShelfLocation] = useState(initialBook?.shelf_location ?? '')
-  const [readingStatus, setReadingStatus] = useState(initialBook?.reading_status ?? 'لم يُقرأ')
+  const [shelfLocation, setShelfLocation] = useState(initialBook?.shelfLocation ?? '')
+  const [readingStatus, setReadingStatus] = useState<Book['readingStatus']>(
+    initialBook?.readingStatus ?? 'لم يُقرأ'
+  )
   const [publicationYear, setPublicationYear] = useState(
-    initialBook?.publication_year ? String(initialBook.publication_year) : ''
+    initialBook?.publicationYear ? String(initialBook.publicationYear) : ''
   )
   const [notes, setNotes] = useState(initialBook?.notes ?? '')
   const [saving, setSaving] = useState(false)
@@ -23,14 +25,15 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
     e.preventDefault()
     setSaving(true)
     try {
+      // الحقول الفارغة تُرسَل undefined فتُحذف من صفّ Convex بدل تخزين نصّ فارغ.
       await onSave({
         title: title.trim(),
-        author: author.trim() || null,
-        category: category.trim() || null,
-        shelf_location: shelfLocation.trim() || null,
-        reading_status: readingStatus as Book['reading_status'],
-        publication_year: publicationYear ? Number(publicationYear) : null,
-        notes: notes.trim() || null,
+        author: author.trim() || undefined,
+        category: category.trim() || undefined,
+        shelfLocation: shelfLocation.trim() || undefined,
+        readingStatus,
+        publicationYear: publicationYear ? Number(publicationYear) : undefined,
+        notes: notes.trim() || undefined,
       })
     } finally {
       setSaving(false)
@@ -71,7 +74,10 @@ export default function BookForm({ initialBook, onSave, onCancel }: Props) {
         <div className="field-row">
           <label className="field">
             <span>حالة القراءة</span>
-            <select value={readingStatus} onChange={(e) => setReadingStatus(e.target.value as Book['reading_status'])}>
+            <select
+              value={readingStatus}
+              onChange={(e) => setReadingStatus(e.target.value as Book['readingStatus'])}
+            >
               {READING_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}

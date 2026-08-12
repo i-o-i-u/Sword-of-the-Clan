@@ -1,16 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabaseClient'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery } from 'convex/react'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { api } from '../../convex/_generated/api'
 import { Book, BookInput, READING_STATUSES } from '../lib/types'
+import { errorText } from '../lib/errors'
 import BookForm from '../components/BookForm'
 
-interface Props {
-  session: Session
-}
+export default function Home() {
+  const { signOut } = useAuthActions()
 
-export default function Home({ session }: Props) {
-  const [books, setBooks] = useState<Book[]>([])
-  const [loading, setLoading] = useState(true)
+  // استعلامات Convex تفاعليّة: أي إضافة أو تعديل تنعكس هنا تلقائيًّا
+  // دون إعادة تحميل يدويّة.
+  const books = useQuery(api.books.list)
+  const viewer = useQuery(api.users.viewer)
+
+  const addBook = useMutation(api.books.add)
+  const updateBook = useMutation(api.books.update)
+  const removeBook = useMutation(api.books.remove)
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
@@ -20,75 +27,50 @@ export default function Home({ session }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editingBook, setEditingBook] = useState<Book | null>(null)
 
-  useEffect(() => {
-    loadBooks()
-  }, [])
-
-  async function loadBooks() {
-    setLoading(true)
-    setErrorMsg(null)
-    const { data, error } = await supabase
-      .from('books')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      setErrorMsg('تعذّر تحميل الكتب: ' + error.message)
-    } else {
-      setBooks(data ?? [])
-    }
-    setLoading(false)
-  }
-
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-  }
+  const loading = books === undefined
 
   async function handleSave(input: BookInput) {
-    if (editingBook) {
-      const { error } = await supabase.from('books').update(input).eq('id', editingBook.id)
-      if (error) {
-        setErrorMsg('تعذّر تعديل الكتاب: ' + error.message)
-        return
+    setErrorMsg(null)
+    try {
+      if (editingBook) {
+        await updateBook({ id: editingBook._id, ...input })
+      } else {
+        await addBook(input)
       }
-    } else {
-      const { error } = await supabase
-        .from('books')
-        .insert({ ...input, user_id: session.user.id })
-      if (error) {
-        setErrorMsg('تعذّر إضافة الكتاب: ' + error.message)
-        return
-      }
+    } catch (error) {
+      setErrorMsg(
+        errorText(error, editingBook ? 'تعذّر تعديل الكتاب.' : 'تعذّر إضافة الكتاب.')
+      )
+      return
     }
     setShowForm(false)
     setEditingBook(null)
-    await loadBooks()
   }
 
   async function handleDelete(book: Book) {
     if (!confirm(`هل تريد حذف كتاب "${book.title}"؟`)) return
-    const { error } = await supabase.from('books').delete().eq('id', book.id)
-    if (error) {
-      setErrorMsg('تعذّر حذف الكتاب: ' + error.message)
-      return
+    setErrorMsg(null)
+    try {
+      await removeBook({ id: book._id })
+    } catch (error) {
+      setErrorMsg(errorText(error, 'تعذّر حذف الكتاب.'))
     }
-    await loadBooks()
   }
 
   const categories = useMemo(() => {
-    const set = new Set(books.map((b) => b.category).filter(Boolean) as string[])
+    const set = new Set((books ?? []).map((b) => b.category).filter(Boolean) as string[])
     return ['الكل', ...Array.from(set).sort()]
   }, [books])
 
   const filteredBooks = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return books.filter((b) => {
+    return (books ?? []).filter((b) => {
       const matchesSearch =
         !q ||
         b.title.toLowerCase().includes(q) ||
         (b.author ?? '').toLowerCase().includes(q)
       const matchesCategory = categoryFilter === 'الكل' || b.category === categoryFilter
-      const matchesStatus = statusFilter === 'الكل' || b.reading_status === statusFilter
+      const matchesStatus = statusFilter === 'الكل' || b.readingStatus === statusFilter
       return matchesSearch && matchesCategory && matchesStatus
     })
   }, [books, search, categoryFilter, statusFilter])
@@ -98,8 +80,8 @@ export default function Home({ session }: Props) {
       <header className="app-header">
         <h1>📚 مكتبة سيف العشيرة</h1>
         <div className="header-actions">
-          <span className="user-email">{session.user.email}</span>
-          <button className="btn" onClick={handleSignOut}>
+          <span className="user-email">{viewer?.email}</span>
+          <button className="btn" onClick={() => void signOut()}>
             تسجيل الخروج
           </button>
         </div>
@@ -165,17 +147,17 @@ export default function Home({ session }: Props) {
               </thead>
               <tbody>
                 {filteredBooks.map((book) => (
-                  <tr key={book.id}>
+                  <tr key={book._id}>
                     <td>{book.title}</td>
                     <td>{book.author || '—'}</td>
                     <td>{book.category || '—'}</td>
-                    <td>{book.shelf_location || '—'}</td>
+                    <td>{book.shelfLocation || '—'}</td>
                     <td>
-                      <span className={`status-badge status-${statusClass(book.reading_status)}`}>
-                        {book.reading_status}
+                      <span className={`status-badge status-${statusClass(book.readingStatus)}`}>
+                        {book.readingStatus}
                       </span>
                     </td>
-                    <td>{book.publication_year ?? '—'}</td>
+                    <td>{book.publicationYear ?? '—'}</td>
                     <td className="notes-cell">{book.notes || '—'}</td>
                     <td className="actions-cell">
                       <button
