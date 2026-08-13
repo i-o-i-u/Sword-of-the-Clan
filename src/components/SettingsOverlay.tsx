@@ -137,45 +137,134 @@ function AppearanceTab() {
 }
 
 // ---------------------------------------------------------- صفحة الهبوط
+const smallInput = {
+  padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)',
+  background: 'var(--bg)', color: 'var(--text)', fontSize: 13, width: '100%',
+} as const
+
+const fieldLabel = {
+  display: 'flex', flexDirection: 'column' as const, gap: 5,
+  fontSize: 12, color: 'var(--muted)',
+}
+
+const addButton = {
+  width: '100%', border: '1.5px dashed var(--border)', background: 'none',
+  color: 'var(--accent-soft)', borderRadius: 10, padding: 10,
+  fontSize: 13, fontWeight: 600,
+} as const
+
+/**
+ * الصور والاقتباسات قائمتان مستقلّتان: صور الخلفية تتبدّل بمهلةٍ، والاقتباسات
+ * بمهلةٍ أخرى، فلا يجرّ تبديلُ إحداهما الأخرى كما كان في «الشرائح».
+ */
 function LandingTab() {
-  const { settings, patchSettings, slides, run, reload } = useLibrary()
-
-  const smallInput = {
-    padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)',
-    background: 'var(--bg)', color: 'var(--text)', fontSize: 13, width: '100%',
-  } as const
-
-  const label = { display: 'flex', flexDirection: 'column' as const, gap: 5, fontSize: 12, color: 'var(--muted)' }
+  const {
+    settings, patchSettings, landingImages, landingQuotes, run, reload,
+  } = useLibrary()
 
   return (
     <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-        <label style={label}>
-          عنوان الصفحة
-          <DebouncedInput value={settings.landing_title} onCommit={(v) => void patchSettings({ landing_title: v })} style={smallInput} />
-        </label>
-        <label style={label}>
-          السطر العلوي
-          <DebouncedInput value={settings.landing_tagline} onCommit={(v) => void patchSettings({ landing_tagline: v })} style={smallInput} />
-        </label>
-        <label style={label}>
-          النص التعريفي
-          <DebouncedTextarea
-            value={settings.landing_intro}
-            onCommit={(v) => void patchSettings({ landing_intro: v })}
-            style={{ ...smallInput, minHeight: 60, lineHeight: 1.8, resize: 'vertical' }}
-          />
-        </label>
+      <div style={groupLabel}>صور الخلفية ({landingImages.length})</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.7 }}>
+        صورٌ بالعرض تظهر خلف الشعار وتتبدّل بتلاشٍ. الأنسب أن تكون عريضة (١٦:٩).
       </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
+        {landingImages.map((img) => (
+          <div key={img.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 8 }}>
+            <div style={{ width: '100%', aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden' }}>
+              <ImageSlot
+                url={img.image_url}
+                folder="landing"
+                canEdit
+                placeholder="صورة المكتبة"
+                onUploaded={async (url) => {
+                  await run(() => api.updateLandingImage(img.id, { image_url: url }))
+                  await reload()
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await run(() => api.removeLandingImage(img.id))
+                await reload()
+              }}
+              style={{
+                border: 'none', background: 'none', fontSize: 12, padding: '6px 4px 0',
+                color: 'oklch(0.55 0.15 30)',
+              }}
+            >
+              حذف
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={async () => {
+          await run(() => api.addLandingImage(landingImages.length))
+          await reload()
+        }}
+        style={{ ...addButton, marginBottom: 22 }}
+      >
+        + إضافة صورة
+      </button>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 12 }}>
-        <ToggleRow
-          label="إظهار شريط الأرقام"
-          on={settings.show_landing_stats}
-          onChange={() => void patchSettings({ show_landing_stats: !settings.show_landing_stats })}
-        />
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+        <div style={groupLabel}>الاقتباسات ({landingQuotes.length})</div>
       </div>
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+        {landingQuotes.map((q) => (
+          <div key={q.id} style={{
+            border: '1px solid var(--border)', borderRadius: 12, padding: 10,
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            <DebouncedTextarea
+              value={q.text}
+              onCommit={(v) => void run(() => api.updateLandingQuote(q.id, { text: v }))}
+              placeholder="نص الاقتباس"
+              style={{
+                minHeight: 58, padding: '7px 9px', borderRadius: 7, border: '1px solid var(--border)',
+                background: 'var(--bg)', color: 'var(--text)', fontSize: 12.5,
+                lineHeight: 1.9, resize: 'vertical',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <DebouncedInput
+                value={q.author}
+                onCommit={(v) => void run(() => api.updateLandingQuote(q.id, { author: v }))}
+                placeholder="القائل ومصدره"
+                style={{ ...smallInput, flex: 1, fontSize: 12.5 }}
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  await run(() => api.removeLandingQuote(q.id))
+                  await reload()
+                }}
+                style={{
+                  border: 'none', background: 'none', fontSize: 12, padding: '6px 10px',
+                  color: 'oklch(0.55 0.15 30)',
+                }}
+              >
+                حذف
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={async () => {
+          await run(() => api.addLandingQuote(landingQuotes.length))
+          await reload()
+        }}
+        style={{ ...addButton, marginBottom: 20 }}
+      >
+        + إضافة اقتباس
+      </button>
+
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 14 }}>
         <ToggleRow
           label="إظهار بطاقة الاقتباس"
           on={settings.show_landing_quote}
@@ -183,100 +272,93 @@ function LandingTab() {
         />
       </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 14 }}>
+      <div style={{ marginBottom: 14 }}>
         <ToggleRow
-          label="تبديل تلقائي"
-          hint="تدوير الاقتباس والصورة كل فترة"
+          label="التبديل التلقائي"
+          hint="تدوير الصور والاقتباسات كلٌّ على مهلته"
           on={settings.auto_rotate}
           onChange={() => void patchSettings({ auto_rotate: !settings.auto_rotate })}
         />
       </div>
 
       {settings.auto_rotate && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
-            <span>مدة العرض</span><span>{settings.rotate_seconds} ثانية</span>
+        <>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+              <span>مهلة تبديل الصور</span><span>{settings.rotate_seconds} ثانية</span>
+            </div>
+            <input
+              type="range" min={3} max={30} step={1}
+              value={settings.rotate_seconds}
+              onChange={(e) => void patchSettings({ rotate_seconds: Number(e.target.value) })}
+              style={{ width: '100%' }}
+            />
           </div>
-          <input
-            type="range" min={3} max={15} step={1}
-            value={settings.rotate_seconds}
-            onChange={(e) => void patchSettings({ rotate_seconds: Number(e.target.value) })}
-            style={{ width: '100%' }}
-          />
-        </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+              <span>مهلة تبديل الاقتباسات</span><span>{settings.quote_seconds} ثانية</span>
+            </div>
+            <input
+              type="range" min={4} max={60} step={2}
+              value={settings.quote_seconds}
+              onChange={(e) => void patchSettings({ quote_seconds: Number(e.target.value) })}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </>
       )}
 
-      <div style={groupLabel}>الشرائح ({slides.length})</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
-        {slides.map((slide) => (
-          <div key={slide.id} style={{
-            border: '1px solid var(--border)', borderRadius: 12, padding: 12,
-            display: 'grid', gridTemplateColumns: '64px 1fr', gap: 12,
-          }}>
-            <div style={{ width: 64, height: 85, borderRadius: 8, overflow: 'hidden' }}>
-              <ImageSlot
-                url={slide.image_url}
-                folder="landing"
-                canEdit
-                placeholder="صورة"
-                onUploaded={async (url) => {
-                  await run(() => api.updateSlide(slide.id, { image_url: url }))
-                  await reload()
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <DebouncedTextarea
-                value={slide.quote}
-                onCommit={(v) => void run(() => api.updateSlide(slide.id, { quote: v }))}
-                placeholder="نص الاقتباس"
-                style={{
-                  minHeight: 44, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)',
-                  background: 'var(--bg)', color: 'var(--text)', fontSize: 12.5, resize: 'vertical',
-                }}
-              />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <DebouncedInput
-                  value={slide.author}
-                  onCommit={(v) => void run(() => api.updateSlide(slide.id, { author: v }))}
-                  placeholder="القائل"
-                  style={{ ...smallInput, flex: 1, fontSize: 12.5 }}
-                />
-                <button
-                  type="button"
-                  disabled={slides.length <= 1}
-                  onClick={async () => {
-                    await run(() => api.removeSlide(slide.id))
-                    await reload()
-                  }}
-                  style={{
-                    border: 'none', background: 'none', fontSize: 12, padding: '6px 10px',
-                    color: slides.length <= 1 ? 'var(--muted)' : 'oklch(0.55 0.15 30)',
-                    cursor: slides.length <= 1 ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  حذف
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+        <div style={groupLabel}>صفحة «عن المكتبة»</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+          <label style={fieldLabel}>
+            سطرٌ تحت الاسم
+            <DebouncedInput
+              value={settings.landing_tagline}
+              onCommit={(v) => void patchSettings({ landing_tagline: v })}
+              style={smallInput}
+            />
+          </label>
+          <label style={fieldLabel}>
+            نصّ الصفحة — يفصل بين الفقرات سطرٌ فارغ
+            <DebouncedTextarea
+              value={settings.about_text}
+              onCommit={(v) => void patchSettings({ about_text: v })}
+              style={{ ...smallInput, minHeight: 150, lineHeight: 1.9, resize: 'vertical' }}
+            />
+          </label>
+        </div>
       </div>
 
-      <button
-        type="button"
-        onClick={async () => {
-          await run(() => api.addSlide(slides.length))
-          await reload()
-        }}
-        style={{
-          width: '100%', border: '1.5px dashed var(--border)', background: 'none',
-          color: 'var(--accent-soft)', borderRadius: 10, padding: 10,
-          fontSize: 13, fontWeight: 600,
-        }}
-      >
-        + إضافة شريحة جديدة
-      </button>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+        <div style={groupLabel}>روابط التواصل في الذيل</div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+          الرابط الفارغ لا يظهر في الذيل أصلًا.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={fieldLabel}>
+            إكس
+            <DebouncedInput
+              value={settings.x_url}
+              onCommit={(v) => void patchSettings({ x_url: v.trim() })}
+              dir="ltr"
+              placeholder="https://x.com/…"
+              style={smallInput}
+            />
+          </label>
+          <label style={fieldLabel}>
+            تلجرام
+            <DebouncedInput
+              value={settings.telegram_url}
+              onCommit={(v) => void patchSettings({ telegram_url: v.trim() })}
+              dir="ltr"
+              placeholder="https://t.me/…"
+              style={smallInput}
+            />
+          </label>
+        </div>
+      </div>
     </div>
   )
 }

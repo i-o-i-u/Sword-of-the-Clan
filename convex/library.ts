@@ -118,10 +118,18 @@ export const categories = query({
   },
 })
 
-export const slides = query({
+export const landingImages = query({
   args: {},
   handler: async (ctx) => {
-    const all = await ctx.db.query('landing_slides').collect()
+    const all = await ctx.db.query('landing_images').collect()
+    return all.sort((a, b) => a.position - b.position).map(toClient)
+  },
+})
+
+export const landingQuotes = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query('landing_quotes').collect()
     return all.sort((a, b) => a.position - b.position).map(toClient)
   },
 })

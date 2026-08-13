@@ -1,6 +1,9 @@
 // أنواع البيانات والثوابت. الأسماء العربية هنا هي نصوص الإنتاج نفسها،
 // وهي مطابقة لما في وثيقة التسليم — لا تُترجم ولا تُعاد صياغتها.
 
+/** اسم المكتبة مضبوطًا بالشكل، كما يظهر في الرأس وفي وسط صفحة الهبوط */
+export const LIBRARY_NAME = 'مكتبة سَيْف العشيرة'
+
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
 export type ReadingStatus = 'لم تُقرأ' | 'قيد القراءة' | 'تم القراءة'
 export type PerkKind = 'فائدة' | 'مقتطف'
@@ -107,10 +110,17 @@ export interface Loan {
   returned: boolean
 }
 
-export interface LandingSlide {
+/** صورة خلفيّة في صفحة الهبوط. القائمة تدور كل `rotate_seconds`. */
+export interface LandingImage {
   id: string
   image_url: string | null
-  quote: string
+  position: number
+}
+
+/** اقتباس في صفحة الهبوط. القائمة تدور كل `quote_seconds`، مستقلّةً عن الصور. */
+export interface LandingQuote {
+  id: string
+  text: string
   author: string
   position: number
 }
@@ -142,7 +152,14 @@ export interface Settings {
   show_landing_stats: boolean
   show_landing_quote: boolean
   auto_rotate: boolean
+  /** مهلة تبديل صور الخلفية */
   rotate_seconds: number
+  /** مهلة تبديل الاقتباسات */
+  quote_seconds: number
+  /** نصّ صفحة «عن المكتبة»، فقراتٌ يفصلها سطرٌ فارغ */
+  about_text: string
+  x_url: string
+  telegram_url: string
   visibility: Visibility
   /** لا تصل هذه القوائم إلى الزائر أصلًا؛ تبقى فارغة عنده */
   hidden_fields: string[]

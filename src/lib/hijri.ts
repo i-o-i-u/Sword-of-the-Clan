@@ -52,6 +52,75 @@ export function hijriLabel(
   return `${day} ${HIJRI_MONTHS[month - 1] ?? ''} ${year} هـ`
 }
 
+// --------------------------------------------------- تقويم الركن وساعته
+// ورقة التقويم في صفحة الهبوط تعرض تاريخ مكة المكرمة لا تاريخ جهاز الزائر،
+// فالمكتبة واحدة وتوقيتها واحد أينما فُتح الموقع. لا تُوجد «Asia/Mecca» في
+// قاعدة المناطق، و«Asia/Riyadh» هي منطقتها نفسها (+٣ بلا توقيتٍ صيفيّ).
+
+const MAKKAH_TZ = 'Asia/Riyadh'
+
+const MAKKAH_HIJRI_FMT = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+  day: 'numeric', month: 'numeric', year: 'numeric', timeZone: MAKKAH_TZ,
+})
+
+const MAKKAH_WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short', timeZone: MAKKAH_TZ,
+})
+
+const MAKKAH_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: true, timeZone: MAKKAH_TZ,
+})
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+}
+
+/** يحوّل الأرقام اللاتينية إلى العربية الهندية (٠١٢…) */
+export function toArabicDigits(input: string | number): string {
+  return String(input ?? '').replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)])
+}
+
+export interface MakkahMoment {
+  /** «الخميس» */
+  weekday: string
+  /** «٢٩» */
+  day: string
+  /** «صفر» */
+  month: string
+  /** «١٤٤٨» */
+  year: string
+  /** «٠٣:٤٥:١٢» */
+  time: string
+  /** «صباحًا» أو «مساءً» */
+  meridiem: string
+}
+
+/** لحظة مكة الآن: تاريخها الهجريّ وساعتها، بالأرقام العربية الهندية */
+export function makkahMoment(now: Date = new Date()): MakkahMoment {
+  const hijri: Record<string, string> = {}
+  MAKKAH_HIJRI_FMT.formatToParts(now).forEach((p) => {
+    if (p.type !== 'literal') hijri[p.type] = p.value
+  })
+
+  const time: Record<string, string> = {}
+  MAKKAH_TIME_FMT.formatToParts(now).forEach((p) => {
+    if (p.type !== 'literal') time[p.type] = p.value
+  })
+
+  const weekday = WEEKDAYS[WEEKDAY_INDEX[MAKKAH_WEEKDAY_FMT.format(now)] ?? 0]
+  const month = HIJRI_MONTHS[parseInt(hijri.month, 10) - 1] ?? ''
+
+  return {
+    weekday,
+    day: toArabicDigits(parseInt(hijri.day, 10)),
+    month,
+    year: toArabicDigits(parseInt(hijri.year, 10)),
+    time: toArabicDigits(`${time.hour}:${time.minute}:${time.second}`),
+    meridiem: (time.dayPeriod ?? '').toUpperCase() === 'PM' ? 'مساءً' : 'صباحًا',
+  }
+}
+
 export interface HijriParts { y: number; m: number; d: number }
 
 export function hijriParts(date: Date): HijriParts {

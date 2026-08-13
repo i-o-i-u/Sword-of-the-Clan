@@ -11,6 +11,7 @@ export type Route =
   | { name: 'author'; id: string }
   | { name: 'add' }
   | { name: 'stats' }
+  | { name: 'about' }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '').split('?')[0]
@@ -22,6 +23,7 @@ export function parseHash(hash: string): Route {
     case 'author': return id ? { name: 'author', id } : { name: 'authors' }
     case 'add': return { name: 'add' }
     case 'stats': return { name: 'stats' }
+    case 'about': return { name: 'about' }
     default: return { name: 'landing' }
   }
 }
@@ -34,6 +36,7 @@ export function hashFor(route: Route): string {
     case 'author': return `#/author/${route.id}`
     case 'add': return '#/add'
     case 'stats': return '#/stats'
+    case 'about': return '#/about'
     default: return '#/'
   }
 }

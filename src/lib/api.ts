@@ -10,7 +10,7 @@ import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import {
   DEFAULT_VISIBILITY,
-  type Author, type Book, type BookWork, type LandingSlide,
+  type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
   type Loan, type Perk, type Settings,
 } from './types'
 
@@ -65,8 +65,12 @@ export async function fetchCategories(_owner: boolean): Promise<string[]> {
   return await convex.query(api.library.categories, {})
 }
 
-export async function fetchSlides(_owner: boolean): Promise<LandingSlide[]> {
-  return (await convex.query(api.library.slides, {})) as unknown as LandingSlide[]
+export async function fetchLandingImages(_owner: boolean): Promise<LandingImage[]> {
+  return (await convex.query(api.library.landingImages, {})) as unknown as LandingImage[]
+}
+
+export async function fetchLandingQuotes(_owner: boolean): Promise<LandingQuote[]> {
+  return (await convex.query(api.library.landingQuotes, {})) as unknown as LandingQuote[]
 }
 
 export async function fetchSettings(_owner: boolean): Promise<Settings> {
@@ -165,20 +169,36 @@ export async function removeCategory(name: string): Promise<void> {
   await convex.mutation(api.catalog.removeCategory, { name })
 }
 
-export async function addSlide(position: number): Promise<void> {
-  await convex.mutation(api.catalog.addSlide, { position })
+export async function addLandingImage(position: number): Promise<void> {
+  await convex.mutation(api.catalog.addLandingImage, { position })
 }
 
-export async function updateSlide(id: string, patch: Partial<LandingSlide>): Promise<void> {
-  const { id: _drop, ...rest } = patch as Partial<LandingSlide> & { id?: string }
-  await convex.mutation(api.catalog.updateSlide, {
-    id: id as Id<'landing_slides'>,
+export async function updateLandingImage(id: string, patch: Partial<LandingImage>): Promise<void> {
+  const { id: _drop, ...rest } = patch as Partial<LandingImage> & { id?: string }
+  await convex.mutation(api.catalog.updateLandingImage, {
+    id: id as Id<'landing_images'>,
     patch: rest as never,
   })
 }
 
-export async function removeSlide(id: string): Promise<void> {
-  await convex.mutation(api.catalog.removeSlide, { id: id as Id<'landing_slides'> })
+export async function removeLandingImage(id: string): Promise<void> {
+  await convex.mutation(api.catalog.removeLandingImage, { id: id as Id<'landing_images'> })
+}
+
+export async function addLandingQuote(position: number): Promise<void> {
+  await convex.mutation(api.catalog.addLandingQuote, { position })
+}
+
+export async function updateLandingQuote(id: string, patch: Partial<LandingQuote>): Promise<void> {
+  const { id: _drop, ...rest } = patch as Partial<LandingQuote> & { id?: string }
+  await convex.mutation(api.catalog.updateLandingQuote, {
+    id: id as Id<'landing_quotes'>,
+    patch: rest as never,
+  })
+}
+
+export async function removeLandingQuote(id: string): Promise<void> {
+  await convex.mutation(api.catalog.removeLandingQuote, { id: id as Id<'landing_quotes'> })
 }
 
 // ---------------------------------------------------------------------------

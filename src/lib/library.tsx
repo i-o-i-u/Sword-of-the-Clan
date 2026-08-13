@@ -12,7 +12,7 @@ import * as api from './api'
 import { applyTheme } from './theme'
 import {
   DEFAULT_VISIBILITY,
-  type Author, type Book, type BookWork, type LandingSlide,
+  type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
   type Loan, type Perk, type Settings,
 } from './types'
 
@@ -24,7 +24,8 @@ const EMPTY_SETTINGS: Settings = {
   landing_tagline: 'فهرسٌ حيّ لكل كتابٍ في البيت',
   landing_intro: '',
   show_landing_stats: true, show_landing_quote: true,
-  auto_rotate: true, rotate_seconds: 6,
+  auto_rotate: true, rotate_seconds: 6, quote_seconds: 12,
+  about_text: '', x_url: '', telegram_url: '',
   visibility: DEFAULT_VISIBILITY,
   hidden_fields: [], hidden_categories: [], hidden_book_ids: [],
 }
@@ -54,7 +55,8 @@ interface LibraryValue {
   loans: Loan[]
   shelves: string[]
   categories: string[]
-  slides: LandingSlide[]
+  landingImages: LandingImage[]
+  landingQuotes: LandingQuote[]
   settings: Settings
 
   authorById: (id: string | null) => Author | null
@@ -105,7 +107,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [loans, setLoans] = useState<Loan[]>([])
   const [shelves, setShelves] = useState<string[]>([])
   const [categories, setCategories] = useState<string[]>([])
-  const [slides, setSlides] = useState<LandingSlide[]>([])
+  const [landingImages, setLandingImages] = useState<LandingImage[]>([])
+  const [landingQuotes, setLandingQuotes] = useState<LandingQuote[]>([])
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS)
 
   // ---------------------------------------------------------------- الدور
@@ -151,7 +154,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const [b, a, w, p, l, sh, c, sl, st] = await Promise.all([
+      const [b, a, w, p, l, sh, c, img, q, st] = await Promise.all([
         api.fetchBooks(isOwner),
         api.fetchAuthors(isOwner),
         api.fetchWorks(isOwner),
@@ -159,11 +162,13 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         api.fetchLoans(isOwner),
         api.fetchShelves(isOwner),
         api.fetchCategories(isOwner),
-        api.fetchSlides(isOwner),
+        api.fetchLandingImages(isOwner),
+        api.fetchLandingQuotes(isOwner),
         api.fetchSettings(isOwner),
       ])
       setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
-      setShelves(sh); setCategories(c); setSlides(sl)
+      setShelves(sh); setCategories(c)
+      setLandingImages(img); setLandingQuotes(q)
       // الزائر قد يكون اختار مظهرًا لنفسه، فلا يُلغيه تحميلُ الإعدادات
       const pref = isOwner ? null : readThemePref()
       setSettings(pref ? { ...st, theme: pref } : st)
@@ -242,7 +247,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly: () => setBrowseOnly((v) => !v),
     signOut, refreshRole,
-    books, authors, works, perks, loans, shelves, categories, slides, settings,
+    books, authors, works, perks, loans, shelves, categories,
+    landingImages, landingQuotes, settings,
     authorById: (id) => (id ? authorMap.get(id) ?? null : null),
     bookById: (id) => bookMap.get(id),
     reload, patchBook, patchAuthor, patchSettings, cycleTheme, run,

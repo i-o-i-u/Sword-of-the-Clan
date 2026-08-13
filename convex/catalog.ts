@@ -142,6 +142,10 @@ export const updateSettings = mutation({
       show_landing_quote: v.optional(v.boolean()),
       auto_rotate: v.optional(v.boolean()),
       rotate_seconds: v.optional(v.number()),
+      quote_seconds: v.optional(v.number()),
+      about_text: v.optional(v.string()),
+      x_url: v.optional(v.string()),
+      telegram_url: v.optional(v.string()),
       visibility: v.optional(visibility),
       hidden_fields: v.optional(v.array(v.string())),
       hidden_categories: v.optional(v.array(v.string())),
@@ -203,25 +207,52 @@ export const removeCategory = mutation({
 })
 
 // ---------------------------------------------------------------------------
-// شرائح صفحة الهبوط
+// صور صفحة الهبوط واقتباساتها — قائمتان مستقلّتان، تدور كلٌّ على مهلها
 // ---------------------------------------------------------------------------
 
-export const addSlide = mutation({
+export const addLandingImage = mutation({
   args: { position: v.number() },
   handler: async (ctx, { position }) => {
     await requireOwner(ctx)
-    await ctx.db.insert('landing_slides', {
-      image_url: null, quote: '', author: '', position,
-    })
+    await ctx.db.insert('landing_images', { image_url: null, position })
   },
 })
 
-export const updateSlide = mutation({
+export const updateLandingImage = mutation({
   args: {
-    id: v.id('landing_slides'),
+    id: v.id('landing_images'),
     patch: v.object({
       image_url: v.optional(v.union(v.string(), v.null())),
-      quote: v.optional(v.string()),
+      position: v.optional(v.number()),
+    }),
+  },
+  handler: async (ctx, { id, patch }) => {
+    await requireOwner(ctx)
+    await ctx.db.patch(id, patch)
+  },
+})
+
+export const removeLandingImage = mutation({
+  args: { id: v.id('landing_images') },
+  handler: async (ctx, { id }) => {
+    await requireOwner(ctx)
+    await ctx.db.delete(id)
+  },
+})
+
+export const addLandingQuote = mutation({
+  args: { position: v.number() },
+  handler: async (ctx, { position }) => {
+    await requireOwner(ctx)
+    await ctx.db.insert('landing_quotes', { text: '', author: '', position })
+  },
+})
+
+export const updateLandingQuote = mutation({
+  args: {
+    id: v.id('landing_quotes'),
+    patch: v.object({
+      text: v.optional(v.string()),
       author: v.optional(v.string()),
       position: v.optional(v.number()),
     }),
@@ -232,8 +263,8 @@ export const updateSlide = mutation({
   },
 })
 
-export const removeSlide = mutation({
-  args: { id: v.id('landing_slides') },
+export const removeLandingQuote = mutation({
+  args: { id: v.id('landing_quotes') },
   handler: async (ctx, { id }) => {
     await requireOwner(ctx)
     await ctx.db.delete(id)

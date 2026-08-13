@@ -9,9 +9,12 @@ import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import ImageSlot from './ImageSlot'
 import { Overlay, cardStyle } from './ui'
 
-export default function SearchOverlay({ onClose }: { onClose: () => void }) {
+export default function SearchOverlay(
+  { onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string },
+) {
   const { books } = useLibrary()
-  const [query, setQuery] = useState('')
+  // ما كُتب في حقل الرأس يصل هنا فتبدأ اللوحة بنتائجه، لا فارغةً
+  const [query, setQuery] = useState(initialQuery)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useScrollLock()

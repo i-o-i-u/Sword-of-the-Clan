@@ -15,8 +15,12 @@ export const DEFAULT_VISIBILITY = {
   loans: false, value: false, stats: true, authors: true, advSearch: true,
 }
 
-/** الإعدادات كما في المخطّط، بلا حقول النظام — فتبقى مشتقّةً منه لا مكرَّرة */
-export type Settings = Omit<Doc<'library_settings'>, '_id' | '_creationTime'>
+/**
+ * الإعدادات كما في المخطّط، بلا حقول النظام — فتبقى مشتقّةً منه لا مكرَّرة.
+ * `Required` يرفع الاختياريّة عن الحقول المستجدّة: المخطّط يقبل غيابها عن
+ * المستند القديم، أمّا ما تُصدره `loadSettings` فمكتملٌ دائمًا.
+ */
+export type Settings = Required<Omit<Doc<'library_settings'>, '_id' | '_creationTime'>>
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'warm',
@@ -35,6 +39,17 @@ export const DEFAULT_SETTINGS: Settings = {
   show_landing_quote: true,
   auto_rotate: true,
   rotate_seconds: 6,
+  quote_seconds: 12,
+  // نصٌّ تجريبيّ يكتب صاحب المكتبة مكانَه ما يشاء من نافذة الإعدادات
+  about_text:
+    'مكتبة سيف العشيرة مكتبةٌ منزليّة، نشأت كتابًا كتابًا على مهلٍ لا على عجل، '
+    + 'وما جُمع فيها إنما جُمع ليُقرأ لا ليُركن على رفٍّ.\n\n'
+    + 'هذا الموقع فهرسها: يُعرِّف بكل كتابٍ فيها، وبمؤلِّفه وطبعته وموضعه من '
+    + 'الرفّ، وما عَلِق به من فائدةٍ أو مقتطف. وهو مفتوحٌ لمن أراد أن يتصفّح، '
+    + 'فما في المكتبة من علمٍ ليس ملكًا لصاحبها وحده.\n\n'
+    + '(هذا نصٌّ تجريبيٌّ إلى أن يُكتب مكانَه ما يليق.)',
+  x_url: '',
+  telegram_url: '',
   visibility: DEFAULT_VISIBILITY,
   hidden_fields: [],
   hidden_categories: [],

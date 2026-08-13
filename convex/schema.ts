@@ -170,7 +170,15 @@ export default defineSchema({
     show_landing_stats: v.boolean(),
     show_landing_quote: v.boolean(),
     auto_rotate: v.boolean(),
-    rotate_seconds: v.number(),
+    rotate_seconds: v.number(),          // صور الخلفية
+
+    // الحقول المستجدّة اختياريّة عمدًا: مستند الإعدادات واحدٌ قائمٌ من قبل،
+    // وإلزامُها يُفشل التحقّق عليه. `loadSettings` يسدّ الناقص من
+    // DEFAULT_SETTINGS، فلا يصل إلى الواجهة حقلٌ غير معرَّف.
+    quote_seconds: v.optional(v.number()),   // بطاقة الاقتباس، تدور على مهلها
+    about_text: v.optional(v.string()),      // نصّ صفحة «عن المكتبة»
+    x_url: v.optional(v.string()),
+    telegram_url: v.optional(v.string()),
 
     // الخصوصية (§٦)
     visibility,
@@ -179,6 +187,24 @@ export default defineSchema({
     hidden_book_ids: v.array(v.id('books')),
   }),
 
+  // صور الخلفية خلف شعار صفحة الهبوط، تتبدّل بتلاشٍ كل `rotate_seconds`
+  landing_images: defineTable({
+    image_url: v.union(v.string(), v.null()),
+    position: v.number(),
+  }),
+
+  // الاقتباسات، تتبدّل وحدها كل `quote_seconds`
+  landing_quotes: defineTable({
+    text: v.string(),
+    author: v.string(),
+    position: v.number(),
+  }),
+
+  /**
+   * الجدول القديم: كان يجمع الصورة والاقتباس في صفٍّ واحد. فُصل إلى الجدولين
+   * أعلاه لأن الصور والاقتباسات صارت تدور كلٌّ على مهلها. يبقى مُعرَّفًا حتى
+   * ينقل `seed:run` صفوفه ويحذفها، ثم يُحذف من هنا.
+   */
   landing_slides: defineTable({
     image_url: v.union(v.string(), v.null()),
     quote: v.string(),

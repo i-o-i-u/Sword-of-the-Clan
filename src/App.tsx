@@ -9,6 +9,7 @@ import LoginOverlay from './components/LoginOverlay'
 import SearchOverlay from './components/SearchOverlay'
 import SettingsOverlay from './components/SettingsOverlay'
 import Landing from './views/Landing'
+import About from './views/About'
 import Browse from './views/Browse'
 import BookDetail from './views/BookDetail'
 import Stats from './views/Stats'
@@ -19,7 +20,10 @@ export default function App() {
   const route = useRoute()
   const { loading, error, setError, isOwner, canEdit, settings } = useLibrary()
 
-  const [showSearch, setShowSearch] = useState(false)
+  // نصّ حقل البحث السريع في الرأس ينتقل إلى اللوحة عند فتحها
+  const [search, setSearch] = useState<{ open: boolean; query: string }>(
+    { open: false, query: '' },
+  )
   const [showSettings, setShowSettings] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
 
@@ -29,7 +33,7 @@ export default function App() {
 
   // الانتقال يُغلق ما كان مفتوحًا من الطبقات
   useEffect(() => {
-    setShowSearch(false)
+    setSearch({ open: false, query: '' })
     setShowSettings(false)
   }, [route])
 
@@ -43,13 +47,14 @@ export default function App() {
   // نافذة الإعدادات لصاحب المكتبة وحده، فتُغلق إن خرج
   useEffect(() => { if (!isOwner) setShowSettings(false) }, [isOwner])
 
+  const openSearch = (query = '') => setSearch({ open: true, query })
+
   return (
     <>
       <Header
         route={route}
-        onOpenSearch={() => setShowSearch(true)}
+        onOpenSearch={openSearch}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenLogin={() => setShowLogin(true)}
       />
 
       {error && (
@@ -81,10 +86,11 @@ export default function App() {
         <>
           {route.name === 'landing' && (
             <Landing
-              onOpenSearch={() => setShowSearch(true)}
-              onOpenSettings={() => setShowSettings(true)}
+              onOpenSearch={openSearch}
+              onOpenLogin={() => setShowLogin(true)}
             />
           )}
+          {route.name === 'about' && <About />}
           {route.name === 'browse' && <Browse />}
           {route.name === 'book' && <BookDetail bookId={route.id} />}
           {route.name === 'authors' && canSeeAuthors && <AuthorsIndex />}
@@ -94,7 +100,12 @@ export default function App() {
         </>
       )}
 
-      {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
+      {search.open && (
+        <SearchOverlay
+          initialQuery={search.query}
+          onClose={() => setSearch({ open: false, query: '' })}
+        />
+      )}
       {showSettings && isOwner && <SettingsOverlay onClose={() => setShowSettings(false)} />}
       {showLogin && <LoginOverlay onClose={() => setShowLogin(false)} />}
     </>

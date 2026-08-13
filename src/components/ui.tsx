@@ -238,6 +238,101 @@ export function GearIcon({ size = 19 }: { size?: number }) {
   )
 }
 
+/**
+ * أيقونات الأزرار. كلها بمقاسٍ واحد (٢٤) وبلونٍ موروث، فيكفي تمرير `size`
+ * لتتّسق مع نصّ الزر الذي هي فيه.
+ */
+type IconProps = { size?: number }
+
+const strokeIcon = (size: number) => ({
+  width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+  stroke: 'currentColor', strokeWidth: 1.6,
+  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+})
+
+/** كتبٌ على رفّ — الدخول إلى المكتبة */
+export function BooksIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3" y="5" width="4" height="13" rx="1" />
+      <rect x="8.5" y="5" width="4" height="13" rx="1" />
+      <path d="M15.4 6.3l3.4.9-2.6 10.3-3.4-.9z" />
+      <path d="M2 20.5h20" />
+    </svg>
+  )
+}
+
+/** قلمٌ من ريش — المؤلِّفون */
+export function QuillIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M20.5 3.5c-8.6.9-13 5.2-14.6 10.7l3.9 3.9c5.5-1.6 9.8-6 10.7-14.6z" />
+      <path d="M9.8 18.1L14 13.9" />
+      <path d="M3.5 20.5l3.2-3.2" />
+    </svg>
+  )
+}
+
+/** دائرةٌ فيها معلومة — عن المكتبة */
+export function InfoIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11.2v5.3" />
+      <circle cx="12" cy="7.6" r="1.05" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** كتابٌ مفتوحٌ وفوقه لمعة — اقترح لي كتابًا */
+export function SuggestIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M11.5 8.2C9.4 6.9 6.9 6.4 3.5 6.6v11.6c3.4-.2 5.9.3 8 1.6 2.1-1.3 4.6-1.8 8-1.6V9.6" />
+      <path d="M11.5 8.2v11.6" />
+      <path d="M18.2 2.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" />
+    </svg>
+  )
+}
+
+/** هلالٌ — يظهر بدل الشمس حين يكون المظهر داكنًا */
+export function MoonIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M20.5 14.8A8.7 8.7 0 0 1 9.2 3.5a8.7 8.7 0 1 0 11.3 11.3z" />
+    </svg>
+  )
+}
+
+/** شعار إكس */
+export function XIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z" />
+    </svg>
+  )
+}
+
+/** شعار تلجرام */
+export function TelegramIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.9-.86.2-1.3l15.97-6.16c.73-.27 1.37.18 1.13 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
+    </svg>
+  )
+}
+
+/** ساعةٌ صغيرة — بجانب توقيت مكة */
+export function ClockIcon({ size = 14 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 6.8V12l3.4 2" />
+    </svg>
+  )
+}
+
 /** زر الرجوع بسهمٍ مرسوم بحدود CSS */
 export function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
