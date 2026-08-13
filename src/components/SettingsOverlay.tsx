@@ -1,16 +1,21 @@
-// إعدادات الواجهة (§٥-٨ و§٦) — لصاحب المكتبة وحده.
+// إعدادات المكتبة (§٥-٨ و§٦) — لصاحب المكتبة وحده.
 // أربعة تبويبات: المظهر والخط، وصفحة الهبوط، والمكتبة، والزوار.
 // تبويب «الزوار» هو موضع الخصوصية: ما يُطفأ هنا يُحذف من استجابة الزائر
 // في قاعدة البيانات نفسها، لا في المتصفح.
+//
+// **لا يُحفظ شيءٌ إلا بزرّ الحفظ.** ما تغيّره يسري على الشاشة فورًا لتعاينه،
+// ويبقى في المتصفّح حتى تحفظه. والإغلاق بتعديلٍ معلَّق يسأل قبل أن يُهمله.
+// يُستثنى ما هو إجراءٌ لا حقل — رفع صورة، وإضافة صفٍّ أو حذفه — فذاك يمضي
+// حين يُضغط، ولا معنى لتأجيله.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { FONTS, FONT_LABELS, FONT_ORDER, THEMES, THEME_LABELS, THEME_ORDER } from '../lib/theme'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import {
   CURRENCIES, META_DEFS, VIS_TOGGLES,
-  type FontName, type ThemeName, type ViewMode, type Visibility,
+  type FontName, type Settings, type ThemeName, type ViewMode, type Visibility,
 } from '../lib/types'
 import ImageSlot from './ImageSlot'
 import {
@@ -20,15 +25,69 @@ import {
 
 type Tab = 'appearance' | 'landing' | 'library' | 'privacy'
 
+/** تعديلاتٌ معلَّقة على نصوص الاقتباسات، مفتاحها معرّف الاقتباس */
+type QuoteEdits = Record<string, { text?: string; author?: string }>
+
+/** يضع تعديلًا على حقلٍ من حقول الإعدادات، معاينةً بلا حفظ */
+type SetField = (patch: Partial<Settings>) => void
+
 export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
+  const { settings, previewSettings, saveSettings, reload } = useLibrary()
   const [tab, setTab] = useState<Tab>('appearance')
+  const [quoteEdits, setQuoteEdits] = useState<QuoteEdits>({})
+  const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+
+  // ما كانت عليه الإعدادات لحظة الفتح: به نعرف المعلَّق، وإليه نردّ عند الإهمال
+  const snapshot = useRef<Settings>(settings)
+
+  const fieldsDirty = JSON.stringify(settings) !== JSON.stringify(snapshot.current)
+  const quotesDirty = Object.keys(quoteEdits).length > 0
+  const dirty = fieldsDirty || quotesDirty
+
+  const setField: SetField = (patch) => {
+    setJustSaved(false)
+    previewSettings(patch)
+  }
+
+  const editQuote = (id: string, patch: { text?: string; author?: string }) => {
+    setJustSaved(false)
+    setQuoteEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+  }
+
+  async function save() {
+    setSaving(true)
+    try {
+      if (fieldsDirty) await saveSettings(settings)
+      for (const [id, patch] of Object.entries(quoteEdits)) {
+        await api.updateLandingQuote(id, patch)
+      }
+      snapshot.current = settings
+      setQuoteEdits({})
+      if (quotesDirty) await reload()
+      setJustSaved(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** الإغلاق لا يبتلع تعديلًا بصمت: يسأل، فإن أُهمل رُدَّت المعاينة */
+  function requestClose() {
+    if (dirty) {
+      const goOn = window.confirm('فيه تعديلاتٌ لم تُحفظ بعد. أتُغلق النافذة وتُهملها؟')
+      if (!goOn) return
+      previewSettings(snapshot.current)
+    }
+    onClose()
+  }
+
   useScrollLock()
-  useEscapeKey(onClose)
+  useEscapeKey(requestClose)
 
   return (
-    <Overlay onClose={onClose} zIndex={90}>
+    <Overlay onClose={requestClose} zIndex={90}>
       <div style={{
-        ...cardStyle, width: 540, maxWidth: '94vw', maxHeight: '86vh', borderRadius: 20,
+        ...cardStyle, width: 560, maxWidth: '94vw', maxHeight: '88vh', borderRadius: 20,
         boxShadow: '0 34px 80px oklch(0.1 0.01 50 / 0.45)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
@@ -36,13 +95,13 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
             <div>
               <div style={{ fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
-                إعدادات الواجهة
+                إعدادات المكتبة
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
                 المظهر والخطوط، وصفحة الهبوط، وأرفف المكتبة وتصانيفها
               </div>
             </div>
-            <CloseButton onClose={onClose} />
+            <CloseButton onClose={requestClose} />
           </div>
 
           <div style={{ display: 'flex', gap: 4, background: 'var(--header)', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
@@ -54,10 +113,41 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="thin-scroll" style={{ overflowY: 'auto', overflowX: 'hidden', padding: '20px 24px 24px', flex: 1, minHeight: 0 }}>
-          {tab === 'appearance' && <AppearanceTab />}
-          {tab === 'landing' && <LandingTab />}
-          {tab === 'library' && <LibraryTab />}
-          {tab === 'privacy' && <PrivacyTab />}
+          {tab === 'appearance' && <AppearanceTab setField={setField} />}
+          {tab === 'landing' && (
+            <LandingTab setField={setField} quoteEdits={quoteEdits} editQuote={editQuote} />
+          )}
+          {tab === 'library' && <LibraryTab setField={setField} />}
+          {tab === 'privacy' && <PrivacyTab setField={setField} />}
+        </div>
+
+        {/* شريط الحفظ: ملتصقٌ بأسفل النافذة فلا يغيب مهما طال التبويب */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 24px', borderTop: '1px solid var(--border)',
+          background: 'var(--header)', flex: 'none',
+        }}>
+          <span style={{ fontSize: 11.5, color: dirty ? 'var(--accent-soft)' : 'var(--muted)', lineHeight: 1.7 }}>
+            {dirty
+              ? 'تعديلاتٌ لم تُحفظ بعد'
+              : justSaved
+                ? 'حُفِظت التعديلات.'
+                : 'الصور والأرفف والتصانيف تُحفظ فور تغييرها.'}
+          </span>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!dirty || saving}
+            style={{
+              border: 'none', borderRadius: 9, padding: '9px 22px',
+              fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap',
+              background: dirty && !saving ? 'var(--accent)' : 'var(--border)',
+              color: dirty && !saving ? 'var(--on-accent)' : 'var(--muted)',
+              cursor: dirty && !saving ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {saving ? '…يُحفظ' : 'حفظ التعديلات'}
+          </button>
         </div>
       </div>
     </Overlay>
@@ -69,8 +159,8 @@ const groupLabel = {
 } as const
 
 // ---------------------------------------------------------------- المظهر
-function AppearanceTab() {
-  const { settings, patchSettings } = useLibrary()
+function AppearanceTab({ setField }: { setField: SetField }) {
+  const { settings } = useLibrary()
 
   const optionCard = (active: boolean) => ({
     flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
@@ -85,7 +175,7 @@ function AppearanceTab() {
       <div style={groupLabel}>الخط</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
         {FONT_ORDER.map((key: FontName) => (
-          <button key={key} type="button" onClick={() => void patchSettings({ font: key })} style={optionCard(settings.font === key)}>
+          <button key={key} type="button" onClick={() => setField({ font: key })} style={optionCard(settings.font === key)}>
             <span style={{ fontFamily: FONTS[key].heading, fontSize: 20, fontWeight: 700 }}>Aa أب</span>
             <span style={{ fontSize: 12 }}>{FONT_LABELS[key]}</span>
           </button>
@@ -95,7 +185,7 @@ function AppearanceTab() {
       <div style={groupLabel}>المظهر</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
         {THEME_ORDER.map((key: ThemeName) => (
-          <button key={key} type="button" onClick={() => void patchSettings({ theme: key })} style={optionCard(settings.theme === key)}>
+          <button key={key} type="button" onClick={() => setField({ theme: key })} style={optionCard(settings.theme === key)}>
             <span style={{
               width: 36, height: 24, borderRadius: 5,
               background: THEMES[key].bg, border: `1px solid ${THEMES[key].border}`,
@@ -112,7 +202,7 @@ function AppearanceTab() {
         <input
           type="range" min={85} max={125} step={5}
           value={settings.ui_scale}
-          onChange={(e) => void patchSettings({ ui_scale: Number(e.target.value) })}
+          onChange={(e) => setField({ ui_scale: Number(e.target.value) })}
           style={{ width: '100%' }}
         />
       </div>
@@ -122,7 +212,7 @@ function AppearanceTab() {
           label="إظهار نقطة حالة القراءة"
           hint="مؤشر صغير على أغلفة الشبكة"
           on={settings.show_status_dots}
-          onChange={() => void patchSettings({ show_status_dots: !settings.show_status_dots })}
+          onChange={() => setField({ show_status_dots: !settings.show_status_dots })}
         />
       </div>
 
@@ -130,7 +220,7 @@ function AppearanceTab() {
         label="إظهار نجوم التقييم"
         hint="في بطاقات الشبكة"
         on={settings.show_ratings}
-        onChange={() => void patchSettings({ show_ratings: !settings.show_ratings })}
+        onChange={() => setField({ show_ratings: !settings.show_ratings })}
       />
     </div>
   )
@@ -157,16 +247,17 @@ const addButton = {
  * الصور والاقتباسات قائمتان مستقلّتان: صور الخلفية تتبدّل بمهلةٍ، والاقتباسات
  * بمهلةٍ أخرى، فلا يجرّ تبديلُ إحداهما الأخرى كما كان في «الشرائح».
  */
-function LandingTab() {
-  const {
-    settings, patchSettings, landingImages, landingQuotes, run, reload,
-  } = useLibrary()
+function LandingTab(
+  { setField, quoteEdits, editQuote }:
+  { setField: SetField; quoteEdits: QuoteEdits; editQuote: (id: string, p: { text?: string; author?: string }) => void },
+) {
+  const { settings, landingImages, landingQuotes, run, reload } = useLibrary()
 
   return (
     <div>
       <div style={groupLabel}>صور الخلفية ({landingImages.length})</div>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.7 }}>
-        صورٌ بالعرض تظهر خلف الشعار وتتبدّل بتلاشٍ. الأنسب أن تكون عريضة (١٦:٩).
+        صورٌ تظهر داخل إطار الشعار وتتبدّل بتلاشٍ. الأنسب أن تكون عريضة (١٦:٩).
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
         {landingImages.map((img) => (
@@ -220,8 +311,8 @@ function LandingTab() {
             display: 'flex', flexDirection: 'column', gap: 6,
           }}>
             <DebouncedTextarea
-              value={q.text}
-              onCommit={(v) => void run(() => api.updateLandingQuote(q.id, { text: v }))}
+              value={quoteEdits[q.id]?.text ?? q.text}
+              onCommit={(v) => editQuote(q.id, { text: v })}
               placeholder="نص الاقتباس"
               style={{
                 minHeight: 58, padding: '7px 9px', borderRadius: 7, border: '1px solid var(--border)',
@@ -231,8 +322,8 @@ function LandingTab() {
             />
             <div style={{ display: 'flex', gap: 6 }}>
               <DebouncedInput
-                value={q.author}
-                onCommit={(v) => void run(() => api.updateLandingQuote(q.id, { author: v }))}
+                value={quoteEdits[q.id]?.author ?? q.author}
+                onCommit={(v) => editQuote(q.id, { author: v })}
                 placeholder="القائل ومصدره"
                 style={{ ...smallInput, flex: 1, fontSize: 12.5 }}
               />
@@ -268,7 +359,7 @@ function LandingTab() {
         <ToggleRow
           label="إظهار بطاقة الاقتباس"
           on={settings.show_landing_quote}
-          onChange={() => void patchSettings({ show_landing_quote: !settings.show_landing_quote })}
+          onChange={() => setField({ show_landing_quote: !settings.show_landing_quote })}
         />
       </div>
 
@@ -277,7 +368,7 @@ function LandingTab() {
           label="التبديل التلقائي"
           hint="تدوير الصور والاقتباسات كلٌّ على مهلته"
           on={settings.auto_rotate}
-          onChange={() => void patchSettings({ auto_rotate: !settings.auto_rotate })}
+          onChange={() => setField({ auto_rotate: !settings.auto_rotate })}
         />
       </div>
 
@@ -290,7 +381,7 @@ function LandingTab() {
             <input
               type="range" min={3} max={30} step={1}
               value={settings.rotate_seconds}
-              onChange={(e) => void patchSettings({ rotate_seconds: Number(e.target.value) })}
+              onChange={(e) => setField({ rotate_seconds: Number(e.target.value) })}
               style={{ width: '100%' }}
             />
           </div>
@@ -302,7 +393,7 @@ function LandingTab() {
             <input
               type="range" min={4} max={60} step={2}
               value={settings.quote_seconds}
-              onChange={(e) => void patchSettings({ quote_seconds: Number(e.target.value) })}
+              onChange={(e) => setField({ quote_seconds: Number(e.target.value) })}
               style={{ width: '100%' }}
             />
           </div>
@@ -316,7 +407,7 @@ function LandingTab() {
             سطرٌ تحت الاسم
             <DebouncedInput
               value={settings.landing_tagline}
-              onCommit={(v) => void patchSettings({ landing_tagline: v })}
+              onCommit={(v) => setField({ landing_tagline: v })}
               style={smallInput}
             />
           </label>
@@ -324,7 +415,7 @@ function LandingTab() {
             نصّ الصفحة — يفصل بين الفقرات سطرٌ فارغ
             <DebouncedTextarea
               value={settings.about_text}
-              onCommit={(v) => void patchSettings({ about_text: v })}
+              onCommit={(v) => setField({ about_text: v })}
               style={{ ...smallInput, minHeight: 150, lineHeight: 1.9, resize: 'vertical' }}
             />
           </label>
@@ -341,7 +432,7 @@ function LandingTab() {
             إكس
             <DebouncedInput
               value={settings.x_url}
-              onCommit={(v) => void patchSettings({ x_url: v.trim() })}
+              onCommit={(v) => setField({ x_url: v.trim() })}
               dir="ltr"
               placeholder="https://x.com/…"
               style={smallInput}
@@ -351,7 +442,7 @@ function LandingTab() {
             تلجرام
             <DebouncedInput
               value={settings.telegram_url}
-              onCommit={(v) => void patchSettings({ telegram_url: v.trim() })}
+              onCommit={(v) => setField({ telegram_url: v.trim() })}
               dir="ltr"
               placeholder="https://t.me/…"
               style={smallInput}
@@ -364,8 +455,8 @@ function LandingTab() {
 }
 
 // -------------------------------------------------------------- المكتبة
-function LibraryTab() {
-  const { settings, patchSettings, shelves, categories, run, reload } = useLibrary()
+function LibraryTab({ setField }: { setField: SetField }) {
+  const { settings, shelves, categories, run, reload } = useLibrary()
   const [newShelf, setNewShelf] = useState('')
   const [newCategory, setNewCategory] = useState('')
 
@@ -435,7 +526,7 @@ function LibraryTab() {
           <button
             key={key}
             type="button"
-            onClick={() => void patchSettings({ default_view: key })}
+            onClick={() => setField({ default_view: key })}
             style={outlineTabStyle(settings.default_view === key)}
           >
             {label}
@@ -446,7 +537,7 @@ function LibraryTab() {
       <div style={{ ...groupLabel, marginBottom: 8 }}>عملة القيمة</div>
       <select
         value={settings.currency}
-        onChange={(e) => void patchSettings({ currency: e.target.value })}
+        onChange={(e) => setField({ currency: e.target.value })}
         style={{
           width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
           background: 'var(--bg)', color: 'var(--text)', fontSize: 13, marginBottom: 20,
@@ -485,12 +576,12 @@ function LibraryTab() {
 }
 
 // --------------------------------------------------------------- الزوار
-function PrivacyTab() {
-  const { settings, patchSettings, categories, books } = useLibrary()
+function PrivacyTab({ setField }: { setField: SetField }) {
+  const { settings, categories, books } = useLibrary()
   const vis = settings.visibility
 
   const toggleVis = (key: keyof Visibility) =>
-    void patchSettings({ visibility: { ...vis, [key]: !vis[key] } })
+    setField({ visibility: { ...vis, [key]: !vis[key] } })
 
   const toggleInList = (list: string[], value: string) =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value]
@@ -522,7 +613,7 @@ function PrivacyTab() {
             <button
               key={def.key}
               type="button"
-              onClick={() => void patchSettings({ hidden_fields: toggleInList(settings.hidden_fields, def.key) })}
+              onClick={() => setField({ hidden_fields: toggleInList(settings.hidden_fields, def.key) })}
               style={chipStyle(!settings.hidden_fields.includes(def.key))}
             >
               {def.label}
@@ -540,7 +631,7 @@ function PrivacyTab() {
             <button
               key={c}
               type="button"
-              onClick={() => void patchSettings({ hidden_categories: toggleInList(settings.hidden_categories, c) })}
+              onClick={() => setField({ hidden_categories: toggleInList(settings.hidden_categories, c) })}
               style={chipStyle(!settings.hidden_categories.includes(c))}
             >
               {c}
@@ -560,7 +651,7 @@ function PrivacyTab() {
             return (
               <div
                 key={b.id}
-                onClick={() => void patchSettings({ hidden_book_ids: toggleInList(settings.hidden_book_ids, b.id) })}
+                onClick={() => setField({ hidden_book_ids: toggleInList(settings.hidden_book_ids, b.id) })}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
                   cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 9,

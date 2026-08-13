@@ -68,16 +68,37 @@ interface LibraryValue {
   patchSettings: (patch: Partial<Settings>) => Promise<void>
   /** يبدّل المظهر: يحفظه صاحبُ المكتبة، ويبقى عند الزائر تفضيلًا في متصفحه */
   cycleTheme: () => void
+  /** تفضيل الزائر لنفسه: يسري فورًا ويُحفظ في متصفّحه لا في المكتبة */
+  setViewerPref: (patch: ViewerPrefs) => void
+  /** تعديلٌ يسري على الشاشة ولا يُرسَل — نافذة الإعدادات تعاين به قبل الحفظ */
+  previewSettings: (patch: Partial<Settings>) => void
+  /** يحفظ الإعدادات كما هي الآن. زرّ الحفظ في النافذة هو الذي يستدعيه. */
+  saveSettings: (next: Settings) => Promise<void>
   run: (job: () => Promise<void>) => Promise<void>
 }
 
-const THEME_PREF_KEY = 'lib-visitor-theme'
+const VIEWER_PREFS_KEY = 'lib-viewer-prefs'
 
-function readThemePref(): Settings['theme'] | null {
+/**
+ * ما يختاره الزائر لنفسه من مظهرٍ وخطٍّ وحجم. لا يُحفظ في المكتبة — فليس
+ * له أن يغيّر ما يراه غيره — بل في متصفّحه وحده.
+ */
+export type ViewerPrefs = Partial<Pick<Settings, 'theme' | 'font' | 'ui_scale'>>
+
+function readViewerPrefs(): ViewerPrefs {
   try {
-    const v = localStorage.getItem(THEME_PREF_KEY)
-    return v === 'warm' || v === 'sepia' || v === 'dark' ? v : null
-  } catch { return null }
+    const raw = localStorage.getItem(VIEWER_PREFS_KEY)
+    if (!raw) return {}
+    const p = JSON.parse(raw) as ViewerPrefs
+    const out: ViewerPrefs = {}
+    // ما جاء من التخزين لا يُصدَّق: قيمةٌ محرَّفة تكسر المظهر كلّه
+    if (p.theme === 'warm' || p.theme === 'sepia' || p.theme === 'dark') out.theme = p.theme
+    if (p.font === 'kitab' || p.font === 'classic' || p.font === 'modern') out.font = p.font
+    if (typeof p.ui_scale === 'number' && p.ui_scale >= 85 && p.ui_scale <= 125) {
+      out.ui_scale = p.ui_scale
+    }
+    return out
+  } catch { return {} }
 }
 
 const LibraryContext = createContext<LibraryValue | null>(null)
@@ -169,9 +190,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
       setShelves(sh); setCategories(c)
       setLandingImages(img); setLandingQuotes(q)
-      // الزائر قد يكون اختار مظهرًا لنفسه، فلا يُلغيه تحميلُ الإعدادات
-      const pref = isOwner ? null : readThemePref()
-      setSettings(pref ? { ...st, theme: pref } : st)
+      // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
+      setSettings(isOwner ? st : { ...st, ...readViewerPrefs() })
       setError(null)
     } catch (e) {
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
@@ -218,16 +238,27 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     await run(() => api.updateSettings(patch as Record<string, unknown>))
   }, [run])
 
+  const setViewerPref = useCallback((patch: ViewerPrefs) => {
+    setSettings((prev) => ({ ...prev, ...patch }))
+    try {
+      localStorage.setItem(VIEWER_PREFS_KEY, JSON.stringify({ ...readViewerPrefs(), ...patch }))
+    } catch { /* لا يضرّ */ }
+  }, [])
+
+  const previewSettings = useCallback((patch: Partial<Settings>) => {
+    setSettings((prev) => ({ ...prev, ...patch }))
+  }, [])
+
+  const saveSettings = useCallback(async (next: Settings) => {
+    await run(() => api.updateSettings(next as unknown as Record<string, unknown>))
+  }, [run])
+
   const cycleTheme = useCallback(() => {
     const order: Settings['theme'][] = ['warm', 'sepia', 'dark']
     const next = order[(order.indexOf(settings.theme) + 1) % order.length]
-    if (isOwner) {
-      void patchSettings({ theme: next })
-    } else {
-      setSettings((prev) => ({ ...prev, theme: next }))
-      try { localStorage.setItem(THEME_PREF_KEY, next) } catch { /* لا يضرّ */ }
-    }
-  }, [settings.theme, isOwner, patchSettings])
+    if (isOwner) void patchSettings({ theme: next })
+    else setViewerPref({ theme: next })
+  }, [settings.theme, isOwner, patchSettings, setViewerPref])
 
   const authorMap = useMemo(() => {
     const map = new Map<string, Author>()
@@ -251,7 +282,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     landingImages, landingQuotes, settings,
     authorById: (id) => (id ? authorMap.get(id) ?? null : null),
     bookById: (id) => bookMap.get(id),
-    reload, patchBook, patchAuthor, patchSettings, cycleTheme, run,
+    reload, patchBook, patchAuthor, patchSettings, cycleTheme,
+    setViewerPref, previewSettings, saveSettings, run,
   }
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>

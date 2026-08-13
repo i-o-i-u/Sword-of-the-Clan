@@ -10,7 +10,7 @@ import { navigate, type Route } from '../lib/router'
 import { THEME_LABELS } from '../lib/theme'
 import { LIBRARY_NAME } from '../lib/types'
 import {
-  BooksIcon, GearIcon, InfoIcon, MoonIcon, QuillIcon, SearchIcon, SunIcon,
+  BooksIcon, GearIcon, LibraryIcon, MoonIcon, QuillIcon, SearchIcon, SunIcon,
   iconButtonStyle, resolveAsset,
 } from './ui'
 
@@ -28,7 +28,6 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
 
   const vis = settings.visibility
   const showAuthorsTab = isOwner || vis.authors
-  const showStatsTab = isOwner || vis.stats
 
   const onBrowse = route.name === 'browse' || route.name === 'book'
   const onAuthors = route.name === 'authors' || route.name === 'author'
@@ -72,17 +71,16 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
           </button>
         )}
 
-        <button type="button" onClick={() => navigate({ name: 'about' })} className={navClass(route.name === 'about')}>
-          <InfoIcon size={17} />
+        <button
+          type="button"
+          onClick={() => navigate({ name: 'about' })}
+          className={navClass(route.name === 'about' || route.name === 'stats')}
+        >
+          <LibraryIcon size={17} />
           عن المكتبة
         </button>
 
-        {/* تبويبان لصاحب المكتبة وحده، لا يراهما الزائر إلا أن يُسمح بالإحصائيات */}
-        {showStatsTab && (
-          <button type="button" onClick={() => navigate({ name: 'stats' })} className={navClass(route.name === 'stats')}>
-            الإحصائيات
-          </button>
-        )}
+        {/* الإحصائيات لم تعد في الرأس — مدخلها من داخل «عن المكتبة» */}
         {canEdit && (
           <button type="button" onClick={() => navigate({ name: 'add' })} className={navClass(route.name === 'add')}>
             إضافة كتاب
@@ -126,17 +124,16 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
           {settings.theme === 'dark' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
         </button>
 
-        {isOwner && (
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title="الإعدادات"
-            aria-label="الإعدادات"
-            style={iconButtonStyle}
-          >
-            <GearIcon size={19} />
-          </button>
-        )}
+        {/* الزائر يفتح إعدادات العرض لنفسه، وصاحب المكتبة يفتح إعدادات المكتبة */}
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          title={isOwner ? 'إعدادات المكتبة' : 'إعدادات العرض'}
+          aria-label={isOwner ? 'إعدادات المكتبة' : 'إعدادات العرض'}
+          style={iconButtonStyle}
+        >
+          <GearIcon size={19} />
+        </button>
       </div>
     </header>
   )

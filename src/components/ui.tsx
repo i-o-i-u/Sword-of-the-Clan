@@ -274,13 +274,34 @@ export function QuillIcon({ size = 18 }: IconProps) {
   )
 }
 
-/** دائرةٌ فيها معلومة — عن المكتبة */
-export function InfoIcon({ size = 18 }: IconProps) {
+/** واجهة مكتبةٍ بأعمدتها — عن المكتبة */
+export function LibraryIcon({ size = 18 }: IconProps) {
   return (
     <svg {...strokeIcon(size)}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11.2v5.3" />
-      <circle cx="12" cy="7.6" r="1.05" fill="currentColor" stroke="none" />
+      <path d="M3.4 9.7L12 4.4l8.6 5.3" />
+      <path d="M5.3 9.7h13.4" />
+      <path d="M7.3 12.2v5.6M12 12.2v5.6M16.7 12.2v5.6" />
+      <path d="M4.4 20.3h15.2" />
+    </svg>
+  )
+}
+
+/** دبّوس موضع — سطر مكان المكتبة */
+export function PinIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M12 21c4.2-4.6 6.3-8 6.3-10.9A6.3 6.3 0 0 0 5.7 10.1C5.7 13 7.8 16.4 12 21z" />
+      <circle cx="12" cy="10.1" r="2.4" />
+    </svg>
+  )
+}
+
+/** أعمدةٌ متفاوتة — الإحصائيات */
+export function ChartIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M4 20h16" />
+      <path d="M7 20V12.5M12 20V5.5M17 20v-5" />
     </svg>
   )
 }

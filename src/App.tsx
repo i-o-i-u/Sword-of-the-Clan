@@ -8,6 +8,7 @@ import Header from './components/Header'
 import LoginOverlay from './components/LoginOverlay'
 import SearchOverlay from './components/SearchOverlay'
 import SettingsOverlay from './components/SettingsOverlay'
+import ViewerSettingsOverlay from './components/ViewerSettingsOverlay'
 import Landing from './views/Landing'
 import About from './views/About'
 import Browse from './views/Browse'
@@ -44,8 +45,8 @@ export default function App() {
     if (route.name === 'stats' && !canSeeStats) navigate({ name: 'browse' })
   }, [route, canEdit, canSeeAuthors, canSeeStats])
 
-  // نافذة الإعدادات لصاحب المكتبة وحده، فتُغلق إن خرج
-  useEffect(() => { if (!isOwner) setShowSettings(false) }, [isOwner])
+  // لا تُغلق نافذة الإعدادات عند الخروج: للزائر نافذتُه المبسّطة، والعرض
+  // نفسه يتفرّع على isOwner فلا يبقى لغير المالك سبيلٌ إلى إعدادات المكتبة.
 
   const openSearch = (query = '') => setSearch({ open: true, query })
 
@@ -106,7 +107,11 @@ export default function App() {
           onClose={() => setSearch({ open: false, query: '' })}
         />
       )}
-      {showSettings && isOwner && <SettingsOverlay onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        isOwner
+          ? <SettingsOverlay onClose={() => setShowSettings(false)} />
+          : <ViewerSettingsOverlay onClose={() => setShowSettings(false)} />
+      )}
       {showLogin && <LoginOverlay onClose={() => setShowLogin(false)} />}
     </>
   )

@@ -2,12 +2,15 @@
 // شاء دون أن يُمسّ الملف، وفقراتها ما فصله سطرٌ فارغ.
 
 import { useLibrary } from '../lib/library'
+import { navigate } from '../lib/router'
 import { LIBRARY_NAME } from '../lib/types'
 import Footer from '../components/Footer'
-import { resolveAsset } from '../components/ui'
+import { ChartIcon, resolveAsset } from '../components/ui'
 
 export default function About() {
-  const { settings, books, authors } = useLibrary()
+  const { settings, books, authors, isOwner } = useLibrary()
+  // مدخل الإحصائيات صار من هنا لا من الرأس
+  const canSeeStats = isOwner || settings.visibility.stats
 
   const paragraphs = settings.about_text
     .split(/\n\s*\n/)
@@ -51,6 +54,15 @@ export default function About() {
             </div>
           ))}
         </div>
+
+        {canSeeStats && (
+          <div className="about-stats-link">
+            <button type="button" onClick={() => navigate({ name: 'stats' })}>
+              <ChartIcon size={17} />
+              إحصائيات المكتبة بالتفصيل
+            </button>
+          </div>
+        )}
       </main>
 
       <Footer />
