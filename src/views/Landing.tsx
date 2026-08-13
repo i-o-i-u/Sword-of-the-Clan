@@ -114,24 +114,40 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
             </div>
           </div>
 
+          {/* كل زرٍّ أيقونةٌ وحدها، واسمه ينزلق من تحتها عند التمرير */}
           <div className="hero-actions">
-            <button type="button" className="hero-btn hero-btn-main" onClick={() => navigate({ name: 'browse' })}>
-              <BooksIcon size={18} />
-              الدخول إلى المكتبة
+            <button
+              type="button"
+              className="hero-btn hero-btn-main"
+              onClick={() => navigate({ name: 'browse' })}
+              title="الدخول إلى المكتبة"
+              aria-label="الدخول إلى المكتبة"
+            >
+              <BooksIcon size={21} />
+              <span>الدخول إلى المكتبة</span>
             </button>
-            <button type="button" className="hero-btn" onClick={() => onOpenSearch()}>
-              <SearchIcon size={16} />
-              ابحث عن كتاب
+
+            <button
+              type="button"
+              className="hero-btn"
+              onClick={() => onOpenSearch()}
+              title="ابحث عن كتاب"
+              aria-label="ابحث عن كتاب"
+            >
+              <SearchIcon size={19} />
+              <span>ابحث عن كتاب</span>
             </button>
+
             <button
               type="button"
               className="hero-btn"
               onClick={suggestBook}
               disabled={books.length === 0}
-              title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'كتابٌ بالقرعة'}
+              title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
+              aria-label="اقترح لي كتابًا"
             >
-              <SuggestIcon size={18} />
-              اقترح لي كتابًا
+              <SuggestIcon size={21} />
+              <span>اقترح لي كتابًا</span>
             </button>
           </div>
         </div>
@@ -141,7 +157,8 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
 
       {settings.show_landing_quote && quote && (
         <section className="quote-wrap">
-          <figure className="quote-card">
+          {/* المفتاح يُعيد بناء البطاقة عند تبدّل الاقتباس فتُعاد حركة الظهور */}
+          <figure className="quote-card" key={quote.id}>
             <span className="quote-mark" aria-hidden="true">”</span>
 
             <blockquote className="quote-text">{quote.text}</blockquote>

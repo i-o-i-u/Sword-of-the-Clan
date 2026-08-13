@@ -117,7 +117,7 @@ export function makkahMoment(now: Date = new Date()): MakkahMoment {
     month,
     year: toArabicDigits(parseInt(hijri.year, 10)),
     time: toArabicDigits(`${time.hour}:${time.minute}:${time.second}`),
-    meridiem: (time.dayPeriod ?? '').toUpperCase() === 'PM' ? 'مساءً' : 'صباحًا',
+    meridiem: (time.dayPeriod ?? '').toUpperCase() === 'PM' ? 'مَساءًا' : 'صباحًا',
   }
 }
 

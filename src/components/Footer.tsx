@@ -30,7 +30,7 @@ export default function Footer() {
           <p className="footer-copy">
             <span className="footer-name">{LIBRARY_NAME}</span>
             <span className="footer-sep" aria-hidden="true">◆</span>
-            <span>جميع الحقوق محفوظة</span>
+            <span>© جميع الحقوق محفوظة</span>
             <span className="footer-sep" aria-hidden="true">◆</span>
             <span className="footer-year">{year} هـ</span>
           </p>

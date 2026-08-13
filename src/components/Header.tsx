@@ -11,7 +11,7 @@ import { THEME_LABELS } from '../lib/theme'
 import { LIBRARY_NAME } from '../lib/types'
 import {
   BooksIcon, GearIcon, LibraryIcon, MoonIcon, QuillIcon, SearchIcon, SunIcon,
-  iconButtonStyle, resolveAsset,
+  resolveAsset,
 } from './ui'
 
 interface Props {
@@ -119,7 +119,7 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
           onClick={cycleTheme}
           title={`تبديل المظهر (${THEME_LABELS[settings.theme]})`}
           aria-label="تبديل المظهر"
-          style={iconButtonStyle}
+          className="icon-btn theme-btn"
         >
           {settings.theme === 'dark' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
         </button>
@@ -130,7 +130,7 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
           onClick={onOpenSettings}
           title={isOwner ? 'إعدادات المكتبة' : 'إعدادات العرض'}
           aria-label={isOwner ? 'إعدادات المكتبة' : 'إعدادات العرض'}
-          style={iconButtonStyle}
+          className="icon-btn gear-btn"
         >
           <GearIcon size={19} />
         </button>
