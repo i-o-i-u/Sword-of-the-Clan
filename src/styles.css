@@ -38,7 +38,19 @@ body {
   color: var(--text);
   font-family: var(--body-font);
   transition: background 0.25s, color 0.25s;
+  /* شبكةُ أمانٍ للشاشات الضيّقة: ما تجاوز العرضَ يُقصّ ولا يفتح تمريرًا
+     أفقيًّا للصفحة كلِّها. و`clip` لا `hidden` عمدًا: الأخير يُنشئ حاويةَ
+     تمرير فيُبطل `position: sticky` في الرأس وفي عمود التصفُّح. */
+  overflow-x: clip;
 }
+
+/* ما لا ينضغط بطبعه يُمنَع من تجاوز حاويته: الصور والحقول أكثرُ ما يخرج عن
+   حدود الشاشة الضيّقة، فالحقلُ له عرضٌ ابتدائيّ لا يعرف أباه. */
+img, svg, video, canvas { max-width: 100%; }
+input, select, textarea, button { max-width: 100%; }
+
+/* الكلمة الطويلة — رابطٌ أو ردمك — تكسر السطر ولا تمدّ البطاقة */
+p, li, td, th, dd, dt { overflow-wrap: break-word; }
 
 ::selection { background: oklch(0.42 0.09 45 / 0.25); }
 
@@ -110,6 +122,10 @@ input[dir='ltr'] { text-align: left; }
   transform: translateY(-6px);
   box-shadow: 0 8px 16px oklch(0.2 0.02 50 / 0.3);
 }
+
+/* حاشية طبقات النوافذ. في ملف الأنماط لا في النمط السطريّ كي تضيق على
+   الشاشات الضيّقة، فالنافذة هناك تكاد تملأ الشاشة. */
+.overlay-wrap { padding: 20px; }
 
 /* شريط تمرير رفيع داخل نافذة الإعدادات */
 .thin-scroll {
@@ -842,6 +858,87 @@ input[dir='ltr'] { text-align: left; }
 }
 .footer-link:active { transform: translateY(0) scale(0.96); }
 
+/* =============================================== أدوات صفحة التصفُّح */
+
+/* لوحُ عدّاد المكتبة: إطارٌ داخليٌّ ثانٍ يعطيه هيئة اللوح المزخرف، كما في
+   بطاقة الاقتباس. وهو أوّل ما تقع عليه العين في الصفحة، فلا يكون سطرًا. */
+.total-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 150px;
+  padding: 10px 22px;
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+  box-shadow: 0 6px 18px oklch(0.24 0.02 50 / 0.1);
+}
+
+.total-box::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, transparent);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.total-box-label {
+  font-family: var(--heading-font);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-soft);
+  letter-spacing: 0.3px;
+}
+
+.total-box-value {
+  font-family: var(--heading-font);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.total-box-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* زرّا الحاسبة والإحصائيات: بقامة اللوح نفسها، فيقوم الثلاثة صفًّا واحدًا */
+.side-tool {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 104px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.18s;
+}
+.side-tool svg { color: var(--accent-soft); }
+.side-tool:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 20px oklch(0.24 0.02 50 / 0.12);
+  transform: translateY(-2px);
+}
+.side-tool:active { transform: translateY(0) scale(0.97); }
+
+/* شريط الحروف يفصله خطٌّ عمّا فوقه */
+.letter-bar {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
 /* ------------------------------------------------------- عن المكتبة */
 .about-main { max-width: 820px; margin: 0 auto; padding: 54px 32px 40px; }
 .about-head { text-align: center; margin-bottom: 34px; }
@@ -957,6 +1054,8 @@ input[dir='ltr'] { text-align: left; }
   .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .stats-pair { grid-template-columns: 1fr !important; }
   .form-row { grid-template-columns: 1fr !important; }
+  /* صفوف التصفيات: اسم الوجه فوق مربّعاته لا عن يمينها */
+  .filter-row { grid-template-columns: 1fr !important; gap: 7px !important; }
 
   /* الرأس يتكدّس: الشعار وأدواته في سطر، والبحث والتبويبات تحته */
   .app-header { gap: 12px; row-gap: 10px; flex-wrap: wrap; }
@@ -989,6 +1088,38 @@ input[dir='ltr'] { text-align: left; }
   .footer-row { justify-content: center; text-align: center; }
   .stats-grid { grid-template-columns: 1fr !important; }
   .about-figures { gap: 26px; }
+
+  /* النوافذ تكاد تملأ الشاشة الضيّقة، فحاشيتُها تضيق */
+  .overlay-wrap { padding: 10px !important; }
+
+  /* عدّاد المكتبة وخدمتاه: صفٌّ يتقاسمونه، فلا يتكدّس ثلاثة ألواح طوليًّا */
+  .browse-head { gap: 14px; }
+  .browse-head > div:last-child { width: 100%; }
+  .total-box { flex: 1 1 100%; flex-direction: row; gap: 10px; padding: 9px 16px; }
+  .total-box-label { font-size: 12px; }
+  .total-box-value { font-size: 21px; }
+  .total-box-sub { margin-inline-start: auto; }
+  .side-tool { flex: 1 1 0; min-width: 0; padding: 9px 8px; font-size: 11.5px; }
+
+  /* أسماء طرق العرض تسقط وتبقى أيقوناتها: الثلاثة معروفةٌ بأشكالها */
+  .view-btn-name { display: none; }
+
+  /* مربّعات الحروف أصغر، فتقلّ أسطرها */
+  .letter-bar button { min-width: 27px !important; height: 27px !important; font-size: 12.5px !important; }
+}
+
+/* ----------------------------------------------- الشاشات البالغة الضيق */
+/* دون ٤٢٠ بكسل: ما بقي من صفوفٍ ثنائيّة يُفكّ، والحواشي تُقلَّص إلى أدنى ما
+   يبقى معه النصُّ بعيدًا عن الحافّة. */
+@media (max-width: 420px) {
+  .app-main { padding: 16px 12px !important; }
+  .app-header { padding: 9px 12px !important; }
+  .stats-grid { grid-template-columns: 1fr !important; }
+  .detail-fields { grid-template-columns: 1fr !important; }
+  .publisher-head { flex-direction: column; align-items: center; text-align: center; }
+  .quote-wrap { padding: 0 12px 30px; }
+  .site-footer { padding: 0 12px 22px; }
+  .hero { padding: 24px 12px 34px; }
 }
 
 /* ------------------------------------------------- من يكره الحركة */

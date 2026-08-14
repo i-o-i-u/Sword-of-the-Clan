@@ -19,7 +19,7 @@ export const SEARCH_FIELDS: { key: string; label: string; def: boolean }[] = [
   { key: 'title',      label: 'العنوان',        def: true },
   { key: 'subtitle',   label: 'العنوان الفرعي', def: true },
   { key: 'author',     label: 'المؤلف',         def: true },
-  { key: 'contributors', label: 'المحقق ومن معه', def: true },
+  { key: 'contributors', label: 'المحقِّق ونحوه', def: true },
   { key: 'publisher',  label: 'دار النشر',      def: true },
   { key: 'series',     label: 'السلسلة',        def: false },
   { key: 'topic',      label: 'الموضوع',        def: true },

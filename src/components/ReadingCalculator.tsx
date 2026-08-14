@@ -74,7 +74,7 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
       <div
         style={{
           ...cardStyle, borderRadius: 18, padding: 0, width: 'min(640px, 100%)',
-          maxHeight: 'calc(100vh - 88px)', display: 'flex', flexDirection: 'column',
+          maxHeight: 'calc(100vh / var(--ui-scale) - 88px)', display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
         }}
       >

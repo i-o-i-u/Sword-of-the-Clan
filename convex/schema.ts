@@ -15,8 +15,15 @@ export const era = v.union(
   v.literal('هـ'), v.literal('م'), v.literal('ق.هـ'), v.literal('ق.م'),
 )
 
+/**
+ * حالة القراءة. الفراغ حالةٌ رابعة مقصودة: «غير معروفة»، يرجع إليها صاحب
+ * المكتبة متى أراد رفع ما أثبته. و«تم القراءة» لفظٌ متروك بقيَ في الاتحاد
+ * لأن في القاعدة كتبًا كُتبت به قبل أن يصير «مقروء» — يقبله المخطّط،
+ * ويحوّله `toClient` عند القراءة فلا تراه الواجهة.
+ */
 export const readingStatus = v.union(
-  v.literal('لم تُقرأ'), v.literal('قيد القراءة'), v.literal('تم القراءة'),
+  v.literal('لم تُقرأ'), v.literal('قيد القراءة'), v.literal('مقروء'),
+  v.literal('تم القراءة'), v.literal(''),
 )
 
 export const perkKind = v.union(v.literal('فائدة'), v.literal('مقتطف'))
@@ -81,6 +88,11 @@ export const bookFields = {
   volumes: v.union(v.number(), v.null()),
   single_volume: v.boolean(),
   volume_pages: v.array(v.union(v.number(), v.string())),
+  // ما اشتمل عليه كل مجلَّد من أسفار المؤلِّف وأجزائه، نصًّا كما يُكتب
+  // («٥-٧»، «الثامن»). اختياريّ لأن الكتب المفهرَسة قبله لا تحمله.
+  volume_parts: v.optional(v.array(v.string())),
+  // أرقام مجلَّدات الفهارس. لا تُحسب صفحاتُها في الإجمالي: فهرسٌ لا متن.
+  index_volumes: v.optional(v.array(v.number())),
   pages: v.union(v.number(), v.null()),
   isbn: v.string(),
   language: v.string(),
@@ -163,6 +175,8 @@ export default defineSchema({
     founded: v.string(),
     website: v.string(),
     notes: v.string(),
+    // شعار الدار، يُرفع من صفحتها. اختياريّ لأن الدُّور المسجَّلة قبله بلا شعار.
+    logo_url: v.optional(v.union(v.string(), v.null())),
   }).index('by_name', ['name']),
 
   book_works: defineTable({

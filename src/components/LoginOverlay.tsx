@@ -127,7 +127,9 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={handleSubmit}
         style={{
-          ...cardStyle, width: 420, maxWidth: '94vw', borderRadius: 18,
+          // النسبة المئوية لا `vw`: البطاقة داخل `#root` المكبَّر بـ zoom،
+          // و`vw` لا تتبع التكبير فتخرج البطاقةُ عن الشاشة كلّما كبّر القارئ
+          ...cardStyle, width: 'min(420px, 100%)', borderRadius: 18,
           boxShadow: '0 30px 70px oklch(0.1 0.01 50 / 0.45)', padding: 26,
         }}
       >

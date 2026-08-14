@@ -30,7 +30,7 @@ export default function ViewerSettingsOverlay({ onClose }: { onClose: () => void
   return (
     <Overlay onClose={onClose} zIndex={90}>
       <div style={{
-        ...cardStyle, width: 440, maxWidth: '94vw', borderRadius: 18,
+        ...cardStyle, width: 'min(440px, 100%)', borderRadius: 18,
         boxShadow: '0 30px 70px oklch(0.1 0.01 50 / 0.42)', padding: 24,
       }}>
         <div style={{

@@ -20,12 +20,13 @@ import { navigate } from '../lib/router'
 import {
   BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, LANGUAGES, ORIGINAL_LANGUAGES, SIZES,
   SOURCES, SOURCE_DETAILS, WORK_TYPES,
-  editionInWords, parseNumber, type Contributor,
+  editionInWords, formatNumber, parseNumber, sumVolumePages, type Contributor,
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
 import {
-  BackButton, RiyalGlyph, SectionHeading, cardStyle, primaryButtonStyle,
+  BackButton, Combobox, RiyalGlyph, SectionHeading, TagIcon,
+  cardStyle, primaryButtonStyle,
 } from '../components/ui'
 
 const inputStyle = {
@@ -105,7 +106,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   )
   const [series, setSeries] = useState(() => editing?.series ?? '')
   const [seriesNo, setSeriesNo] = useState(() => editing?.series_no ?? '')
-  const [category, setCategory] = useState(() => editing?.category ?? categories[0] ?? '')
+  const [category, setCategory] = useState(() => editing?.category ?? '')
+  // تصنيفٌ كتبه الفاهرس هنا ولمّا يُحفظ بعدُ: يظهر في المربَّعات مختارًا،
+  // ولا يدخل تصنيفات المكتبة إلا مع حفظ الكتاب
+  const [pendingCategories, setPendingCategories] = useState<string[]>(
+    () => (editing?.category && !categories.includes(editing.category) ? [editing.category] : []),
+  )
 
   // --------------------------------------------------------- ٢. بيانات الطبعة
   const [publisherName, setPublisherName] = useState(() => editing?.publisher ?? '')
@@ -126,6 +132,15 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [volumePages, setVolumePages] = useState<string[]>(
     () => (editing?.volume_pages ?? []).map((v) => String(v)),
   )
+  // ما اشتمل عليه كل مجلَّد من أسفار المؤلِّف: قد يجمع المجلَّدُ الرابعُ
+  // الأسفارَ الخامسَ والسادسَ والسابع، ويقتصر الخامسُ على الثامن وحده.
+  const [volumeParts, setVolumeParts] = useState<string[]>(
+    () => (editing?.volume_parts ?? []).map((v) => String(v)),
+  )
+  // مجلَّدات الفهارس: تُعلَّم فلا تُحسب صفحاتُها في الإجمالي — فهرسٌ لا متن
+  const [indexVolumes, setIndexVolumes] = useState<number[]>(
+    () => [...(editing?.index_volumes ?? [])],
+  )
   const [pages, setPages] = useState(() => str(editing?.pages))
   const [isbn, setIsbn] = useState(() => editing?.isbn ?? '')
   const [language, setLanguage] = useState(() => editing?.language || LANGUAGES[0])
@@ -139,7 +154,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [binding, setBinding] = useState(() => editing?.binding || BINDINGS[0])
   const [condition, setCondition] = useState(() => editing?.condition || CONDITIONS[1])
   const [value, setValue] = useState(() => (editing?.value ? String(editing.value) : ''))
-  const [source, setSource] = useState(() => editing?.source || SOURCES[0])
+  // الفارغ صفةُ ورودٍ «غير مُحدَّدة»، وهو الأصل: لا يُلزَم أحدٌ بما لا يعرف
+  const [source, setSource] = useState(() => editing?.source ?? '')
   const [sourceDetail, setSourceDetail] = useState(() => editing?.source_detail ?? '')
   const [acquired, setAcquired] = useState<HijriYear>(() => (editing
     ? {
@@ -163,9 +179,14 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [newWorks, setNewWorks] = useState<{ target_book_id: string; type: string }[]>([])
 
   const [coverUrl, setCoverUrl] = useState<string | null>(() => editing?.cover_url ?? null)
-  // كعبٌ لكل مجلَّد، مفتاحُه رقمُه كما في المخطّط
-  const [spines, setSpines] = useState<Record<string, string>>(
-    () => ({ ...(editing?.spine_images ?? {}) }),
+  /**
+   * كَعْبٌ واحد للكتاب كلِّه، لا كعبٌ لكل مجلَّد: كعوب المجلَّدات في الطبعة
+   * الواحدة صورةٌ واحدة لا تختلف إلا برقمها، فتُرفع مرةً وتُكرَّر على الرفّ
+   * ويُوضع على كل واحدٍ منها رقمُ مجلَّده. ويبقى `spine_images` سجلًّا كما
+   * هو في المخطّط، مفتاحُه «1» لا غير.
+   */
+  const [spine, setSpine] = useState<string | null>(
+    () => editing?.spine_images?.['1'] ?? null,
   )
   const [saving, setSaving] = useState(false)
 
@@ -178,19 +199,39 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     [publishers, publisherName],
   )
 
+  // قوائم ما في المكتبة، تُعرض في الحقول التي تقبل الجديد والمُختار جميعًا
+  const authorNames = useMemo(() => authors.map((a) => a.name), [authors])
+  const publisherNames = useMemo(() => publishers.map((p) => p.name), [publishers])
+  const seriesNames = useMemo(
+    () => [...new Set(books.map((b) => b.series.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ar')),
+    [books],
+  )
+  /** أسماء من عُرفوا بصفةٍ في كتبٍ سابقة: المحقِّقون والمراجعون ومن معهم */
+  const contributorNames = useMemo(() => {
+    const found = new Set<string>()
+    books.forEach((b) => (b.contributors ?? []).forEach((c) => {
+      if (c.name.trim()) found.add(c.name.trim())
+    }))
+    return [...found].sort((a, b) => a.localeCompare(b, 'ar'))
+  }, [books])
+
   const volumeCount = singleVolume ? 1 : Math.min(40, Math.max(1, parseNumber(volumes) ?? 1))
   const manyVolumes = !singleVolume && volumeCount > 1
-  const volumeSum = volumePages
-    .slice(0, volumeCount)
-    .reduce((sum, v) => sum + (parseNumber(v) ?? 0), 0)
+  // مجلَّدات الفهارس خارج الحساب، وما جاوز العددَ المُدخَل لا يُعتدّ به
+  const volumeSum = sumVolumePages(volumePages.slice(0, volumeCount), indexVolumes)
 
+  /**
+   * ما يُقال تحت اسم المؤلِّف. وهو خبرٌ عمّا سيقع، فلا يُقال في التعديل:
+   * الكتاب في صفحة مؤلِّفه من قبلُ، فلا شيء «سيُضاف».
+   */
   const authorHint = useMemo(() => {
+    if (editing) return ''
     const trimmed = authorRows[0]?.name.trim()
     if (!trimmed) return ''
     return authors.some((a) => a.name === trimmed)
       ? 'سيُضاف الكتاب إلى صفحة هذا المؤلِّف'
       : 'مؤلِّفٌ جديد، ستُنشأ له صفحة خاصة'
-  }, [authorRows, authors])
+  }, [authorRows, authors, editing])
 
   const ready = !!(title.trim() && authorRows[0]?.name.trim())
 
@@ -250,8 +291,16 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         await api.addCategory(trimmedCategory, categories.length)
       }
 
+      // صفحات المجلَّدات تُحفظ بطول عدد المجلَّدات تمامًا، فموضعُ كل رقمٍ هو
+      // رقمُ مجلَّده. ولو رُشِّح الفارغ منها لانزاح ما بعده عن موضعه.
       const volPages = manyVolumes
-        ? volumePages.slice(0, volumeCount).map((v) => parseNumber(v)).filter((n): n is number => n != null)
+        ? Array.from({ length: volumeCount }, (_, i) => parseNumber(volumePages[i]) ?? 0)
+        : []
+      const volParts = manyVolumes
+        ? Array.from({ length: volumeCount }, (_, i) => (volumeParts[i] ?? '').trim())
+        : []
+      const indexVols = manyVolumes
+        ? indexVolumes.filter((n) => n >= 1 && n <= volumeCount).sort((a, b) => a - b)
         : []
 
       const fields: api.BookInput = {
@@ -284,6 +333,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         volumes: singleVolume ? 1 : parseNumber(volumes),
         single_volume: singleVolume,
         volume_pages: volPages,
+        volume_parts: volParts,
+        index_volumes: indexVols,
         // مجموع صفحات المجلَّدات يُحسب، ولا يُكتب باليد إلا في المجلَّد الواحد
         pages: manyVolumes ? (volumeSum > 0 ? volumeSum : null) : parseNumber(pages),
         isbn: isbn.trim(),
@@ -309,9 +360,10 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         notes: notes.trim(),
 
         cover_url: coverUrl,
-        // الكعوب المرفوعة، وبها يُفعَّل عرضُها على الرف
-        spine_images: spines,
-        use_spine: Object.keys(spines).length > 0,
+        // الكعب المرفوع، وبه يُفعَّل عرضُه على الرف. مفتاحُه «1» لا غير:
+        // صورةٌ واحدة تُكرَّر على مجلَّدات الكتاب كلِّها.
+        spine_images: spine ? { '1': spine } : {},
+        use_spine: !!spine,
       }
 
       const id = editing ? (await api.updateBook(editing.id, fields), editing.id)
@@ -361,32 +413,37 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             />
           </div>
 
-          {/* الكعوب هي ما يُعرض في «عرض الأرفف»: كعوب الكتب مصفوفةً كما تُرى
-              في المكتبة. وعددُها يتبع عدد المجلَّدات المُدخَل. */}
+          {/* الكعب هو ما يُعرض في «عرض الأرفف»: كعوب الكتب مصفوفةً كما تُرى في
+              المكتبة. وهو صورةٌ واحدة للكتاب كلِّه — كعوب مجلَّدات الطبعة
+              الواحدة لا تختلف إلا برقمها — فتُكرَّر على عدد المجلَّدات ويُوضع
+              على كل واحدٍ منها رقمُ مجلَّده في دائرة. */}
           <div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 8 }}>
-              {volumeCount > 1 ? 'كعوب المجلَّدات' : 'كَعْب الكتاب'} (اختياري)، تُعرَض في «عرض الأرفف».
+              كَعْب الكتاب (اختياري)، يُعرَض في «عرض الأرفف».
+              {volumeCount > 1 && ` وتُكرَّر الصورة على مجلَّداته الـ${volumeCount} برقم كلِّ مجلَّد.`}
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
-              {Array.from({ length: volumeCount }, (_, i) => {
-                const key = String(i + 1)
-                return (
-                  <div key={key} style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 42, height: 158, borderRadius: 4, overflow: 'hidden' }}>
-                      <ImageSlot
-                        url={spines[key] ?? null}
-                        folder="spines"
-                        canEdit
-                        placeholder="كعب"
-                        onUploaded={(url) => setSpines((prev) => ({ ...prev, [key]: url }))}
-                      />
-                    </div>
-                    {volumeCount > 1 && (
-                      <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>مجلَّد {key}</span>
-                    )}
-                  </div>
-                )
-              })}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ width: 46, height: 168, borderRadius: 4, overflow: 'hidden', flex: 'none' }}>
+                <ImageSlot
+                  url={spine}
+                  folder="spines"
+                  canEdit
+                  placeholder="كعب"
+                  onUploaded={(url) => setSpine(url)}
+                />
+              </div>
+              {spine && (
+                <button
+                  type="button"
+                  onClick={() => setSpine(null)}
+                  style={{
+                    border: '1px solid var(--border)', background: 'none', color: 'var(--muted)',
+                    borderRadius: 8, padding: '5px 10px', fontSize: 11.5,
+                  }}
+                >
+                  إزالة الكعب
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -411,14 +468,15 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             >
               <label style={labelStyle}>
                 {i === 0 ? 'المُؤلِّف' : `المُؤلِّف ${i + 1}`}
-                <input
+                <Combobox
                   value={row.name}
-                  onChange={(e) => fillFromKnownAuthor(i, e.target.value)}
-                  list="known-authors"
+                  onChange={(name) => fillFromKnownAuthor(i, name)}
+                  options={authorNames}
                   placeholder="اكتب اسمًا جديدًا أو اختر من مؤلِّفي المكتبة"
-                  style={inputStyle}
                 />
-                {i === 0 && <span style={{ fontSize: 11, color: 'var(--accent-soft)' }}>{authorHint}</span>}
+                {i === 0 && authorHint && (
+                  <span style={{ fontSize: 11, color: 'var(--accent-soft)' }}>{authorHint}</span>
+                )}
               </label>
 
               <div style={{ ...labelStyle, gap: 6 }}>
@@ -494,10 +552,6 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               )}
             </div>
           ))}
-          <datalist id="known-authors">
-            {authors.map((a) => <option key={a.id} value={a.name} />)}
-          </datalist>
-
           <label style={labelStyle}>
             العنوان الفرعي
             <input
@@ -528,10 +582,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               </label>
               <label style={labelStyle}>
                 {i === 0 ? 'الاسم' : ''}
-                <input
+                <Combobox
                   value={row.name}
-                  onChange={(e) => patchContrib(i, { name: e.target.value })}
-                  style={inputStyle}
+                  onChange={(name) => patchContrib(i, { name })}
+                  options={contributorNames}
+                  placeholder="اكتب اسمًا جديدًا أو اختر ممّن في المكتبة"
                 />
               </label>
               {i === contribRows.length - 1 ? (
@@ -561,7 +616,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           <div className="form-row" style={row21}>
             <label style={labelStyle}>
               اسم السلسلة
-              <input value={series} onChange={(e) => setSeries(e.target.value)} style={inputStyle} />
+              <Combobox
+                value={series}
+                onChange={setSeries}
+                options={seriesNames}
+                placeholder="اكتب سلسلةً جديدة أو اختر من سلاسل المكتبة"
+              />
             </label>
             <label style={labelStyle}>
               رقمه في السلسلة
@@ -569,22 +629,17 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
           </div>
 
-          <label style={labelStyle}>
-            التصنيف
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              list="known-categories"
-              placeholder="اختر تصنيفًا أو اكتب تصنيفًا جديدًا"
-              style={inputStyle}
-            />
-            <datalist id="known-categories">
-              {categories.map((c) => <option key={c} value={c} />)}
-            </datalist>
-            {category.trim() && !categories.includes(category.trim()) && (
-              <span style={{ fontSize: 11, color: 'var(--accent-soft)' }}>تصنيفٌ جديد، سيُضاف إلى تصنيفات المكتبة</span>
-            )}
-          </label>
+          {/* التصنيفات مربَّعاتٌ تُرى كلُّها بنظرةٍ واحدة، لا قائمةٌ تُفتح:
+              تصنيفات المكتبة معدودة، والاختيار من المرئيّ أسرع من التذكّر. */}
+          <CategoryPicker
+            value={category}
+            onChange={setCategory}
+            known={categories}
+            extra={pendingCategories}
+            onAdd={(name) => setPendingCategories((prev) => (
+              prev.includes(name) || categories.includes(name) ? prev : [...prev, name]
+            ))}
+          />
 
           {/* ----------------------------------------------- ٢. بيانات الطبعة */}
           <SectionHeading>٢. بيانات الطبعة</SectionHeading>
@@ -592,31 +647,27 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           <div className="form-row" style={row21}>
             <label style={labelStyle}>
               دار النَّشْر
-              <input
+              <Combobox
                 value={publisherName}
-                onChange={(e) => {
-                  const name = e.target.value
+                onChange={(name) => {
                   setPublisherName(name)
                   const known = publishers.find((p) => p.name === name.trim())
                   // مكان الدار يتبعها: يُملأ منها، ويُفرَّغ إن غُيِّر اسمُها
                   if (known) setPlace(known.place)
                   else if (knownPublisher) setPlace('')
                 }}
-                list="known-publishers"
+                options={publisherNames}
                 placeholder="اكتب اسم الدار أو اخترها"
-                style={inputStyle}
+                emptyHint={editing ? undefined : 'دارٌ جديدة، سيُنشأ لها سجلّ في «دُوْر النَّشْر»'}
               />
-              <datalist id="known-publishers">
-                {publishers.map((p) => <option key={p.id} value={p.name} />)}
-              </datalist>
             </label>
             <label style={labelStyle}>
-              مكان النَّشْر
+              بلد النَّشْر
               <input
                 value={place}
                 onChange={(e) => setPlace(e.target.value)}
                 readOnly={!!knownPublisher}
-                title={knownPublisher ? 'مكان الدار يُعدَّل من صفحة دُوْر النَّشْر' : undefined}
+                title={knownPublisher ? 'بلد الدار يُعدَّل من صفحة دُوْر النَّشْر' : undefined}
                 style={knownPublisher ? lockedStyle : inputStyle}
               />
               {knownPublisher && (
@@ -727,30 +778,78 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </div>
           </div>
 
-          {/* حقول صفحات المجلَّدات تُنشأ بعدد المجلَّدات المُدخَل */}
+          {/* تفصيل المجلَّدات، صفٌّ لكل مجلَّد: صفحاتُه، وما اشتمل عليه من
+              أسفار المؤلِّف، وهل هو مجلَّد فهارس. ومجلَّد الفهارس لا تُحسب
+              صفحاتُه في الإجمالي، فيسقط حقلُ صفحاته أصلًا. */}
           {manyVolumes && (
             <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>عدد صفحات كلّ مُجلَّد</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>تفصيل المُجلَّدات</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.8 }}>
+                صفحاتُ كلِّ مجلَّد، وما اشتمل عليه من أسفار المؤلِّف وأجزائه
+                (مثل: ٥-٧، أو: الثامن). ومجلَّدات الفهارس تُعلَّم فلا تُحسب
+                صفحاتُها في الإجمالي.
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                {Array.from({ length: volumeCount }, (_, i) => {
+                  const volume = i + 1
+                  const isIndex = indexVolumes.includes(volume)
+                  return (
+                    <div
+                      key={i}
+                      className="form-row"
+                      style={{
+                        display: 'grid', gridTemplateColumns: '74px 110px minmax(0,1fr) auto',
+                        gap: 10, alignItems: 'center',
+                      }}
+                    >
+                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>المُجلَّد {volume}</span>
+                      <input
+                        value={volumePages[i] ?? ''}
+                        onChange={(e) => setVolumePages((prev) => {
+                          const next = prev.slice()
+                          next[i] = e.target.value
+                          return next
+                        })}
+                        placeholder="صفحات"
+                        inputMode="numeric"
+                        aria-label={`صفحات المجلَّد ${volume}`}
+                        style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
+                      />
+                      <input
+                        value={volumeParts[i] ?? ''}
+                        onChange={(e) => setVolumeParts((prev) => {
+                          const next = prev.slice()
+                          next[i] = e.target.value
+                          return next
+                        })}
+                        placeholder="ما فيه من الأسفار (اختياري)"
+                        aria-label={`أسفار المجلَّد ${volume}`}
+                        style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
+                      />
+                      <label style={{ ...checkStyle, fontSize: 11.5, color: 'var(--muted)' }}>
+                        <input
+                          type="checkbox"
+                          checked={isIndex}
+                          onChange={(e) => setIndexVolumes((prev) => (
+                            e.target.checked
+                              ? [...prev, volume]
+                              : prev.filter((n) => n !== volume)
+                          ))}
+                        />
+                        فهارس
+                      </label>
+                    </div>
+                  )
+                })}
+              </div>
+
               <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px,1fr))',
-                gap: 10, marginTop: 12,
+                fontSize: 12.5, color: 'var(--muted)', marginTop: 12,
+                paddingTop: 10, borderTop: '1px solid var(--border)',
               }}>
-                {Array.from({ length: volumeCount }, (_, i) => (
-                  <label key={i} style={{ ...labelStyle, gap: 5, fontSize: 11.5 }}>
-                    المُجلَّد {i + 1}
-                    <input
-                      value={volumePages[i] ?? ''}
-                      onChange={(e) => setVolumePages((prev) => {
-                        const next = prev.slice()
-                        next[i] = e.target.value
-                        return next
-                      })}
-                      placeholder="صفحات"
-                      inputMode="numeric"
-                      style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
-                    />
-                  </label>
-                ))}
+                الإجمالي: <strong style={{ color: 'var(--text)' }}>{formatNumber(volumeSum)}</strong>
+                {indexVolumes.length > 0 && ` — بلا ${indexVolumes.length} مجلَّد فهارس`}
               </div>
             </div>
           )}
@@ -760,7 +859,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               {manyVolumes ? 'عدد الصفحات إجمالًا' : 'عدد الصفحات'}
               {/* المجموع في المجلَّدات حسابٌ لا إدخال */}
               <input
-                value={manyVolumes ? (volumeSum > 0 ? String(volumeSum) : '') : pages}
+                value={manyVolumes ? (volumeSum > 0 ? formatNumber(volumeSum) : '') : pages}
                 onChange={(e) => setPages(e.target.value)}
                 readOnly={manyVolumes}
                 inputMode="numeric"
@@ -839,11 +938,13 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
             <label style={labelStyle}>
               صِفَة الوُرُود
+              {/* الفراغ خيارٌ قائم: لا يُلزَم الفاهرس بصفةٍ لا يعرفها */}
               <select
                 value={source}
                 onChange={(e) => { setSource(e.target.value); setSourceDetail('') }}
                 style={inputStyle}
               >
+                <option value="">غير مُحدَّدة</option>
                 {SOURCES.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </label>
@@ -1004,3 +1105,126 @@ const plusStyle = {
   borderRadius: 8, width: 38, height: 38, fontSize: 17, lineHeight: 1,
   flex: 'none', alignSelf: 'end', marginBottom: 1,
 } as const
+
+/**
+ * التصنيف: مربَّعاتٌ تُعرض فيها تصنيفات المكتبة كلُّها، يُختار منها واحد —
+ * فالكتاب لا ينتمي إلا إلى تصنيفٍ واحد — ومعها زرٌّ لتصنيفٍ جديد. الجديد
+ * يظهر مختارًا في الحال، ولا يدخل تصنيفات المكتبة إلا مع حفظ الكتاب.
+ */
+function CategoryPicker(
+  { value, onChange, known, extra, onAdd }: {
+    value: string
+    onChange: (v: string) => void
+    known: string[]
+    extra: string[]
+    onAdd: (name: string) => void
+  },
+) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const all = [...known, ...extra.filter((c) => !known.includes(c))]
+
+  function commit() {
+    const name = draft.trim()
+    if (!name) { setAdding(false); return }
+    onAdd(name)
+    onChange(name)
+    setDraft('')
+    setAdding(false)
+  }
+
+  return (
+    <div style={{ ...labelStyle, gap: 8 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <TagIcon size={14} />
+        التصنيف
+      </span>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        {all.map((name) => {
+          const on = value.trim() === name
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onChange(on ? '' : name)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                border: on ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                background: on ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : 'var(--bg)',
+                color: on ? 'var(--text)' : 'var(--muted)',
+                fontWeight: on ? 700 : 400, fontSize: 13,
+                borderRadius: 9, padding: '7px 12px',
+              }}
+            >
+              {/* مربَّع الاختيار مرسومٌ لا أصليّ، ليتّسق مع لون المكتبة */}
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 15, height: 15, borderRadius: 4, flex: 'none', fontSize: 11,
+                border: on ? 'none' : '1.5px solid var(--border)',
+                background: on ? 'var(--accent)' : 'transparent',
+                color: 'var(--on-accent)',
+              }}>
+                {on ? '✓' : ''}
+              </span>
+              {name}
+            </button>
+          )
+        })}
+
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            style={{
+              border: '1px dashed var(--accent)', background: 'none', color: 'var(--accent)',
+              borderRadius: 9, padding: '7px 12px', fontSize: 13, fontWeight: 600,
+            }}
+          >
+            + إضافة تصنيف جديد
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setDraft(''); setAdding(false) }
+            }}
+            placeholder="اسم التصنيف الجديد"
+            style={{ ...inputStyle, flex: '1 1 200px', width: 'auto' }}
+          />
+          <button
+            type="button"
+            onClick={commit}
+            disabled={!draft.trim()}
+            style={{
+              border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
+              borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600,
+              opacity: draft.trim() ? 1 : 0.45,
+            }}
+          >
+            إضافة
+          </button>
+          <button
+            type="button"
+            onClick={() => { setDraft(''); setAdding(false) }}
+            style={{
+              border: '1px solid var(--border)', background: 'none', color: 'var(--muted)',
+              borderRadius: 8, padding: '9px 14px', fontSize: 13,
+            }}
+          >
+            إلغاء
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

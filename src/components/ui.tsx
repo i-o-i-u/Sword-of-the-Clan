@@ -1,7 +1,10 @@
 // القطع الصغيرة المشتركة وأنماطها. القيم مأخوذة من رموز التصميم كما هي (§٩).
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { starsText } from '../lib/types'
+import {
+  useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode,
+} from 'react'
+import { QUICK_OPTS, normalizeText } from '../lib/search'
+import { formatNumber, starsText } from '../lib/types'
 
 /** يحلّ روابط الصور: المرفوعة مطلقة، والمرافقة للموقع نسبيّة إلى مسار النشر */
 export function resolveAsset(url: string | null | undefined): string | null {
@@ -181,7 +184,7 @@ export function RiyalGlyph() {
 export function Money({ amount, currency }: { amount: number; currency: string }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      <span>{amount}</span>
+      <span>{formatNumber(amount)}</span>
       {currency === 'ريال' ? <RiyalGlyph /> : <span>({currency})</span>}
     </span>
   )
@@ -196,7 +199,7 @@ export function Stars({ rating }: { rating: number }) {
 /** شارة حالة القراءة في الجدول */
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, CSSProperties> = {
-    'تم القراءة': { color: 'oklch(0.36 0.09 150)', background: 'oklch(0.93 0.04 150)' },
+    'مقروء': { color: 'oklch(0.36 0.09 150)', background: 'oklch(0.93 0.04 150)' },
     'قيد القراءة': { color: 'oklch(0.42 0.11 70)', background: 'oklch(0.94 0.05 78)' },
   }
   const tone = map[status] ?? { color: 'var(--muted)', background: 'var(--header)' }
@@ -440,6 +443,191 @@ export function ClockIcon({ size = 14 }: IconProps) {
   )
 }
 
+/* ----------------------------------------------- أيقونات البيانات والعرض */
+/* لكل قسمٍ من أقسام بطاقة الكتاب أيقونتُه، ولكل عمودٍ من أعمدة الجدول، ولكل
+   طريقة عرض. كلها على المقاس نفسه وبلونٍ موروث كسابقاتها. */
+
+/** كتابٌ مفتوح — قسم بيانات الكتاب */
+export function OpenBookIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M12 6.6C10.2 5.2 7.6 4.6 4 4.8v12.6c3.6-.2 6.2.4 8 1.8 1.8-1.4 4.4-2 8-1.8V4.8c-3.6-.2-6.2.4-8 1.8z" />
+      <path d="M12 6.6v12.6" />
+    </svg>
+  )
+}
+
+/** بطاقةٌ بأسطر — قسم بيانات النسخة */
+export function ArchiveIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.2" y="4.4" width="17.6" height="4.4" rx="1.2" />
+      <path d="M5 8.8v9a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8v-9" />
+      <path d="M9.8 12.6h4.4" />
+    </svg>
+  )
+}
+
+/** حرف المعلومة في دائرة — قسم عن الكتاب */
+export function InfoIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="8.8" />
+      <path d="M12 11v5.2" />
+      <path d="M12 7.9h.01" />
+    </svg>
+  )
+}
+
+/** ساعةٌ رمليّة — تاريخ الوفاة */
+export function HourglassIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M6.6 3.4h10.8" />
+      <path d="M6.6 20.6h10.8" />
+      <path d="M7.8 3.4v3.2c0 2 1.6 3.6 4.2 5.4 2.6 1.8 4.2 3.4 4.2 5.4v3.2" />
+      <path d="M16.2 3.4v3.2c0 2-1.6 3.6-4.2 5.4-2.6 1.8-4.2 3.4-4.2 5.4v3.2" />
+    </svg>
+  )
+}
+
+/** عدسةٌ على سطر — المُحقِّق ومن على صفته */
+export function VerifyIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="10.4" cy="10.4" r="5" />
+      <path d="M14.2 14.2l4.6 4.6" />
+      <path d="M8.2 10.4l1.6 1.6 3-3.2" />
+    </svg>
+  )
+}
+
+/** بطاقةُ وسمٍ — التصنيف */
+export function TagIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M11.4 3.4H4.2a.8.8 0 0 0-.8.8v7.2c0 .2.1.4.2.6l8.4 8.4a.8.8 0 0 0 1.2 0l7.2-7.2a.8.8 0 0 0 0-1.2L12 3.6a.8.8 0 0 0-.6-.2z" />
+      <path d="M7.6 7.6h.01" />
+    </svg>
+  )
+}
+
+/** دولابُ كتبٍ برفوفه — موضع الكتاب */
+export function CabinetIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.6" y="3.2" width="16.8" height="17.6" rx="1.8" />
+      <path d="M3.6 9.1h16.8M3.6 14.9h16.8" />
+      <path d="M8.4 6.2h.01M8.4 12h.01M8.4 17.8h.01" />
+    </svg>
+  )
+}
+
+/** مِربَّعٌ بعلامة الرقم — الرقم المسلسل */
+export function HashIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M9.4 3.6L7.6 20.4M16.4 3.6l-1.8 16.8" />
+      <path d="M3.8 9h16.4M3.2 15h16.4" />
+    </svg>
+  )
+}
+
+/** ورقةٌ مطويّة الركن — عدد الصفحات */
+export function PagesIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M13.4 3.4H6.8A1.8 1.8 0 0 0 5 5.2v13.6a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8V8.8z" />
+      <path d="M13.4 3.4v5.4h5.6" />
+      <path d="M8.6 13h6.8M8.6 16.6h4.6" />
+    </svg>
+  )
+}
+
+/** طبقاتٌ متراكبة — عدد المجلَّدات */
+export function VolumesIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M12 3.2l8.4 4.2-8.4 4.2-8.4-4.2z" />
+      <path d="M3.6 12L12 16.2 20.4 12" />
+      <path d="M3.6 16.4L12 20.6l8.4-4.2" />
+    </svg>
+  )
+}
+
+/** مربَّعاتٌ أربعة — العرض في صورة شبكة */
+export function GridIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.4" y="3.4" width="7.4" height="7.4" rx="1.4" />
+      <rect x="13.2" y="3.4" width="7.4" height="7.4" rx="1.4" />
+      <rect x="3.4" y="13.2" width="7.4" height="7.4" rx="1.4" />
+      <rect x="13.2" y="13.2" width="7.4" height="7.4" rx="1.4" />
+    </svg>
+  )
+}
+
+/** جدولٌ بصفوفه — العرض في صورة جدول */
+export function TableIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.2" y="4.4" width="17.6" height="15.2" rx="1.8" />
+      <path d="M3.2 9.4h17.6M3.2 14.6h17.6" />
+      <path d="M9.6 4.4v15.2" />
+    </svg>
+  )
+}
+
+/** كعوبٌ قائمة على رفّ — العرض في صورة أَرْفُف */
+export function ShelfIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="4" y="5.2" width="3.4" height="12.6" rx="0.8" />
+      <rect x="9.2" y="7.6" width="3.4" height="10.2" rx="0.8" />
+      <path d="M15.2 6.4l3.3.9-2.4 10.6-3.3-.9z" />
+      <path d="M2.8 20.4h18.4" />
+    </svg>
+  )
+}
+
+/** قُمعُ الترشيح — زرّ التصفيات */
+export function FilterIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M3.6 5.2h16.8l-6.6 7.6v6.2l-3.6 1.8v-8z" />
+    </svg>
+  )
+}
+
+/** سهمٌ لأسفل — فتحُ ما طُوي، ويُدار بالتحويل عند الفتح */
+export function ChevronIcon({ size = 14 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M6 9.4l6 6 6-6" />
+    </svg>
+  )
+}
+
+/** حرف الضرب في دائرة — إزالة ما أُثبت */
+export function ClearIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="8.8" />
+      <path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" />
+    </svg>
+  )
+}
+
+/** حلقتان متشابكتان — صلةُ الكتاب بغيره */
+export function LinkIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M10.2 13.8a3.6 3.6 0 0 0 5.4.4l2.6-2.6a3.6 3.6 0 0 0-5.1-5.1l-1.5 1.5" />
+      <path d="M13.8 10.2a3.6 3.6 0 0 0-5.4-.4l-2.6 2.6a3.6 3.6 0 0 0 5.1 5.1l1.5-1.5" />
+    </svg>
+  )
+}
+
 /** زر الرجوع بسهمٍ مرسوم بحدود CSS */
 export function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
@@ -469,11 +657,12 @@ export function Overlay(
   return (
     <div
       onClick={onClose}
+      className="overlay-wrap"
       style={{
         position: 'fixed', inset: 0, zIndex,
         background: 'oklch(0.15 0.01 50 / 0.55)', backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: align, justifyContent: 'center',
-        padding: 20, paddingTop,
+        paddingTop,
       }}
     >
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'contents' }}>{children}</div>
@@ -574,6 +763,119 @@ export function DebouncedTextarea({ value, onCommit, delay = 700, ...rest }: Tex
       onFocus={f.onFocus}
       onBlur={f.onBlur}
     />
+  )
+}
+
+/**
+ * حقلُ «اكتب جديدًا أو اختر من المكتبة». كان `datalist`، وكان يَكِلُ الترشيح
+ * إلى المتصفّح فيختلف من متصفّحٍ إلى آخر ولا يُطابق العربية إلا بحرفها
+ * كما كُتب. وهذا يُرشِّح بنفسه بمعيار البحث في المكتبة نفسه — بلا تشكيلٍ
+ * ولا تفريقٍ بين الهمزات — ويُبقي الكتابة الحرّة على حالها.
+ */
+export function Combobox(
+  { value, onChange, options, placeholder, disabled, style, emptyHint }: {
+    value: string
+    onChange: (value: string) => void
+    options: string[]
+    placeholder?: string
+    disabled?: boolean
+    style?: CSSProperties
+    /** ما يُقال حين لا مطابق: «اسمٌ جديد، سيُنشأ له سجلّ» ونحوه */
+    emptyHint?: string
+  },
+) {
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (blurTimer.current) clearTimeout(blurTimer.current) }, [])
+
+  const matches = useMemo(() => {
+    const needle = normalizeText(value, QUICK_OPTS)
+    const seen = options.filter((o) => o.trim())
+    if (!needle) return seen.slice(0, 40)
+    // ما ابتدأ بالمكتوب أولى مما تضمّنه، فالمقصود غالبًا أوّلُ الاسم
+    const starts = seen.filter((o) => normalizeText(o, QUICK_OPTS).startsWith(needle))
+    const has = seen.filter((o) => {
+      const n = normalizeText(o, QUICK_OPTS)
+      return !n.startsWith(needle) && n.includes(needle)
+    })
+    return [...starts, ...has].slice(0, 40)
+  }, [options, value])
+
+  const exact = options.some(
+    (o) => normalizeText(o, QUICK_OPTS) === normalizeText(value, QUICK_OPTS),
+  )
+  const showList = open && matches.length > 0
+
+  function pick(option: string) {
+    onChange(option)
+    setOpen(false)
+  }
+
+  return (
+    <span style={{ position: 'relative', display: 'block' }}>
+      <input
+        value={value}
+        disabled={disabled}
+        placeholder={placeholder}
+        role="combobox"
+        aria-expanded={showList}
+        aria-autocomplete="list"
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0) }}
+        onFocus={() => setOpen(true)}
+        // الإغلاق يتأخّر لحظةً كي يسبقه نقرُ الخيار، فالنقر يُفقِد التركيز أولًا
+        onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 130) }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { setOpen(false); return }
+          if (!showList) { if (e.key === 'ArrowDown') setOpen(true); return }
+          if (e.key === 'ArrowDown') {
+            e.preventDefault(); setActive((i) => (i + 1) % matches.length)
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault(); setActive((i) => (i - 1 + matches.length) % matches.length)
+          } else if (e.key === 'Enter') {
+            e.preventDefault(); pick(matches[active] ?? value)
+          }
+        }}
+        style={{ ...inputStyle, ...style }}
+      />
+
+      {showList && (
+        <ul
+          className="thin-scroll"
+          role="listbox"
+          style={{
+            position: 'absolute', insetInline: 0, top: 'calc(100% + 4px)', zIndex: 40,
+            margin: 0, padding: 4, listStyle: 'none', maxHeight: 220, overflowY: 'auto',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 9, boxShadow: '0 12px 28px oklch(0.24 0.02 50 / 0.18)',
+          }}
+        >
+          {matches.map((option, i) => (
+            <li
+              key={option}
+              role="option"
+              aria-selected={i === active}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(option)}
+              onMouseEnter={() => setActive(i)}
+              style={{
+                padding: '7px 10px', borderRadius: 6, fontSize: 13.5, cursor: 'pointer',
+                background: i === active ? 'var(--header)' : 'none',
+              }}
+            >
+              {option}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {emptyHint && value.trim() && !exact && (
+        <span style={{ display: 'block', fontSize: 11, color: 'var(--accent-soft)', marginTop: 5 }}>
+          {emptyHint}
+        </span>
+      )}
+    </span>
   )
 }
 

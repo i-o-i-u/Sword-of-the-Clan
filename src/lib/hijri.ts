@@ -36,6 +36,18 @@ export function lifeLabel(a: Pick<Author, 'birth' | 'death' | 'era'> | null | un
   return 'تاريخٌ غير مسجَّل'
 }
 
+/**
+ * الوفاة وحدها كما تُعرض: «ت ٨٠٨ هـ»، أو «مُعاصِر» لمن لا وفاة له، أو نصُّ
+ * التقريب كما كُتب. وعليها يقوم ترتيب المكتبة، فلا تُخلط بالمولد هنا.
+ */
+export function deathLabel(a: Author | null | undefined): string {
+  if (!a) return ''
+  if (a.alive) return 'مُعاصِر'
+  if (a.death_approx && a.death_text.trim()) return a.death_text.trim()
+  if (a.death != null) return `ت ${a.death} ${a.era || 'هـ'}`
+  return ''
+}
+
 /** «١٤٤٧ هـ» — سنة النشر مع تقويمها */
 export function yearLabel(year: number | null | undefined, era: Era | string | undefined): string {
   if (year === null || year === undefined) return '—'

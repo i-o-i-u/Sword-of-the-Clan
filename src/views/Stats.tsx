@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
+import { formatNumber } from '../lib/types'
 import { RiyalGlyph, cardStyle } from '../components/ui'
 
 export default function Stats() {
@@ -13,7 +14,7 @@ export default function Stats() {
   const showLoans = isOwner || settings.visibility.loans
 
   const s = useMemo(() => {
-    const read = books.filter((b) => b.status === 'تم القراءة')
+    const read = books.filter((b) => b.status === 'مقروء')
     const reading = books.filter((b) => b.status === 'قيد القراءة')
     const unread = books.filter((b) => b.status === 'لم تُقرأ')
     const rated = books.filter((b) => b.rating > 0)
@@ -67,11 +68,11 @@ export default function Stats() {
 
       <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 32 }}>
         <div style={tile}>
-          <div style={bigNumber}>{s.total}</div>
+          <div style={bigNumber}>{formatNumber(s.total)}</div>
           <div style={tileLabel}>إجمالي الكتب</div>
         </div>
         <div style={tile}>
-          <div style={bigNumber}>{s.pagesRead}</div>
+          <div style={bigNumber}>{formatNumber(s.pagesRead)}</div>
           <div style={tileLabel}>صفحة مقروءة</div>
         </div>
         <div style={tile}>
@@ -86,7 +87,7 @@ export default function Stats() {
         )}
         {showValue && (
           <div style={tile}>
-            <div style={bigNumber}>{s.totalValue}</div>
+            <div style={bigNumber}>{formatNumber(s.totalValue)}</div>
             <div style={{ ...tileLabel, display: 'flex', alignItems: 'center', gap: 5 }}>
               <span>قيمة المكتبة</span>
               {settings.currency === 'ريال' ? <RiyalGlyph /> : <span>({settings.currency})</span>}
@@ -105,7 +106,7 @@ export default function Stats() {
           <div style={{ background: 'oklch(0.7 0.01 60)', width: `${s.unreadPct}%` }} />
         </div>
         <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--muted)', flexWrap: 'wrap' }}>
-          <span>● تمت قراءتها ({s.readCount})</span>
+          <span>● مقروءة ({s.readCount})</span>
           <span>● قيد القراءة ({s.readingCount})</span>
           <span>● لم تُقرأ ({s.unreadCount})</span>
         </div>

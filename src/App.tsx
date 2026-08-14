@@ -19,6 +19,7 @@ const Stats = lazy(() => import('./views/Stats'))
 const AuthorsIndex = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorsIndex })))
 const AuthorPage = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorPage })))
 const PublishersView = lazy(() => import('./views/Publishers'))
+const PublisherPage = lazy(() => import('./views/Publishers').then((m) => ({ default: m.PublisherPage })))
 const LoginOverlay = lazy(() => import('./components/LoginOverlay'))
 const SettingsOverlay = lazy(() => import('./components/SettingsOverlay'))
 const ViewerSettingsOverlay = lazy(() => import('./components/ViewerSettingsOverlay'))
@@ -108,6 +109,7 @@ export default function App() {
           {route.name === 'edit' && canEdit && <AddBook bookId={route.id} />}
           {route.name === 'stats' && canSeeStats && <Stats />}
           {route.name === 'publishers' && <PublishersView />}
+          {route.name === 'publisher' && <PublisherPage publisherId={route.id} />}
         </Suspense>
       )}
 

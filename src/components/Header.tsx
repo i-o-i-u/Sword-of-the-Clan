@@ -89,7 +89,7 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
         <button
           type="button"
           onClick={() => navigate({ name: 'publishers' })}
-          className={navClass(route.name === 'publishers')}
+          className={navClass(route.name === 'publishers' || route.name === 'publisher')}
         >
           <PressIcon size={17} />
           دُوْر النَّشْر

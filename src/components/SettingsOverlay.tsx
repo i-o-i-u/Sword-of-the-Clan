@@ -87,7 +87,7 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
   return (
     <Overlay onClose={requestClose} zIndex={90}>
       <div style={{
-        ...cardStyle, width: 560, maxWidth: '94vw', maxHeight: '88vh', borderRadius: 20,
+        ...cardStyle, width: 'min(560px, 100%)', maxHeight: 'calc(88vh / var(--ui-scale))', borderRadius: 20,
         boxShadow: '0 34px 80px oklch(0.1 0.01 50 / 0.45)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>

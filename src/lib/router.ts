@@ -12,6 +12,7 @@ export type Route =
   | { name: 'add' }
   | { name: 'edit'; id: string }
   | { name: 'publishers' }
+  | { name: 'publisher'; id: string }
   | { name: 'stats' }
   | { name: 'about' }
 
@@ -26,6 +27,7 @@ export function parseHash(hash: string): Route {
     case 'add': return { name: 'add' }
     case 'edit': return id ? { name: 'edit', id } : { name: 'browse' }
     case 'publishers': return { name: 'publishers' }
+    case 'publisher': return id ? { name: 'publisher', id } : { name: 'publishers' }
     case 'stats': return { name: 'stats' }
     case 'about': return { name: 'about' }
     default: return { name: 'landing' }
@@ -41,6 +43,7 @@ export function hashFor(route: Route): string {
     case 'add': return '#/add'
     case 'edit': return `#/edit/${route.id}`
     case 'publishers': return '#/publishers'
+    case 'publisher': return `#/publisher/${route.id}`
     case 'stats': return '#/stats'
     case 'about': return '#/about'
     default: return '#/'

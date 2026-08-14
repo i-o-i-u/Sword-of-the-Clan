@@ -30,7 +30,7 @@ export default function SearchOverlay(
     <Overlay onClose={onClose} align="flex-start" paddingTop={110} zIndex={90}>
       <div
         style={{
-          ...cardStyle, width: 600, maxWidth: '92vw', maxHeight: '70vh',
+          ...cardStyle, width: 'min(600px, 100%)', maxHeight: 'calc(70vh / var(--ui-scale))',
           borderRadius: 16, boxShadow: '0 30px 70px oklch(0.1 0.01 50 / 0.4)',
           overflow: 'hidden', display: 'flex', flexDirection: 'column',
         }}

@@ -85,11 +85,15 @@ function stripSystem<T extends { _id: unknown; _creationTime: number }>(doc: T) 
 /** يحوّل مستند Convex إلى ما تنتظره الواجهة: id نصّي وتاريخ إنشاء ISO */
 export function toClient<T extends { _id: unknown; _creationTime: number }>(doc: T) {
   const { _id, _creationTime, ...rest } = doc
-  return {
+  const out = {
     ...rest,
     id: _id as string,
     created_at: new Date(_creationTime).toISOString(),
-  }
+  } as Record<string, unknown> & { id: string; created_at: string }
+  // «تم القراءة» لفظٌ قديم في القاعدة، والمعتمَد «مقروء». يُحوَّل هنا مرةً
+  // واحدة فلا تعرف الواجهةُ إلا اللفظ الجديد، وتبقى المستندات القديمة صحيحة.
+  if (out.status === 'تم القراءة') out.status = 'مقروء'
+  return out as unknown as Omit<T, '_id' | '_creationTime'> & { id: string; created_at: string }
 }
 
 /**
@@ -131,6 +135,8 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     volumes:      hidden('volumes')      ? null : book.volumes,
     pages:        hidden('pages')        ? null : book.pages,
     volume_pages: hidden('volumePagesText') ? [] : book.volume_pages,
+    volume_parts: hidden('volumePagesText') ? [] : (book.volume_parts ?? []),
+    index_volumes: hidden('volumePagesText') ? [] : (book.index_volumes ?? []),
     size:         hidden('size')         ? '' : book.size,
     isbn:         hidden('isbn')         ? '' : book.isbn,
     language:     hidden('language')     ? '' : book.language,

@@ -8,14 +8,17 @@ export const LIBRARY_NAME = 'مكتبة سَيْف العشيرة'
 export const LIBRARY_PLACE = 'أبها - حيُّ المُوظَّفين - شارع عَين جالوت'
 
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
-export type ReadingStatus = 'لم تُقرأ' | 'قيد القراءة' | 'تم القراءة'
+export type ReadingStatus = 'لم تُقرأ' | 'قيد القراءة' | 'مقروء'
 export type PerkKind = 'فائدة' | 'مقتطف'
 export type ViewMode = 'grid' | 'table' | 'shelf'
 export type ThemeName = 'warm' | 'sepia' | 'dark'
 export type FontName = 'kitab' | 'classic' | 'modern'
 
 export const ERAS: Era[] = ['هـ', 'م', 'ق.هـ', 'ق.م']
-export const STATUSES: ReadingStatus[] = ['لم تُقرأ', 'قيد القراءة', 'تم القراءة']
+export const STATUSES: ReadingStatus[] = ['لم تُقرأ', 'قيد القراءة', 'مقروء']
+
+/** ما يُعرض حين لا حالة للكتاب. الفراغ هو ما يُخزَّن، وهذا لفظُه. */
+export const STATUS_UNKNOWN = 'غير معروفة'
 export const PERK_KINDS: PerkKind[] = ['فائدة', 'مقتطف']
 export const LANGUAGES = ['العربية', 'مُترجَمٌ إلى العربية', 'لغةٌ أخرى']
 
@@ -38,11 +41,32 @@ export const CONTRIBUTOR_ROLES = [
   'تَقْرِيظ', 'تقديم',
 ]
 
+/**
+ * الصفة مُثنّاةً ومجموعةً: إذا اجتمع في الكتاب اثنان من صفةٍ واحدة ثُنِّي
+ * لفظُها، وإن زادوا جُمِع. و«تَقْرِيظ» و«تقديم» مصدران لا وصفان، فلا
+ * يُثنَّيان ولا يُجمعان مهما كثر أصحابُهما — يلزمان لفظهما كما هو.
+ */
+export const CONTRIBUTOR_FORMS: Record<string, { two: string; many: string }> = {
+  'المُحقِّق':  { two: 'المُحقِّقان',  many: 'المُحقِّقون' },
+  'المُراجِع':  { two: 'المُراجِعان',  many: 'المُراجِعون' },
+  'المُعتَني':  { two: 'المُعتَنِيان', many: 'المُعتَنُون' },
+  'المُصحِّح':  { two: 'المُصحِّحان',  many: 'المُصحِّحون' },
+  'المُخَرِّج': { two: 'المُخَرِّجان', many: 'المُخَرِّجون' },
+  'المُتَرجِم': { two: 'المُتَرجِمان', many: 'المُتَرجِمون' },
+}
+
+/** لفظ الصفة موافقًا لعدد أصحابها */
+export function contributorLabel(role: string, count: number): string {
+  const forms = CONTRIBUTOR_FORMS[role]
+  if (!forms || count < 2) return role
+  return count === 2 ? forms.two : forms.many
+}
+
 export const BINDINGS = ['مُجلَّد كرتوني', 'تغليف ورقي مَرِن']
 export const SIZES = ['قِطع كبير', 'حجم متوسط معتاد', 'حجم صغير', 'كُتيِّب']
 export const CONDITIONS = ['جديد', 'جيد جدًّا', 'جيد', 'مستعمل', 'يحتاج ترميمًا']
 
-/** صِفة الوُرُود: بأيّ صفةٍ وَرَد هذا الكتاب إلى المكتبة */
+/** صِفة الوُرُود: بأيّ صفةٍ وَرَد هذا الكتاب إلى المكتبة. والفراغ: لم تُحدَّد. */
 export const SOURCES = ['شِراء', 'إِهْداء', 'إرْث', 'توزيع', 'تنازُل']
 
 /** ما يستدعيه كلُّ صفةِ ورودٍ من سؤالٍ بعده. وما ليس فيها لا يستدعي شيئًا. */
@@ -56,6 +80,23 @@ export const WORK_TYPES = [
   'شرح', 'حاشية', 'تهذيب', 'اختصار', 'ردّ',
   'تعليق', 'انتصار', 'فهرسة', 'انتقاء', 'استخراج',
 ]
+
+/**
+ * صياغة نوع العمل في الجملة، وحرفُ جرِّه معه: «هذا الكتاب شرحٌ لـ…»،
+ * «حاشيةٌ على…»، «انتقاءٌ من…». الحرف يتبع اللفظ ولا يُقاس، فيُكتب هنا.
+ */
+export const WORK_PHRASES: Record<string, string> = {
+  'شرح':     'شرحٌ لـ',
+  'حاشية':   'حاشيةٌ على',
+  'تهذيب':   'تهذيبٌ لـ',
+  'اختصار':  'اختصارٌ لـ',
+  'ردّ':      'ردٌّ على',
+  'تعليق':   'تعليقٌ على',
+  'انتصار':  'انتصارٌ لـ',
+  'فهرسة':   'فهرسةٌ لـ',
+  'انتقاء':  'انتقاءٌ من',
+  'استخراج': 'استخراجٌ من',
+}
 
 export interface Author {
   id: string
@@ -91,6 +132,8 @@ export interface Publisher {
   founded: string
   website: string
   notes: string
+  /** شعار الدار، يُرفع من صفحتها */
+  logo_url: string | null
   created_at: string
 }
 
@@ -122,6 +165,10 @@ export interface Book {
   volumes: number | null
   single_volume: boolean
   volume_pages: (number | string)[]
+  /** ما اشتمل عليه كل مجلَّد من أسفار المؤلِّف، نصًّا: «٥-٧»، «الثامن» */
+  volume_parts: string[]
+  /** أرقام مجلَّدات الفهارس، لا تدخل صفحاتُها في الإجمالي */
+  index_volumes: number[]
   pages: number | null
   size: string
   isbn: string
@@ -262,11 +309,11 @@ export const VIS_TOGGLES: { key: keyof Visibility; label: string; hint: string }
  */
 export const META_DEFS: { label: string; key: string }[] = [
   { label: 'العنوان الفرعي',   key: 'subtitle' },
-  { label: 'المحقق ومن معه',   key: 'contributors' },
+  { label: 'المحقِّق ونحوه',     key: 'contributors' },
   { label: 'السلسلة',          key: 'series' },
   { label: 'رقمه في السلسلة',  key: 'seriesNo' },
   { label: 'دار النشر',        key: 'publisher' },
-  { label: 'مكان النشر',       key: 'place' },
+  { label: 'بلد النشر',        key: 'place' },
   { label: 'سنة النشر',        key: 'yearLabel' },
   { label: 'الطبعة',           key: 'edition' },
   { label: 'الأجزاء',          key: 'parts' },
@@ -317,7 +364,7 @@ export const CATEGORY_SPINE: Record<string, string> = {
 }
 
 export const STATUS_DOT: Record<string, string> = {
-  'تم القراءة':  'oklch(0.5 0.1 150)',
+  'مقروء':       'oklch(0.5 0.1 150)',
   'قيد القراءة': 'oklch(0.6 0.14 70)',
   'لم تُقرأ':     'oklch(0.65 0.01 60)',
 }
@@ -363,6 +410,62 @@ export function editionInWords(input: string | number): string {
   return ones === 0
     ? EDITION_TENS[tens]
     : `${EDITION_ONES_BOUND[ones]} و${EDITION_TENS[tens]}`
+}
+
+/**
+ * عددٌ يُعرض بفاصلةٍ بين كل ثلاث مراتب: ١١٣٠ ← «1,130». الأعدادُ الكبيرة —
+ * وأكثرُها صفحات — لا تُقرأ بنظرةٍ واحدة بغير هذا الفصل.
+ */
+export function formatNumber(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return ''
+  return Number(n).toLocaleString('en-US')
+}
+
+/**
+ * مجموع صفحات المجلَّدات، ناقصًا مجلَّدات الفهارس: فهرسٌ لا متن، فلا تُعدّ
+ * صفحاتُه في صفحات الكتاب. `indexVolumes` أرقام المجلَّدات بدءًا من ١.
+ */
+export function sumVolumePages(
+  pages: (number | string)[], indexVolumes: number[] = [],
+): number {
+  return pages.reduce<number>((sum, v, i) => {
+    if (indexVolumes.includes(i + 1)) return sum
+    return sum + (parseNumber(v) ?? 0)
+  }, 0)
+}
+
+/** حروف الهجاء كما تُرتَّب في الفهارس، لشريط الحروف في صفحة التصفُّح */
+export const ARABIC_LETTERS = [
+  'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض',
+  'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي',
+]
+
+/**
+ * الحرف الذي يُفهرَس تحته العنوان: تُطرح «ال» التعريف كما يصنع الفهارسة —
+ * «الرسالة» في الراء لا في الألف — وتُوحَّد الهمزات والتاء المربوطة.
+ */
+export function titleInitial(title: string): string {
+  const clean = String(title ?? '')
+    .replace(/[ً-ْٰـ]/g, '')             // تشكيلٌ وتطويل
+    .replace(/^[^ء-ي]+/, '')   // ما تصدَّر من علاماتٍ وأرقام
+    .replace(/^ال(?=.{2})/, '')          // «ال» التعريف، ما بقي بعدها اسم
+    .trim()
+  const first = clean[0] ?? ''
+  return first
+    .replace(/[أإآٱ]/, 'ا')
+    .replace(/ة/, 'ه')
+    .replace(/ى/, 'ي')
+}
+
+const CENTURY_NAMES = [
+  '', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع',
+  'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر',
+  'الرابع عشر', 'الخامس عشر', 'السادس عشر',
+]
+
+/** «القرن الثامن» من رقمه. وما جاوز المعدود بقي رقمًا. */
+export function centuryName(n: number): string {
+  return CENTURY_NAMES[n] ? `القرن ${CENTURY_NAMES[n]}` : `القرن ${n}`
 }
 
 /** نجوم التقييم كنصّ: ★★★☆☆ أو «—» حين لا تقييم */

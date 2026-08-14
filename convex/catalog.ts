@@ -247,6 +247,7 @@ export const updatePublisher = mutation({
       founded: v.optional(v.string()),
       website: v.optional(v.string()),
       notes: v.optional(v.string()),
+      logo_url: v.optional(v.union(v.string(), v.null())),
     }),
   },
   handler: async (ctx, { id, patch }) => {
