@@ -35,6 +35,21 @@ export const visibility = v.object({
   advSearch: v.boolean(),
 })
 
+/** مؤلِّفٌ مشارك. الأول يبقى في `author_id`، وهؤلاء من بعده. */
+export const coAuthor = v.object({
+  author_id: v.union(v.id('authors'), v.null()),
+  name: v.string(),
+})
+
+/**
+ * مَن عمل في الكتاب غير مؤلِّفه، ودورُه معه: محقِّقٌ ومراجعٌ ومخرِّج… وقد
+ * يجتمع في كتابٍ واحد محقِّقان ومقدِّمون، فهي قائمةٌ لا حقولٌ معدودة.
+ */
+export const contributor = v.object({
+  role: v.string(),
+  name: v.string(),
+})
+
 /** حقول الكتاب. مُصدَّرة ليعيد استعمالها مُحوِّل الإضافة والتعديل. */
 export const bookFields = {
   // ١. بيانات الكتاب
@@ -42,39 +57,50 @@ export const bookFields = {
   subtitle: v.string(),
   author_id: v.union(v.id('authors'), v.null()),
   author_name: v.string(),          // مُكرَّر للبحث والترتيب
-  verifier: v.string(),
-  translator: v.string(),
-  presenter: v.string(),
+  co_authors: v.array(coAuthor),
+  contributors: v.array(contributor),
   series: v.string(),
   series_no: v.string(),
   category: v.string(),
-  room: v.string(),
 
-  // ٢. بيانات النشر
-  publisher: v.string(),
-  place: v.string(),
+  // ٢. بيانات الطبعة
+  publisher_id: v.union(v.id('publishers'), v.null()),
+  publisher: v.string(),            // مُكرَّر لاسم الدار كما في الكتاب
+  place: v.string(),                // تابعٌ للدار، يُملأ منها
   year: v.union(v.number(), v.null()),
+  year_month: v.union(v.number(), v.null()),   // شهرٌ هجريّ، وقد لا يُعرف
   year_era: era,
-  edition: v.string(),
+  year_approx: v.boolean(),
+  year_text: v.string(),            // «نحو ١٤٠٠ هـ» حين لا تُعرف السنة
+  edition: v.string(),              // «٢» أو «الثانية» بعد تحويلها كتابةً
+  edition_worded: v.boolean(),
+  edition_notes: v.string(),        // مَزِيدة، مُنقَّحة…
+  size: v.string(),
   parts: v.union(v.number(), v.null()),
+  single_part: v.boolean(),
   volumes: v.union(v.number(), v.null()),
+  single_volume: v.boolean(),
   volume_pages: v.array(v.union(v.number(), v.string())),
   pages: v.union(v.number(), v.null()),
-  size: v.string(),
   isbn: v.string(),
   language: v.string(),
+  language_original: v.string(),    // لغة الأصل حين يكون الكتاب مترجَمًا
 
-  // ٣. النسخة وموضعها
-  shelf_no: v.string(),
+  // ٣. بيانات النسخة
+  cabinet_no: v.string(),           // رقم الدولاب
+  shelf_no: v.string(),             // رقم الرفّ داخله
   binding: v.string(),
   condition: v.string(),
-  source: v.string(),
-  acquired_day: v.union(v.number(), v.null()),
+  value: v.union(v.number(), v.null()),
+  source: v.string(),               // صِفة الورود: شِراء، إِهْداء، إرْث…
+  source_detail: v.string(),        // مكان الشراء أو المُهدي أو المَوروث
   acquired_month: v.union(v.number(), v.null()),
   acquired_year: v.union(v.number(), v.null()),
-  value: v.union(v.number(), v.null()),
+  acquired_approx: v.boolean(),
+  acquired_text: v.string(),
+  margin_note: v.string(),          // طُرَّة الكتاب: ما خُطَّ عليها بيد
 
-  // ٤. القراءة والملاحظات
+  // ٤. عن الكتاب
   topic: v.string(),
   tags: v.array(v.string()),
   blurb: v.string(),
@@ -102,12 +128,13 @@ export default defineSchema({
   books: defineTable(bookFields)
     .index('by_author', ['author_id'])
     .index('by_category', ['category'])
-    .index('by_room', ['room'])
+    .index('by_cabinet', ['cabinet_no'])
+    .index('by_publisher', ['publisher_id'])
     .index('by_status', ['status'])
     // بحث النصّ الكامل بديلًا عن ترشيح العنوان في المتصفّح
     .searchIndex('search_title', {
       searchField: 'title',
-      filterFields: ['category', 'room', 'status'],
+      filterFields: ['category', 'cabinet_no', 'status'],
     }),
 
   authors: defineTable({
@@ -116,7 +143,26 @@ export default defineSchema({
     birth: v.union(v.number(), v.null()),
     death: v.union(v.number(), v.null()),
     era,
+    // وفاةُ المؤلِّف مِلاكُ ترتيب الكتب، فلها هنا ثلاث حالات: معاصرٌ حيّ،
+    // أو وفاةٌ محقَّقة في `death`، أو تقريبٌ يُكتب نصًّا («نحو ١٠٦٠»،
+    // «القرن الرابع») لأنه لا يُضبط برقم.
+    alive: v.boolean(),
+    death_approx: v.boolean(),
+    death_text: v.string(),
     bio: v.string(),
+  }).index('by_name', ['name']),
+
+  /**
+   * دُوْر النَّشْر. مكان الدار مُثبَتٌ فيها لا في الكتاب: تُكتب مرةً أولى ثم
+   * يُملأ مكانُها تلقائيًّا في كل كتابٍ نشرَته، فلا يختلف مكانُ الدار الواحدة
+   * من كتابٍ إلى كتاب. وتعديلُه من صفحة «دُوْر النَّشْر» وحدها.
+   */
+  publishers: defineTable({
+    name: v.string(),
+    place: v.string(),
+    founded: v.string(),
+    website: v.string(),
+    notes: v.string(),
   }).index('by_name', ['name']),
 
   book_works: defineTable({
@@ -143,6 +189,12 @@ export default defineSchema({
     returned: v.boolean(),
   }).index('by_book', ['book_id']),
 
+  /**
+   * جدولٌ مهجور: كان «الرفّ داخل المكتبة» اسمًا يُختار من قائمةٍ يديرها صاحب
+   * المكتبة. حلّ محلّه في الكتاب رقمُ الدولاب ورقمُ الرفّ، وصارت دواليبُ
+   * صفحة التصفُّح تُشتقّ من الكتب نفسها. يبقى مُعرَّفًا لأن فيه صفَّ البذرة،
+   * ويُحذف متى حُذف.
+   */
   shelves: defineTable({
     name: v.string(),
     position: v.number(),

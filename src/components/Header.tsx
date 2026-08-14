@@ -10,8 +10,8 @@ import { navigate, type Route } from '../lib/router'
 import { THEME_LABELS } from '../lib/theme'
 import { LIBRARY_NAME } from '../lib/types'
 import {
-  BooksIcon, GearIcon, LibraryIcon, MoonIcon, QuillIcon, SearchIcon, SunIcon,
-  resolveAsset,
+  BookPlusIcon, BooksIcon, GearIcon, HomeIcon, LibraryIcon, MoonIcon, PressIcon,
+  QuillIcon, SearchIcon, SunIcon, resolveAsset,
 } from './ui'
 
 interface Props {
@@ -31,6 +31,11 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
 
   const onBrowse = route.name === 'browse' || route.name === 'book'
   const onAuthors = route.name === 'authors' || route.name === 'author'
+
+  // في صفحة الهبوط تنتقل أدوات صاحب المكتبة إلى الصفحة نفسها: «إضافة كتاب»
+  // إلى أزرار الإطار، واسمُه وأدواتُه إلى الفراغ عن يمين الصورة. فلا تُعاد
+  // هنا مرّتين.
+  const onLanding = route.name === 'landing'
 
   /** حقل البحث يسلّم ما كُتب فيه إلى لوحة البحث ثم يفرغ */
   function submitQuick(e: FormEvent) {
@@ -59,9 +64,19 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
       </form>
 
       <nav className="head-nav">
+        <button
+          type="button"
+          onClick={() => navigate({ name: 'landing' })}
+          className={navClass(route.name === 'landing')}
+        >
+          <HomeIcon size={17} />
+          الصفحة الأولى
+        </button>
+
         <button type="button" onClick={() => navigate({ name: 'browse' })} className={navClass(onBrowse)}>
           <BooksIcon size={17} />
-          الدخول إلى المكتبة
+          {/* اسمُه دعوةٌ ما دمتَ خارجها، فإذا صرتَ فيها صار وصفًا لما تفعل */}
+          {onBrowse ? 'تصفُّح المكتبة' : 'الدخول إلى المكتبة'}
         </button>
 
         {showAuthorsTab && (
@@ -73,6 +88,15 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
 
         <button
           type="button"
+          onClick={() => navigate({ name: 'publishers' })}
+          className={navClass(route.name === 'publishers')}
+        >
+          <PressIcon size={17} />
+          دُوْر النَّشْر
+        </button>
+
+        <button
+          type="button"
           onClick={() => navigate({ name: 'about' })}
           className={navClass(route.name === 'about' || route.name === 'stats')}
         >
@@ -81,17 +105,16 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
         </button>
 
         {/* الإحصائيات لم تعد في الرأس — مدخلها من داخل «عن المكتبة» */}
-        {canEdit && (
+        {canEdit && !onLanding && (
           <button type="button" onClick={() => navigate({ name: 'add' })} className={navClass(route.name === 'add')}>
+            <BookPlusIcon size={17} />
             إضافة كتاب
           </button>
         )}
       </nav>
 
-      <div style={{ flex: 1 }} />
-
       <div className="head-tools">
-        {isOwner && (
+        {isOwner && !onLanding && (
           <>
             <span className="owner-pill">{ownerName}</span>
             <button

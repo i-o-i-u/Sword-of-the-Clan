@@ -24,11 +24,6 @@ export const run = internalMutation({
   handler: async (ctx) => {
     const done: string[] = []
 
-    if ((await ctx.db.query('shelves').first()) === null) {
-      await ctx.db.insert('shelves', { name: 'المكتبة', position: 0 })
-      done.push('رفّ')
-    }
-
     if ((await ctx.db.query('categories').first()) === null) {
       for (const [i, name] of CATEGORIES.entries()) {
         await ctx.db.insert('categories', { name, position: i })

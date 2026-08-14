@@ -17,11 +17,40 @@ export type FontName = 'kitab' | 'classic' | 'modern'
 export const ERAS: Era[] = ['هـ', 'م', 'ق.هـ', 'ق.م']
 export const STATUSES: ReadingStatus[] = ['لم تُقرأ', 'قيد القراءة', 'تم القراءة']
 export const PERK_KINDS: PerkKind[] = ['فائدة', 'مقتطف']
-export const LANGUAGES = ['العربية', 'مترجم إلى العربية', 'لغة أخرى']
+export const LANGUAGES = ['العربية', 'مُترجَمٌ إلى العربية', 'لغةٌ أخرى']
+
+/** لغة الأصل، تُسأل حين يكون الكتاب مترجَمًا. فيها القديم كما فيها الحيّ. */
+export const ORIGINAL_LANGUAGES = [
+  'الإنجليزية', 'الفرنسية', 'الألمانية', 'الإسبانية', 'الإيطالية', 'البرتغالية',
+  'الهولندية', 'الروسية', 'التركية', 'الفارسية', 'الأردية', 'الهندية',
+  'الصينية', 'اليابانية', 'الكورية', 'الملايوية', 'الإندونيسية', 'السواحيلية',
+  'العبرية', 'الأمازيغية',
+  'اللاتينية', 'اليونانية القديمة', 'السريانية', 'الآرامية', 'القبطية',
+  'الفَهْلَوية', 'السنسكريتية', 'الأكادية',
+]
+
+/**
+ * أدوار من عمل في الكتاب غير مؤلِّفه. الافتراضيّ «المُحقِّق»، وقد يجتمع في
+ * الكتاب الواحد محقِّقان ومخرِّجٌ وثلاثة تقديمات.
+ */
+export const CONTRIBUTOR_ROLES = [
+  'المُحقِّق', 'المُراجِع', 'المُعتَني', 'المُصحِّح', 'المُخَرِّج', 'المُتَرجِم',
+  'تَقْرِيظ', 'تقديم',
+]
+
 export const BINDINGS = ['مُجلَّد كرتوني', 'تغليف ورقي مَرِن']
 export const SIZES = ['قِطع كبير', 'حجم متوسط معتاد', 'حجم صغير', 'كُتيِّب']
 export const CONDITIONS = ['جديد', 'جيد جدًّا', 'جيد', 'مستعمل', 'يحتاج ترميمًا']
-export const SOURCES = ['شراء', 'هدية', 'إرث', 'معرض كتاب', 'مكتبة مستعملة']
+
+/** صِفة الوُرُود: بأيّ صفةٍ وَرَد هذا الكتاب إلى المكتبة */
+export const SOURCES = ['شِراء', 'إِهْداء', 'إرْث', 'توزيع', 'تنازُل']
+
+/** ما يستدعيه كلُّ صفةِ ورودٍ من سؤالٍ بعده. وما ليس فيها لا يستدعي شيئًا. */
+export const SOURCE_DETAILS: Record<string, string> = {
+  'شِراء': 'مكان الشِّراء',
+  'إِهْداء': 'المُهدِي',
+  'إرْث': 'المَوْروث',
+}
 export const CURRENCIES = ['ريال', 'درهم', 'دينار', 'دولار', 'يورو']
 export const WORK_TYPES = [
   'شرح', 'حاشية', 'تهذيب', 'اختصار', 'ردّ',
@@ -35,7 +64,34 @@ export interface Author {
   birth: number | null
   death: number | null
   era: Era
+  /** معاصرٌ حيّ، فلا وفاة له */
+  alive: boolean
+  /** وفاةٌ لم تُعرف على التعيين، تُكتب نصًّا في `death_text` */
+  death_approx: boolean
+  death_text: string
   bio: string
+}
+
+/** مؤلِّفٌ مشارك: الأول في `author_id`، وهؤلاء من بعده */
+export interface CoAuthor {
+  author_id: string | null
+  name: string
+}
+
+/** من عمل في الكتاب غير مؤلِّفه، ودورُه معه */
+export interface Contributor {
+  role: string
+  name: string
+}
+
+export interface Publisher {
+  id: string
+  name: string
+  place: string
+  founded: string
+  website: string
+  notes: string
+  created_at: string
 }
 
 export interface Book {
@@ -44,34 +100,45 @@ export interface Book {
   subtitle: string
   author_id: string | null
   author_name: string
-  verifier: string
-  translator: string
-  presenter: string
+  co_authors: CoAuthor[]
+  contributors: Contributor[]
   series: string
   series_no: string
   category: string
-  room: string
 
+  publisher_id: string | null
   publisher: string
   place: string
   year: number | null
+  year_month: number | null
   year_era: Era
+  year_approx: boolean
+  year_text: string
   edition: string
+  edition_worded: boolean
+  edition_notes: string
   parts: number | null
+  single_part: boolean
   volumes: number | null
+  single_volume: boolean
   volume_pages: (number | string)[]
   pages: number | null
   size: string
   isbn: string
   language: string
+  language_original: string
 
+  cabinet_no: string
   shelf_no: string
   binding: string
   condition: string
   source: string
-  acquired_day: number | null
+  source_detail: string
   acquired_month: number | null
   acquired_year: number | null
+  acquired_approx: boolean
+  acquired_text: string
+  margin_note: string
   value: number | null
 
   topic: string
@@ -195,39 +262,47 @@ export const VIS_TOGGLES: { key: keyof Visibility; label: string; hint: string }
  */
 export const META_DEFS: { label: string; key: string }[] = [
   { label: 'العنوان الفرعي',   key: 'subtitle' },
-  { label: 'المحقق',           key: 'verifier' },
-  { label: 'المترجم',          key: 'translator' },
-  { label: 'المُقدِّم',          key: 'presenter' },
+  { label: 'المحقق ومن معه',   key: 'contributors' },
   { label: 'السلسلة',          key: 'series' },
   { label: 'رقمه في السلسلة',  key: 'seriesNo' },
-  { label: 'الناشر',           key: 'publisher' },
+  { label: 'دار النشر',        key: 'publisher' },
   { label: 'مكان النشر',       key: 'place' },
   { label: 'سنة النشر',        key: 'yearLabel' },
   { label: 'الطبعة',           key: 'edition' },
   { label: 'الأجزاء',          key: 'parts' },
-  { label: 'المجلدات المادية', key: 'volumes' },
+  { label: 'المجلدات',         key: 'volumes' },
   { label: 'عدد الصفحات',      key: 'pages' },
   { label: 'صفحات المجلدات',   key: 'volumePagesText' },
   { label: 'الحجم',            key: 'size' },
   { label: 'ردمك',             key: 'isbn' },
   { label: 'اللغة',            key: 'language' },
-  { label: 'موضع الرف',        key: 'shelfNo' },
+  { label: 'رقم الدولاب',      key: 'cabinet' },
+  { label: 'رقم الرفّ',         key: 'shelfNo' },
   { label: 'التغليف',          key: 'binding' },
   { label: 'الحالة المادية',   key: 'condition' },
-  { label: 'مصدر الاقتناء',    key: 'source' },
-  { label: 'تاريخ الاقتناء',   key: 'acquired' },
+  { label: 'صِفة الوُرود',       key: 'source' },
+  { label: 'تاريخ الوُرود',     key: 'acquired' },
+  { label: 'طُرَّة الكتاب',      key: 'marginNote' },
   { label: 'الموضوع',          key: 'topic' },
 ]
 
 export const SORT_OPTIONS = [
-  { key: 'authorDeath', label: 'ترتيب: أقدمية المؤلِّف' },
-  { key: 'title',       label: 'ترتيب: العنوان' },
-  { key: 'author',      label: 'ترتيب: المؤلف' },
-  { key: 'year',        label: 'ترتيب: الأحدث نشرًا' },
-  { key: 'rating',      label: 'ترتيب: الأعلى تقييمًا' },
-  { key: 'pages',       label: 'ترتيب: الأكثر صفحات' },
-  { key: 'value',       label: 'ترتيب: الأعلى قيمة' },
+  { key: 'authorDeath', label: 'ترتيب حسَب القِدَم' },
+  { key: 'title',       label: 'حسَب ترتيب حروف المُعجَم' },
+  { key: 'newest',      label: 'حسَب الأحدث إضافةً' },
+  { key: 'rating',      label: 'حسَب الأعلى تقييمًا' },
+  { key: 'volumes',     label: 'حسَب عدد المُجلَّدات' },
+  { key: 'pages',       label: 'حسَب عدد الصفَحات' },
+  { key: 'value',       label: 'حسَب قيمة الكتاب' },
+  { key: 'year',        label: 'حسَب تاريخ النشْر' },
 ] as const
+
+/** أسماء طرق العرض كما تظهر في زرّ طريقة العرض */
+export const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
+  { key: 'table', label: 'عرض في صورة جدول' },
+  { key: 'grid',  label: 'عرض في صورة شبكة' },
+  { key: 'shelf', label: 'عرض في صورة أَرْفُف' },
+]
 
 export type SortKey = (typeof SORT_OPTIONS)[number]['key']
 
@@ -259,6 +334,35 @@ export function parseNumber(input: string | number | null | undefined): number |
   if (input === null || input === undefined || input === '') return null
   const n = Number(toLatinDigits(String(input)).replace(/[^\d.-]/g, ''))
   return Number.isFinite(n) ? n : null
+}
+
+const EDITION_ONES = [
+  '', 'الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة',
+  'السادسة', 'السابعة', 'الثامنة', 'التاسعة', 'العاشرة',
+]
+const EDITION_ONES_BOUND = [
+  '', 'الحادية', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة',
+  'السادسة', 'السابعة', 'الثامنة', 'التاسعة',
+]
+const EDITION_TENS = [
+  '', '', 'العشرون', 'الثلاثون', 'الأربعون', 'الخمسون',
+  'الستون', 'السبعون', 'الثمانون', 'التسعون',
+]
+
+/**
+ * رقم الطبعة كتابةً: ٢ ← «الثانية»، ٢١ ← «الحادية والعشرون». مؤنَّثةٌ لأن
+ * الموصوف «الطبعة». وما جاوز التسع والتسعين يبقى رقمًا كما كُتب.
+ */
+export function editionInWords(input: string | number): string {
+  const n = parseNumber(input)
+  if (n === null || !Number.isInteger(n) || n < 1 || n > 99) return String(input ?? '').trim()
+  if (n <= 10) return EDITION_ONES[n]
+  if (n < 20) return `${EDITION_ONES_BOUND[n - 10]} عشرة`
+  const tens = Math.floor(n / 10)
+  const ones = n % 10
+  return ones === 0
+    ? EDITION_TENS[tens]
+    : `${EDITION_ONES_BOUND[ones]} و${EDITION_TENS[tens]}`
 }
 
 /** نجوم التقييم كنصّ: ★★★☆☆ أو «—» حين لا تقييم */

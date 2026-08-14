@@ -13,7 +13,7 @@ import { applyTheme } from './theme'
 import {
   DEFAULT_VISIBILITY,
   type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
-  type Loan, type Perk, type Settings,
+  type Loan, type Perk, type Publisher, type Settings,
 } from './types'
 
 const EMPTY_SETTINGS: Settings = {
@@ -53,7 +53,7 @@ interface LibraryValue {
   works: BookWork[]
   perks: Perk[]
   loans: Loan[]
-  shelves: string[]
+  publishers: Publisher[]
   categories: string[]
   landingImages: LandingImage[]
   landingQuotes: LandingQuote[]
@@ -84,6 +84,14 @@ const VIEWER_PREFS_KEY = 'lib-viewer-prefs'
  * له أن يغيّر ما يراه غيره — بل في متصفّحه وحده.
  */
 export type ViewerPrefs = Partial<Pick<Settings, 'theme' | 'font' | 'ui_scale'>>
+
+/**
+ * إعدادات المكتبة كما جاءت من الخادم، مخلوطةً بما اختاره الزائر لنفسه. صاحبُ
+ * المكتبة لا يُخلط له شيء: يرى ما حفظه هو.
+ */
+function withViewerPrefs(st: Settings, owner: boolean): Settings {
+  return owner ? st : { ...st, ...readViewerPrefs() }
+}
 
 function readViewerPrefs(): ViewerPrefs {
   try {
@@ -126,7 +134,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [works, setWorks] = useState<BookWork[]>([])
   const [perks, setPerks] = useState<Perk[]>([])
   const [loans, setLoans] = useState<Loan[]>([])
-  const [shelves, setShelves] = useState<string[]>([])
+  const [publishers, setPublishers] = useState<Publisher[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [landingImages, setLandingImages] = useState<LandingImage[]>([])
   const [landingQuotes, setLandingQuotes] = useState<LandingQuote[]>([])
@@ -172,35 +180,65 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, [authSignOut])
 
   // ------------------------------------------------------------- التحميل
+  // التحميل يبدأ قبل أن يستقرّ الدور، فيُقرأ الدورُ من مرجعٍ لا من الحالة
+  // كيلا يُعاد بناء `reload` كلما تبدّل، وتُحفظ نسخةُ الخادم من الإعدادات
+  // ليُعاد خلطُها متى عُرف الدور بلا طلبٍ جديد.
+  const isOwnerRef = useRef(isOwner)
+  isOwnerRef.current = isOwner
+  const serverSettings = useRef<Settings | null>(null)
+
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      const owner = isOwnerRef.current
       const [b, a, w, p, l, sh, c, img, q, st] = await Promise.all([
-        api.fetchBooks(isOwner),
-        api.fetchAuthors(isOwner),
-        api.fetchWorks(isOwner),
-        api.fetchPerks(isOwner),
-        api.fetchLoans(isOwner),
-        api.fetchShelves(isOwner),
-        api.fetchCategories(isOwner),
-        api.fetchLandingImages(isOwner),
-        api.fetchLandingQuotes(isOwner),
-        api.fetchSettings(isOwner),
+        api.fetchBooks(owner),
+        api.fetchAuthors(owner),
+        api.fetchWorks(owner),
+        api.fetchPerks(owner),
+        api.fetchLoans(owner),
+        api.fetchPublishers(owner),
+        api.fetchCategories(owner),
+        api.fetchLandingImages(owner),
+        api.fetchLandingQuotes(owner),
+        api.fetchSettings(owner),
       ])
       setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
-      setShelves(sh); setCategories(c)
+      setPublishers(sh); setCategories(c)
       setLandingImages(img); setLandingQuotes(q)
       // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
-      setSettings(isOwner ? st : { ...st, ...readViewerPrefs() })
+      serverSettings.current = st
+      setSettings(withViewerPrefs(st, isOwnerRef.current))
       setError(null)
     } catch (e) {
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
     } finally {
       setLoading(false)
     }
-  }, [isOwner])
+  }, [])
 
-  useEffect(() => { if (roleReady) void reload() }, [roleReady, reload])
+  // التحميل يبدأ فور استقرار الجلسة ولا ينتظر معرفة الدور: الخادم يقرّر ما
+  // يُعيده بهويّة الطلب نفسها، ووسيط `owner` لا أثر له أصلًا. وانتظارُ
+  // `ownerExists` قبل أول طلبٍ كان يكلّف جولةً كاملة على الشبكة بلا فائدة.
+  useEffect(() => { if (!authLoading) void reload() }, [authLoading, reload])
+
+  // أما الدخول والخروج بعد ذلك فيغيّران ما يعيده الخادم، فيُعاد التحميل.
+  // واستقرارُ الدور أولَ مرة لا يُعاد له: التحميل سبقه بالفعل.
+  const settledRole = useRef<boolean | null>(null)
+  useEffect(() => {
+    if (!roleReady) return
+    if (settledRole.current === isOwner) return
+    const first = settledRole.current === null
+    settledRole.current = isOwner
+    if (!first) void reload()
+  }, [roleReady, isOwner, reload])
+
+  // والإعدادات تُخلط بتفضيلات الزائر قبل أن يُعرف الدور، فإن تبيّن أنه صاحب
+  // المكتبة رُدّت إليه إعداداته كما حفظها — من النسخة المحفوظة بلا طلبٍ جديد.
+  useEffect(() => {
+    if (!roleReady || !serverSettings.current) return
+    setSettings(withViewerPrefs(serverSettings.current, isOwner))
+  }, [roleReady, isOwner])
 
   // المظهر والخط وحجم الواجهة تُطبَّق على جذر الصفحة
   useEffect(() => {
@@ -278,7 +316,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly: () => setBrowseOnly((v) => !v),
     signOut, refreshRole,
-    books, authors, works, perks, loans, shelves, categories,
+    books, authors, works, perks, loans, publishers, categories,
     landingImages, landingQuotes, settings,
     authorById: (id) => (id ? authorMap.get(id) ?? null : null),
     bookById: (id) => bookMap.get(id),

@@ -2,7 +2,7 @@
 // شبكة، وجدول، وأرفف. عرض الأرفف هو وجه هذا الفهرس: كل مجلَّدٍ ماديّ كعبٌ
 // قائم، وصورة الكعب المرفوعة هي ما يجعل الرف يشبه رفّ البيت.
 
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { toHijriYear, yearLabel } from '../lib/hijri'
@@ -11,14 +11,17 @@ import {
   matchBook, type SearchOptions,
 } from '../lib/search'
 import {
-  CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT,
-  type Book, type SortKey, type ViewMode, volumesOf,
+  CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT, VIEW_OPTIONS,
+  parseNumber, type Book, type SortKey, type ViewMode, volumesOf,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
-  EmptyState, SearchIcon, StatusBadge, Stars, ToggleRow,
+  CalculatorIcon, EmptyState, SearchIcon, StatusBadge, Stars, SuggestIcon, ToggleRow,
   cardStyle, chipStyle, countPillStyle, facetStyle, viewToggleStyle,
 } from '../components/ui'
+
+// الحاسبة خدمةٌ تُفتح عند طلبها، فلا تُحمَّل مع الصفحة
+const ReadingCalculator = lazy(() => import('../components/ReadingCalculator'))
 
 const ALL = 'الكل'
 
@@ -30,15 +33,16 @@ const SEARCH_TOGGLES: { key: keyof SearchOptions; label: string; hint: string }[
 ]
 
 export default function Browse() {
-  const { books, authorById, shelves, categories, settings, isOwner } = useLibrary()
+  const { books, authorById, categories, settings, isOwner } = useLibrary()
 
-  const [filterRoom, setFilterRoom] = useState(ALL)
+  const [filterCabinet, setFilterCabinet] = useState(ALL)
   const [filterCategory, setFilterCategory] = useState(ALL)
   const [filterStatus, setFilterStatus] = useState(ALL)
   const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('authorDeath')
   const [viewMode, setViewMode] = useState<ViewMode>(settings.default_view)
 
+  const [showCalculator, setShowCalculator] = useState(false)
   const [advanced, setAdvanced] = useState(false)
   const [opts, setOpts] = useState<SearchOptions>({
     caseSensitive: false, respectHamza: false, exact: false, anyOrder: true,
@@ -52,7 +56,7 @@ export default function Browse() {
   const searchKeys = advancedOn ? fields : ALL_SEARCH_KEYS
 
   // ------------------------------------------------------------ المرشِّحات
-  const passRoom = (b: Book) => filterRoom === ALL || b.room === filterRoom
+  const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no === filterCabinet
   const passCategory = (b: Book) => filterCategory === ALL || b.category === filterCategory
   const passStatus = (b: Book) => filterStatus === ALL || b.status === filterStatus
   const passSearch = (b: Book) => matchBook(b, query.trim(), searchOpts, searchKeys)
@@ -67,9 +71,10 @@ export default function Browse() {
     const sorters: Record<SortKey, (a: Book, b: Book) => number> = {
       authorDeath: (a, b) => (deathKey(a) - deathKey(b)) || byTitle(a, b),
       title: byTitle,
-      author: (a, b) => a.author_name.localeCompare(b.author_name, 'ar'),
+      newest: (a, b) => b.created_at.localeCompare(a.created_at),
       year: (a, b) => (b.year ?? 0) - (a.year ?? 0),
       rating: (a, b) => b.rating - a.rating,
+      volumes: (a, b) => (b.volumes ?? 0) - (a.volumes ?? 0),
       pages: (a, b) => (b.pages ?? 0) - (a.pages ?? 0),
       value: (a, b) => (b.value ?? 0) - (a.value ?? 0),
     }
@@ -77,21 +82,33 @@ export default function Browse() {
   }, [sortBy, authorById])
 
   const filtered = useMemo(
-    () => books.filter((b) => passRoom(b) && passCategory(b) && passStatus(b) && passSearch(b)).sort(sorter),
+    () => books.filter((b) => passCabinet(b) && passCategory(b) && passStatus(b) && passSearch(b)).sort(sorter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, filterRoom, filterCategory, filterStatus, query, searchOpts, searchKeys, sorter],
+    [books, filterCabinet, filterCategory, filterStatus, query, searchOpts, searchKeys, sorter],
   )
 
+  // دواليب المكتبة تُشتقّ من الكتب نفسها: ما من قائمةٍ تُدار على حِدَة، فرقمُ
+  // الدولاب يُكتب مع كل كتاب. وترتيبها عدديٌّ لا أبجديّ.
+  const cabinets = useMemo(() => {
+    const found = new Set(books.map((b) => b.cabinet_no.trim()).filter(Boolean))
+    return [...found].sort((a, b) => {
+      const na = parseNumber(a)
+      const nb = parseNumber(b)
+      if (na !== null && nb !== null) return na - nb
+      return a.localeCompare(b, 'ar')
+    })
+  }, [books])
+
   // عدّاد كل وجهٍ يُحسب مقابل بقية المرشِّحات النشطة، لا مقابل الكل
-  const roomFacets = useMemo(
-    () => [ALL, ...shelves].map((name) => ({
+  const cabinetFacets = useMemo(
+    () => [ALL, ...cabinets].map((name) => ({
       name,
-      label: name === ALL ? 'كل الأرفف' : name,
+      label: name === ALL ? 'كل الدواليب' : `دولاب ${name}`,
       count: books.filter((b) =>
-        (name === ALL || b.room === name) && passCategory(b) && passStatus(b) && passSearch(b)).length,
+        (name === ALL || b.cabinet_no === name) && passCategory(b) && passStatus(b) && passSearch(b)).length,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, shelves, filterCategory, filterStatus, query, searchOpts, searchKeys],
+    [books, cabinets, filterCategory, filterStatus, query, searchOpts, searchKeys],
   )
 
   const categoryFacets = useMemo(
@@ -99,13 +116,22 @@ export default function Browse() {
       name,
       label: name === ALL ? 'كل التصنيفات' : name,
       count: books.filter((b) =>
-        (name === ALL || b.category === name) && passRoom(b) && passStatus(b) && passSearch(b)).length,
+        (name === ALL || b.category === name) && passCabinet(b) && passStatus(b) && passSearch(b)).length,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, categories, filterRoom, filterStatus, query, searchOpts, searchKeys],
+    [books, categories, filterCabinet, filterStatus, query, searchOpts, searchKeys],
   )
 
-  const activeLabel = filterRoom !== ALL ? filterRoom : (filterCategory !== ALL ? filterCategory : null)
+  /** كتابٌ يُنتقى بالقرعة، والانتقال إلى صفحته مباشرة */
+  function suggestBook() {
+    if (!books.length) return
+    const pick = books[Math.floor(Math.random() * books.length)]
+    navigate({ name: 'book', id: pick.id })
+  }
+
+  const activeLabel = filterCabinet !== ALL
+    ? `دولاب ${filterCabinet}`
+    : (filterCategory !== ALL ? filterCategory : null)
   const readingCount = books.filter((b) => b.status === 'قيد القراءة').length
   const trimmed = query.trim()
 
@@ -125,12 +151,12 @@ export default function Browse() {
           تصفّح المكتبة
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>أرفف المكتبة</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>دواليب المكتبة</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 16 }}>
-          {roomFacets.map((f) => (
-            <button key={f.name} type="button" onClick={() => setFilterRoom(f.name)} style={facetStyle(filterRoom === f.name)}>
+          {cabinetFacets.map((f) => (
+            <button key={f.name} type="button" onClick={() => setFilterCabinet(f.name)} style={facetStyle(filterCabinet === f.name)}>
               <span>{f.label}</span>
-              <span style={countPillStyle(filterRoom === f.name)}>{f.count}</span>
+              <span style={countPillStyle(filterCabinet === f.name)}>{f.count}</span>
             </button>
           ))}
         </div>
@@ -169,40 +195,67 @@ export default function Browse() {
           marginBottom: 22, gap: 20, flexWrap: 'wrap',
         }}>
           <div>
-            <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 30, margin: '0 0 4px', fontWeight: 700 }}>
-              {activeLabel ?? 'مكتبتي المنزلية'}
+            <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 30, margin: 0, fontWeight: 700 }}>
+              {activeLabel ?? 'فِهْرِس المكتبة'}
             </h1>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>
-              {trimmed
-                ? `نتائج البحث عن "${trimmed}" — ${filtered.length} كتاب`
-                : 'فهرس دافئ لكل كتاب في البيت — من الرف إلى القراءة'}
-            </p>
+            {trimmed && (
+              <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>
+                {`نتائج البحث عن "${trimmed}" — ${filtered.length} كتاب`}
+              </p>
+            )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--muted)' }}>
-              <span><strong style={{ color: 'var(--text)' }}>{books.length}</strong> كتاب</span>
-              <span><strong style={{ color: 'var(--star)' }}>{readingCount}</strong> قيد القراءة</span>
-            </div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortKey)}
-              style={{
-                padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)',
-                background: 'var(--surface)', fontSize: 12.5, color: 'var(--text)',
-              }}
-            >
-              {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-            <div style={{ display: 'flex', gap: 4, background: 'var(--header)', borderRadius: 9, padding: 3 }}>
-              <button type="button" onClick={() => setViewMode('grid')} style={viewToggleStyle(viewMode === 'grid')}>شبكة</button>
-              <button type="button" onClick={() => setViewMode('table')} style={viewToggleStyle(viewMode === 'table')}>جدول</button>
-              <button type="button" onClick={() => setViewMode('shelf')} style={viewToggleStyle(viewMode === 'shelf')}>أرفف</button>
-            </div>
+          <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--muted)' }}>
+            <span><strong style={{ color: 'var(--text)' }}>{books.length}</strong> كتاب</span>
+            <span><strong style={{ color: 'var(--star)' }}>{readingCount}</strong> قيد القراءة</span>
           </div>
         </section>
 
         <section style={{ ...cardStyle, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
+          {/* أزرار الصفحة فوق شريط البحث: العرض، والترتيب، ثم خدمتان */}
+          <div style={{
+            display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+            marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)',
+          }}>
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as ViewMode)}
+              aria-label="طريقة العرض"
+              style={toolStyle}
+            >
+              {VIEW_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+              aria-label="طريقة الترتيب"
+              style={toolStyle}
+            >
+              {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+
+            <button
+              type="button"
+              onClick={suggestBook}
+              disabled={books.length === 0}
+              title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
+              style={{ ...toolStyle, opacity: books.length === 0 ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 7 }}
+            >
+              <SuggestIcon size={16} />
+              اقترح لي كتابًا
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowCalculator(true)}
+              style={{ ...toolStyle, display: 'inline-flex', alignItems: 'center', gap: 7 }}
+            >
+              <CalculatorIcon size={16} />
+              حاسبة القراءة
+            </button>
+          </div>
+
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: 240, display: 'flex', alignItems: 'center' }}>
               <span style={{ position: 'absolute', right: 13, display: 'flex', color: 'var(--muted)', pointerEvents: 'none' }}>
@@ -298,12 +351,21 @@ export default function Browse() {
         ) : viewMode === 'table' ? (
           <TableView books={filtered} />
         ) : (
-          <ShelfView books={filtered} rooms={filterRoom === ALL ? shelves : [filterRoom]} />
+          <ShelfView books={filtered} cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]} />
         )}
       </div>
+
+      <Suspense fallback={null}>
+        {showCalculator && <ReadingCalculator onClose={() => setShowCalculator(false)} />}
+      </Suspense>
     </main>
   )
 }
+
+const toolStyle = {
+  padding: '8px 13px', borderRadius: 9, border: '1px solid var(--border)',
+  background: 'var(--bg)', color: 'var(--text)', fontSize: 13,
+} as const
 
 // ------------------------------------------------------------------ شبكة
 function GridView({ books }: { books: Book[] }) {
@@ -409,9 +471,15 @@ function TableView({ books }: { books: Book[] }) {
 }
 
 // ------------------------------------------------------------------ أرفف
-function ShelfView({ books, rooms }: { books: Book[]; rooms: string[] }) {
-  const sections = rooms
-    .map((room) => ({ room, roomBooks: books.filter((b) => b.room === room) }))
+function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
+  // ما لم يُكتب له دولاب يُعرض في رفٍّ أخيرٍ لا يُهمَل
+  const placed = new Set(cabinets)
+  const sections = [...cabinets, '']
+    .map((cabinet) => ({
+      cabinet,
+      roomBooks: books.filter((b) =>
+        cabinet ? b.cabinet_no === cabinet : !placed.has(b.cabinet_no.trim())),
+    }))
     .filter((s) => s.roomBooks.length > 0)
 
   if (sections.length === 0) {
@@ -420,12 +488,14 @@ function ShelfView({ books, rooms }: { books: Book[]; rooms: string[] }) {
 
   return (
     <>
-      {sections.map(({ room, roomBooks }) => {
+      {sections.map(({ cabinet, roomBooks }) => {
         const spineCount = roomBooks.reduce((sum, b) => sum + volumesOf(b), 0)
         return (
-          <div key={room} style={{ marginBottom: 34 }}>
+          <div key={cabinet || 'بلا دولاب'} style={{ marginBottom: 34 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontFamily: 'var(--heading-font)', fontSize: 19, fontWeight: 700 }}>{room}</div>
+              <div style={{ fontFamily: 'var(--heading-font)', fontSize: 19, fontWeight: 700 }}>
+                {cabinet ? `دولاب ${cabinet}` : 'كتبٌ بلا موضع'}
+              </div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                 {roomBooks.length} كتاب — {spineCount} مجلَّد على الرف
               </div>

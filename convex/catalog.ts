@@ -27,9 +27,47 @@ export const findOrCreateAuthor = mutation({
     if (found) return toClient(found)
 
     const id = await ctx.db.insert('authors', {
-      name: trimmed, full_name: '', birth: null, death: null, era: 'هـ', bio: '',
+      name: trimmed, full_name: '', birth: null, death: null, era: 'هـ',
+      alive: false, death_approx: false, death_text: '', bio: '',
     })
     return toClient((await ctx.db.get(id))!)
+  },
+})
+
+/**
+ * وفاة المؤلِّف تُدخَل من نموذج الكتاب لا من صفحة المؤلِّف وحدها: هي مِلاك
+ * ترتيب الكتب، وطلبُها ساعةَ كتابة الاسم أيسر من العودة إليها بعدُ. ولا
+ * تُمحى وفاةٌ مثبتة بإدخالٍ فارغ — من نسي ملأها لا يُفسد ما سُجّل.
+ */
+export const setAuthorDeath = mutation({
+  args: {
+    id: v.id('authors'),
+    death: v.union(v.number(), v.null()),
+    era: v.optional(era),
+    alive: v.boolean(),
+    death_approx: v.boolean(),
+    death_text: v.string(),
+  },
+  handler: async (ctx, { id, death, era: dEra, alive, death_approx, death_text }) => {
+    await requireOwner(ctx)
+    const author = await ctx.db.get(id)
+    if (!author) throw new Error('لا مؤلِّف بهذا المعرّف.')
+
+    if (alive) {
+      await ctx.db.patch(id, { alive: true, death: null, death_approx: false, death_text: '' })
+      return
+    }
+    if (death_approx) {
+      if (!death_text.trim()) return
+      await ctx.db.patch(id, {
+        alive: false, death_approx: true, death_text: death_text.trim(), death: null,
+      })
+      return
+    }
+    if (death === null) return
+    await ctx.db.patch(id, {
+      alive: false, death_approx: false, death_text: '', death, era: dEra ?? author.era,
+    })
   },
 })
 
@@ -47,6 +85,9 @@ export const updateAuthor = mutation({
       birth: v.optional(v.union(v.number(), v.null())),
       death: v.optional(v.union(v.number(), v.null())),
       era: v.optional(era),
+      alive: v.optional(v.boolean()),
+      death_approx: v.optional(v.boolean()),
+      death_text: v.optional(v.string()),
       bio: v.optional(v.string()),
     }),
   },
@@ -161,29 +202,94 @@ export const updateSettings = mutation({
 })
 
 // ---------------------------------------------------------------------------
-// الأرفف والتصنيفات: قوائم أسماء فريدة
+// دُوْر النَّشْر
 // ---------------------------------------------------------------------------
 
-export const addShelf = mutation({
-  args: { name: v.string(), position: v.number() },
-  handler: async (ctx, { name, position }) => {
+/**
+ * الدار تُكتب مرةً واحدة: أوّلَ كتابٍ نشرَته يُكتب اسمُها ومكانُها، ثم يُملأ
+ * المكان من سجلّها في كل كتابٍ بعده. ولا يُعدَّل المكان من نموذج الكتاب —
+ * وإلا اختلف مكانُ الدار الواحدة من كتابٍ إلى كتاب — بل من صفحة دُور النشر.
+ */
+export const findOrCreatePublisher = mutation({
+  args: { name: v.string(), place: v.optional(v.string()) },
+  handler: async (ctx, { name, place }) => {
     await requireOwner(ctx)
-    const exists = await ctx.db
-      .query('shelves').withIndex('by_name', (q) => q.eq('name', name)).first()
-    if (exists) return
-    await ctx.db.insert('shelves', { name, position })
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('اسم الدار فارغ.')
+
+    const found = await ctx.db
+      .query('publishers')
+      .withIndex('by_name', (q) => q.eq('name', trimmed))
+      .first()
+    // مكانُ الدار المحفوظ لا يُكتب فوقه من نموذج الكتاب، لكنّ الفارغ يُسدّ
+    if (found) {
+      if (!found.place && place?.trim()) await ctx.db.patch(found._id, { place: place.trim() })
+      return toClient((await ctx.db.get(found._id))!)
+    }
+
+    const id = await ctx.db.insert('publishers', {
+      name: trimmed, place: place?.trim() ?? '', founded: '', website: '', notes: '',
+    })
+    return toClient((await ctx.db.get(id))!)
   },
 })
 
-export const removeShelf = mutation({
-  args: { name: v.string() },
-  handler: async (ctx, { name }) => {
+/**
+ * تعديل دار. الاسم والمكان مُكرَّران على كتبها — كما يُكرَّر اسم المؤلِّف —
+ * فتُزامَن هنا صراحةً، وإلا بقي على الكتب اسمٌ أو مكانٌ قديم.
+ */
+export const updatePublisher = mutation({
+  args: {
+    id: v.id('publishers'),
+    patch: v.object({
+      name: v.optional(v.string()),
+      place: v.optional(v.string()),
+      founded: v.optional(v.string()),
+      website: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
-    const row = await ctx.db
-      .query('shelves').withIndex('by_name', (q) => q.eq('name', name)).first()
-    if (row) await ctx.db.delete(row._id)
+    const before = await ctx.db.get(id)
+    if (!before) throw new Error('لا دار بهذا المعرّف.')
+
+    await ctx.db.patch(id, patch)
+
+    const renamed = patch.name !== undefined && patch.name !== before.name
+    const moved = patch.place !== undefined && patch.place !== before.place
+    if (!renamed && !moved) return
+
+    const books = await ctx.db
+      .query('books')
+      .withIndex('by_publisher', (q) => q.eq('publisher_id', id))
+      .collect()
+    for (const b of books) {
+      await ctx.db.patch(b._id, {
+        ...(renamed ? { publisher: patch.name } : {}),
+        ...(moved ? { place: patch.place } : {}),
+      })
+    }
   },
 })
+
+/** حذف دار: تُفكّ عن كتبها ويبقى اسمُها مكتوبًا عليها، فلا يضيع خبرُ الطبعة */
+export const removePublisher = mutation({
+  args: { id: v.id('publishers') },
+  handler: async (ctx, { id }) => {
+    await requireOwner(ctx)
+    const books = await ctx.db
+      .query('books')
+      .withIndex('by_publisher', (q) => q.eq('publisher_id', id))
+      .collect()
+    for (const b of books) await ctx.db.patch(b._id, { publisher_id: null })
+    await ctx.db.delete(id)
+  },
+})
+
+// ---------------------------------------------------------------------------
+// التصنيفات: قائمة أسماء فريدة
+// ---------------------------------------------------------------------------
 
 export const addCategory = mutation({
   args: { name: v.string(), position: v.number() },

@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { hijriLabel, lifeLabel, yearLabel } from '../lib/hijri'
+import { HIJRI_MONTHS, lifeLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import {
   META_DEFS, PERK_KINDS, STATUSES,
   type Book, type PerkKind, type ReadingStatus, volumesOf,
@@ -51,27 +51,30 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   // صفوف البيانات بترتيبها المعتمد، ويُسقَط الفارغ منها
   const metaValues: Record<string, string | number | null> = {
     subtitle: book.subtitle,
-    verifier: book.verifier,
-    translator: book.translator,
-    presenter: book.presenter,
+    // المشاركون سطرٌ واحد: «المُحقِّق: فلان، تقديم: فلان»
+    contributors: (book.contributors ?? [])
+      .map((c) => `${c.role}: ${c.name}`).join('، '),
     series: book.series,
     seriesNo: book.series_no,
     publisher: book.publisher,
     place: book.place,
-    yearLabel: book.year != null ? yearLabel(book.year, book.year_era) : '',
-    edition: book.edition,
-    parts: book.parts,
-    volumes: book.volumes,
+    yearLabel: publishYear(book),
+    edition: book.edition + (book.edition_notes ? ` (${book.edition_notes})` : ''),
+    parts: book.single_part ? 'جزءٌ واحد' : book.parts,
+    volumes: book.single_volume ? 'مُجلَّدٌ واحد' : book.volumes,
     pages: book.pages,
     volumePagesText: (book.volume_pages ?? []).filter(Boolean).join(' + '),
     size: book.size,
     isbn: book.isbn,
-    language: book.language,
+    language: book.language
+      + (book.language_original ? ` (عن ${book.language_original})` : ''),
+    cabinet: book.cabinet_no,
     shelfNo: book.shelf_no,
     binding: book.binding,
     condition: book.condition,
-    source: book.source,
-    acquired: hijriLabel(book.acquired_day, book.acquired_month, book.acquired_year),
+    source: book.source + (book.source_detail ? ` — ${book.source_detail}` : ''),
+    acquired: acquiredLabel(book),
+    marginNote: book.margin_note,
     topic: book.topic,
   }
 
@@ -108,9 +111,9 @@ export default function BookDetail({ bookId }: { bookId: string }) {
                 {book.category}
               </span>
             )}
-            {book.room && (
+            {book.cabinet_no && (
               <span style={{ fontSize: 12, background: 'var(--header)', padding: '4px 10px', borderRadius: 999 }}>
-                {book.room}
+                دولاب {book.cabinet_no}{book.shelf_no ? ` — رفّ ${book.shelf_no}` : ''}
               </span>
             )}
           </div>
@@ -134,6 +137,9 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               <span style={{ fontSize: 16, fontWeight: 600 }}>{book.author_name}</span>
             )}
             {author && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{lifeLabel(author)}</span>}
+            {(book.co_authors ?? []).map((co) => (
+              <span key={co.name} style={{ fontSize: 14, fontWeight: 600 }}>و{co.name}</span>
+            ))}
           </div>
 
           {(metaRows.length > 0 || showTo('value')) && (
@@ -605,4 +611,20 @@ function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeo
       )}
     </div>
   )
+}
+
+/** سنة النشر كما تُعرض: تقريبٌ كما كُتب، أو شهرٌ وسنة، أو سنةٌ وحدها */
+function publishYear(book: Book): string {
+  if (book.year_approx) return book.year_text
+  if (book.year == null) return ''
+  const year = yearLabel(book.year, book.year_era)
+  return book.year_month ? `${HIJRI_MONTHS[book.year_month - 1]} ${year}` : year
+}
+
+/** تاريخ الوُرود: مثلُ سنة النشر، بلا يومٍ فاليوم لا يُسأل عنه */
+function acquiredLabel(book: Book): string {
+  if (book.acquired_approx) return book.acquired_text
+  if (book.acquired_year == null) return ''
+  const year = `${toArabicDigits(book.acquired_year)} هـ`
+  return book.acquired_month ? `${HIJRI_MONTHS[book.acquired_month - 1]} ${year}` : year
 }

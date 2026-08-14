@@ -456,8 +456,7 @@ function LandingTab(
 
 // -------------------------------------------------------------- المكتبة
 function LibraryTab({ setField }: { setField: SetField }) {
-  const { settings, shelves, categories, run, reload } = useLibrary()
-  const [newShelf, setNewShelf] = useState('')
+  const { settings, categories, run, reload } = useLibrary()
   const [newCategory, setNewCategory] = useState('')
 
   const nameChips = (
@@ -546,19 +545,8 @@ function LibraryTab({ setField }: { setField: SetField }) {
         {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
       </select>
 
-      <div style={{ ...groupLabel, marginBottom: 8 }}>أرفف المكتبة</div>
-      {nameChips(shelves, async (name) => {
-        await run(() => api.removeShelf(name))
-        await reload()
-      })}
-      {addRow(newShelf, setNewShelf, 'اسم رف جديد', async () => {
-        const name = newShelf.trim()
-        if (!name || shelves.includes(name)) { setNewShelf(''); return }
-        setNewShelf('')
-        await run(() => api.addShelf(name, shelves.length))
-        await reload()
-      })}
-
+      {/* لا قائمة أرففٍ تُدار هنا: موضع الكتاب صار رقمَ دولابٍ ورقمَ رفٍّ
+          يُكتبان معه، ودواليبُ صفحة التصفُّح تُشتقّ من الكتب نفسها. */}
       <div style={{ ...groupLabel, marginBottom: 8 }}>التصنيفات</div>
       {nameChips(categories, async (name) => {
         await run(() => api.removeCategory(name))

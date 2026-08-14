@@ -263,6 +263,82 @@ export function BooksIcon({ size = 18 }: IconProps) {
   )
 }
 
+/** بيتٌ بجملونه — الصفحة الأولى */
+export function HomeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M3.6 10.4L12 3.8l8.4 6.6" />
+      <path d="M5.6 12v8.2h12.8V12" />
+      <path d="M9.9 20.2v-5h4.2v5" />
+    </svg>
+  )
+}
+
+/** كتابٌ وعليه زائد — إضافة كتاب */
+export function BookPlusIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M4 4.8h9.6a2 2 0 0 1 2 2v12.4H6a2 2 0 0 1-2-2z" />
+      <path d="M6 19.2a2 2 0 0 1 0-4h9.6" />
+      <path d="M19 6.4v5.4M16.3 9.1h5.4" />
+    </svg>
+  )
+}
+
+/** آلةٌ حاسبة — حاسبة القراءة، في زرّها وفي رأس نافذتها */
+export function CalculatorIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="4.4" y="2.8" width="15.2" height="18.4" rx="2.4" />
+      <path d="M7.6 6.6h8.8v3.2H7.6z" />
+      <path d="M8.4 13.4h.01M12 13.4h.01M15.6 13.4h.01M8.4 17.4h.01M12 17.4h.01M15.6 17.4h.01" />
+    </svg>
+  )
+}
+
+/** رأسُ إنسانٍ وكتفاه — اسم صاحب المكتبة */
+export function OwnerIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="8.2" r="3.7" />
+      <path d="M4.8 20.2c0-3.6 3.2-5.8 7.2-5.8s7.2 2.2 7.2 5.8" />
+    </svg>
+  )
+}
+
+/** عينٌ ناظرة — وضع التصفُّح فقط */
+export function EyeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M2.4 12S6 5.8 12 5.8 21.6 12 21.6 12 18 18.2 12 18.2 2.4 12 2.4 12z" />
+      <circle cx="12" cy="12" r="2.9" />
+    </svg>
+  )
+}
+
+/** بابٌ وسهمٌ خارجٌ منه — الخروج */
+export function ExitIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M14.4 4.2H6.2a1.6 1.6 0 0 0-1.6 1.6v12.4a1.6 1.6 0 0 0 1.6 1.6h8.2" />
+      <path d="M17.6 15.2 20.8 12l-3.2-3.2" />
+      <path d="M20.4 12H10.2" />
+    </svg>
+  )
+}
+
+/** مِطبعةٌ بلوحها — دُوْر النَّشْر */
+export function PressIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M6 3.6h12v4.2H6z" />
+      <path d="M4.2 7.8h15.6v6.4H4.2z" />
+      <path d="M7.4 14.2h9.2v6.2H7.4z" />
+      <path d="M9.6 17.2h4.8" />
+    </svg>
+  )
+}
+
 /** قلمٌ من ريش — المؤلِّفون */
 export function QuillIcon({ size = 18 }: IconProps) {
   return (

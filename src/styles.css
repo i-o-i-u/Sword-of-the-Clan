@@ -138,7 +138,9 @@ input[dir='ltr'] { text-align: left; }
   align-items: center;
   gap: 18px;
   padding: 11px 30px;
-  flex-wrap: wrap;
+  /* لا يلتفّ الرأس على الحواسيب: التبويبات تنزلق أفقيًّا عند الضيق، وأدوات
+     المظهر والإعدادات تبقى في أقصى اليسار لا تنزل تحت. */
+  flex-wrap: nowrap;
   background: var(--header);
   border-bottom: 1px solid var(--border);
 }
@@ -198,11 +200,20 @@ input[dir='ltr'] { text-align: left; }
   color: var(--text);
 }
 
-.head-nav { display: flex; gap: 3px; flex-wrap: wrap; }
+.head-nav {
+  display: flex;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.head-nav::-webkit-scrollbar { display: none; }
 
 .head-tab {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 7px;
   border: none;
   background: none;
@@ -221,7 +232,13 @@ input[dir='ltr'] { text-align: left; }
 }
 .head-tab-on:hover { background: var(--accent); }
 
-.head-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-inline-start: auto;
+}
 
 /* أزرار الأيقونات في الرأس: قرصٌ يتّسع تحت الأيقونة عند التمرير */
 .icon-btn {
@@ -334,17 +351,8 @@ input[dir='ltr'] { text-align: left; }
   opacity: 0;
   transition: opacity 1.4s ease-in-out;
 }
-.frame-shot-on {
-  opacity: 0.46;
-  animation: ken-burns 24s ease-out forwards;
-}
+.frame-shot-on { opacity: 0.46; }
 [data-theme='dark'] .frame-shot-on { opacity: 0.36; }
-
-/* زحفٌ بطيء في الصورة يمنعها الجمود ما دامت معروضة */
-@keyframes ken-burns {
-  from { transform: scale(1.01); }
-  to   { transform: scale(1.11); }
-}
 
 /*
  * حجابان: هالةٌ في الوسط تحت الشعار والاسم فيبقيان مقروءَين مهما كانت
@@ -452,6 +460,47 @@ input[dir='ltr'] { text-align: left; }
   color: var(--text);
 }
 .hero-place svg { flex: none; color: var(--accent-soft); }
+
+/* أدوات صاحب المكتبة: عمودٌ في الفراغ عن يمين الإطار (بدايةُ السطر في RTL).
+   يُطوى تحت الإطار على الشاشات الضيّقة حيث لا فراغ عن يمينه. */
+.owner-nook {
+  position: absolute;
+  top: 32px;
+  inset-inline-start: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 2;
+}
+
+.owner-nook-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.owner-nook-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.owner-nook-btn:hover { background: var(--surface); }
 
 /* ------------------------------------------ الأزرار، خارج الإطار */
 .hero-actions {
@@ -886,6 +935,18 @@ input[dir='ltr'] { text-align: left; }
   }
 }
 
+@media (max-width: 1180px) {
+  /* لا فراغ عن يمين الإطار في هذا العرض، فتنزل الأدوات صفًّا تحته */
+  .owner-nook {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 4px;
+  }
+  .hero { flex-direction: column; gap: 14px; }
+}
+
 @media (max-width: 900px) {
   .browse-layout { grid-template-columns: 1fr !important; }
   .browse-sidebar { position: static !important; }
@@ -898,7 +959,7 @@ input[dir='ltr'] { text-align: left; }
   .form-row { grid-template-columns: 1fr !important; }
 
   /* الرأس يتكدّس: الشعار وأدواته في سطر، والبحث والتبويبات تحته */
-  .app-header { gap: 12px; row-gap: 10px; }
+  .app-header { gap: 12px; row-gap: 10px; flex-wrap: wrap; }
   .quick-search { flex: 1 1 100%; order: 3; }
   .head-nav { order: 4; flex: 1 1 100%; }
   .head-tools { order: 2; }

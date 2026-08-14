@@ -11,7 +11,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import {
   DEFAULT_VISIBILITY,
   type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
-  type Loan, type Perk, type Settings,
+  type Loan, type Perk, type Publisher, type Settings,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -57,8 +57,8 @@ export async function fetchLoans(_owner: boolean): Promise<Loan[]> {
   return (await convex.query(api.library.loans, {})) as unknown as Loan[]
 }
 
-export async function fetchShelves(_owner: boolean): Promise<string[]> {
-  return await convex.query(api.library.shelves, {})
+export async function fetchPublishers(_owner: boolean): Promise<Publisher[]> {
+  return (await convex.query(api.library.publishers, {})) as unknown as Publisher[]
 }
 
 export async function fetchCategories(_owner: boolean): Promise<string[]> {
@@ -153,12 +153,38 @@ export async function updateSettings(patch: Record<string, unknown>): Promise<vo
   await convex.mutation(api.catalog.updateSettings, { patch: patch as never })
 }
 
-export async function addShelf(name: string, position: number): Promise<void> {
-  await convex.mutation(api.catalog.addShelf, { name, position })
+/** وفاة المؤلِّف كما تُدخَل من نموذج الكتاب: إمّا معاصرٌ، أو تقريبٌ، أو سنة */
+export async function setAuthorDeath(
+  id: string,
+  death: { death: number | null; era?: string; alive: boolean; approx: boolean; text: string },
+): Promise<void> {
+  await convex.mutation(api.catalog.setAuthorDeath, {
+    id: id as Id<'authors'>,
+    death: death.death,
+    era: (death.era as 'هـ' | 'م' | 'ق.هـ' | 'ق.م' | undefined) ?? undefined,
+    alive: death.alive,
+    death_approx: death.approx,
+    death_text: death.text,
+  })
 }
 
-export async function removeShelf(name: string): Promise<void> {
-  await convex.mutation(api.catalog.removeShelf, { name })
+export async function findOrCreatePublisher(name: string, place: string): Promise<Publisher> {
+  return (await convex.mutation(
+    api.catalog.findOrCreatePublisher, { name, place },
+  )) as unknown as Publisher
+}
+
+export async function updatePublisher(id: string, patch: Partial<Publisher>): Promise<void> {
+  const { id: _drop, created_at: _drop2, ...rest } = patch as Partial<Publisher>
+    & { id?: string; created_at?: string }
+  await convex.mutation(api.catalog.updatePublisher, {
+    id: id as Id<'publishers'>,
+    patch: rest as never,
+  })
+}
+
+export async function removePublisher(id: string): Promise<void> {
+  await convex.mutation(api.catalog.removePublisher, { id: id as Id<'publishers'> })
 }
 
 export async function addCategory(name: string, position: number): Promise<void> {

@@ -1,18 +1,28 @@
-// منتقي التاريخ الهجري لتاريخ الاقتناء (§٧).
-// الأشهر مبنيّة على تقويم أم القرى عبر Intl، لا على تقريبٍ حسابي.
+// منتقي تاريخٍ هجريّ باليوم. الأشهر مبنيّة على تقويم أم القرى عبر Intl، لا
+// على تقريبٍ حسابي. تستعمله حاسبة القراءة لتاريخ البدء وتاريخ الخَتْم.
 
-import { useEffect, useRef, useState } from 'react'
-import { HIJRI_MONTHS, WEEKDAYS, hijriLabel, hijriMonthDays, hijriToday } from '../lib/hijri'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { HIJRI_MONTHS, WEEKDAYS, hijriMonthDays, hijriToday, toArabicDigits } from '../lib/hijri'
 
 interface Props {
+  label: string
   day: number | null
   month: number | null
   year: number | null
   onChange: (day: number | null, month: number | null, year: number | null) => void
 }
 
-export default function HijriDatePicker({ day, month, year, onChange }: Props) {
+/** «١٢ رجب ١٤٤٧ هـ» */
+function dayLabel(d: number | null, m: number | null, y: number | null): string {
+  if (!d || !m || !y) return ''
+  return `${toArabicDigits(d)} ${HIJRI_MONTHS[m - 1] ?? ''} ${toArabicDigits(y)} هـ`
+}
+
+export default function HijriDatePicker({ label, day, month, year, onChange }: Props) {
   const [open, setOpen] = useState(false)
+  // اللوحة تُفتح تحت الحقل، إلا أن يضيق ما تحته فتُفتح فوقه — فلا تخرج عن
+  // حدّ الصفحة ولا تُقصّها النافذة التي تمرّر ما فيها.
+  const [above, setAbove] = useState(false)
   const [viewYear, setViewYear] = useState(() => year ?? hijriToday().y)
   const [viewMonth, setViewMonth] = useState(() => month ?? hijriToday().m)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -32,16 +42,18 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
     }
   }, [open])
 
-  function toggle() {
+  function toggle(e: ReactMouseEvent<HTMLButtonElement>) {
     if (!open) {
       const today = hijriToday()
       setViewYear(year ?? today.y)
       setViewMonth(month ?? today.m)
+      const box = e.currentTarget.getBoundingClientRect()
+      setAbove(window.innerHeight - box.bottom < PANEL_HEIGHT && box.top > PANEL_HEIGHT)
     }
     setOpen((v) => !v)
   }
 
-  const label = hijriLabel(day, month, year)
+  const shown = dayLabel(day, month, year)
   const days = open ? hijriMonthDays(viewYear, viewMonth) : []
   const leading = days.length ? days[0].weekday : 0
 
@@ -52,18 +64,18 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
 
   return (
     <div ref={boxRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)', position: 'relative' }}>
-      تاريخ الاقتناء (هجري)
+      {label}
       <button
         type="button"
         onClick={toggle}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)',
-          fontSize: 14, background: 'var(--bg)', color: label ? 'var(--text)' : 'var(--muted)',
+          fontSize: 14, background: 'var(--bg)', color: shown ? 'var(--text)' : 'var(--muted)',
           minWidth: 0, width: '100%',
         }}
       >
-        <span>{label || 'اختر التاريخ'}</span>
+        <span>{shown || 'اختر التاريخ'}</span>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
           <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
           <path d="M3.5 9.6h17M8.2 3.5v3M15.8 3.5v3" />
@@ -72,7 +84,8 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
 
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 40, width: 268,
+          position: 'absolute', ...(above ? { bottom: '100%', marginBottom: 6 } : { top: '100%', marginTop: 6 }),
+          right: 0, zIndex: 40, width: 268,
           background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
           boxShadow: '0 18px 40px oklch(0.2 0.02 50 / 0.25)', padding: 12,
         }}>
@@ -88,7 +101,7 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
               style={{ border: 'none', background: 'none', color: 'var(--text)', fontSize: 17, padding: '2px 8px' }}
             >›</button>
             <div style={{ fontFamily: 'var(--heading-font)', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-              {HIJRI_MONTHS[viewMonth - 1]} {viewYear} هـ
+              {HIJRI_MONTHS[viewMonth - 1]} {toArabicDigits(viewYear)} هـ
             </div>
             <button
               type="button"
@@ -121,7 +134,7 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
                     ? { ...cellBase, background: 'var(--accent)', color: 'var(--on-accent)', fontWeight: 700 }
                     : cellBase}
                 >
-                  {d.d}
+                  {toArabicDigits(d.d)}
                 </button>
               )
             })}
@@ -151,3 +164,6 @@ export default function HijriDatePicker({ day, month, year, onChange }: Props) {
     </div>
   )
 }
+
+/** ارتفاع اللوحة تقريبًا، به يُعرف أيُفتح تحت الحقل أم فوقه */
+const PANEL_HEIGHT = 340

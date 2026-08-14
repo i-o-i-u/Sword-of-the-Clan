@@ -108,9 +108,33 @@ function registerLocalFont() {
   document.head.appendChild(style)
 }
 
+/**
+ * العائلات التي تُجلب من جوجل عند اختيار خطّها لا مع كل تحميل. أميري خارجَها
+ * لأنه بديل «كتاب» في كل الأحوال، فورقتُه في index.html غيرَ حاجبةٍ للرسم.
+ */
+const WEB_FONTS: Partial<Record<FontName, string>> = {
+  classic: 'family=Cairo:wght@400;500;600;700',
+  modern: 'family=Markazi+Text:wght@500;700&family=Tajawal:wght@400;500;700',
+}
+
+const loadedWebFonts = new Set<FontName>()
+function ensureWebFont(font: FontName) {
+  const query = WEB_FONTS[font]
+  if (!query || loadedWebFonts.has(font)) return
+  loadedWebFonts.add(font)
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  // media=print يمنع الورقةَ من حجب الرسم ريثما تصل، ثم تُعمَّم عند وصولها
+  link.media = 'print'
+  link.onload = () => { link.media = 'all' }
+  link.href = `https://fonts.googleapis.com/css2?${query}&display=swap`
+  document.head.appendChild(link)
+}
+
 /** يكتب رموز المظهر والخط على جذر الصفحة */
 export function applyTheme(theme: ThemeName, font: FontName, uiScale: number) {
   registerLocalFont()
+  ensureWebFont(font)
   const t = THEMES[theme] ?? THEMES.warm
   const f = FONTS[font] ?? FONTS.kitab
   const root = document.documentElement.style

@@ -10,11 +10,28 @@
     />
     <link rel="icon" type="image/svg+xml" href="./assets/logo.svg" />
 
+    <!-- أول ما يُطلب بعد الصفحة: وصلة Convex وخطّ «كتاب». تمهيد الوصلة يوفّر
+         مصافحة TLS كاملة قبل أول استعلام، وسبقُ الخطّ يمنع ارتجاف النصّ. -->
+    <link rel="preconnect" href="%VITE_CONVEX_URL%" crossorigin />
+    <link
+      rel="preload"
+      href="./fonts/Kitab-Regular.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+
+    <!-- أميري بديلُ «كتاب» وحده. تُجلب ورقتُه غير حاجبةٍ للرسم (media=print
+         حتى تصل، ثم تُعمَّم)، فلا تنتظر الصفحةُ جوجل كي تظهر. وبقيّة العائلات
+         (Cairo وMarkazi وTajawal) لا تُجلب إلا إن اختار القارئ خطَّها —
+         يتكفّل بذلك ensureWebFont في theme.ts. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Markazi+Text:wght@500;700&family=Cairo:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap"
     />
   </head>
   <body>

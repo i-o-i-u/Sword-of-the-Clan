@@ -98,11 +98,25 @@ export const loans = query({
   },
 })
 
-export const shelves = query({
+/**
+ * دُوْر النَّشْر. تظهر للزائر كما هي: ليست سرًّا، وهي بيانُ الطبعة نفسه.
+ * غير أنّ الدار التي كل كتبها مخفيّة لا تُعرَض — وإلا دلّت على كتابٍ محجوب.
+ */
+export const publishers = query({
   args: {},
   handler: async (ctx) => {
-    const all = await ctx.db.query('shelves').collect()
-    return all.sort((a, b) => a.position - b.position).map((r) => r.name)
+    const all = (await ctx.db.query('publishers').collect())
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+    if (await isOwner(ctx)) return all.map(toClient)
+
+    const s = await loadSettings(ctx)
+    const visible = new Set(
+      (await ctx.db.query('books').collect())
+        .filter((b) => bookIsPublic(b, s))
+        .map((b) => b.publisher_id)
+        .filter((id): id is NonNullable<typeof id> => id !== null),
+    )
+    return all.filter((p) => visible.has(p._id)).map(toClient)
   },
 })
 

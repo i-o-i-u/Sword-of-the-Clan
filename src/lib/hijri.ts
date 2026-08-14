@@ -42,16 +42,6 @@ export function yearLabel(year: number | null | undefined, era: Era | string | u
   return `${year} ${era || 'م'}`
 }
 
-/** «١٢ رجب ١٤٤٧ هـ» — تاريخ الاقتناء */
-export function hijriLabel(
-  day: number | null | undefined,
-  month: number | null | undefined,
-  year: number | null | undefined,
-): string {
-  if (!day || !month || !year) return ''
-  return `${day} ${HIJRI_MONTHS[month - 1] ?? ''} ${year} هـ`
-}
-
 // --------------------------------------------------- تقويم الركن وساعته
 // ورقة التقويم في صفحة الهبوط تعرض تاريخ مكة المكرمة لا تاريخ جهاز الزائر،
 // فالمكتبة واحدة وتوقيتها واحد أينما فُتح الموقع. لا تُوجد «Asia/Mecca» في
@@ -160,4 +150,42 @@ export function hijriMonthDays(y: number, m: number): { d: number; weekday: numb
     cur = new Date(cur.getTime() + 86400000)
   }
   return days
+}
+
+// ------------------------------------------------- حسابُ الأيام والتواريخ
+// حاسبة القراءة تحتاج أن تمشي بالأيام على التقويم الهجريّ: من يومٍ إلى يوم،
+// وتعدّ ما وافق أيامَ القراءة المختارة. والمشي يجري على التاريخ الميلاديّ
+// (يومٌ = ٨٦٤٠٠٠٠٠ مِلّي) ثم يُترجَم إلى هجريّ عند العرض، فلا يُحتاج إلى
+// معرفة أطوال الشهور الهجرية أصلًا.
+
+/** أوّل لحظةٍ ميلاديّة ليومٍ هجريّ معيَّن */
+export function hijriToDate(y: number, m: number, d: number): Date {
+  return new Date(gregorianForHijri(y, m).getTime() + (d - 1) * 86400000)
+}
+
+export function addDays(date: Date, n: number): Date {
+  return new Date(date.getTime() + n * 86400000)
+}
+
+/** يوم الأسبوع: ٠ الأحد … ٦ السبت، موافقًا لترتيب WEEKDAYS */
+export function weekdayOf(date: Date): number {
+  return date.getUTCDay()
+}
+
+/** عدد الأيام بين تاريخين، بإهمال ما دون اليوم */
+export function daysBetween(from: Date, to: Date): number {
+  return Math.round((to.getTime() - from.getTime()) / 86400000)
+}
+
+/** «يوم الأحد ٩ / ٨ (شَعْبان) / ١٤٤٨ هـ» */
+export function fullDayLabel(date: Date): string {
+  const p = hijriParts(date)
+  const month = HIJRI_MONTHS[p.m - 1] ?? ''
+  return `يوم ${WEEKDAYS[weekdayOf(date)]} ${toArabicDigits(p.d)} / ${toArabicDigits(p.m)} (${month}) / ${toArabicDigits(p.y)} هـ`
+}
+
+/** «٢٩ رَمَضان ١٤٤٨ هـ» — لصياغةٍ أخفَّ داخل الجملة، والسنةُ لازمة */
+export function shortDayLabel(date: Date): string {
+  const p = hijriParts(date)
+  return `${toArabicDigits(p.d)} ${HIJRI_MONTHS[p.m - 1] ?? ''} ${toArabicDigits(p.y)} هـ`
 }

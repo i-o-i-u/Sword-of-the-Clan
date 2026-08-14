@@ -14,7 +14,8 @@ import { navigate } from '../lib/router'
 import { LIBRARY_NAME, LIBRARY_PLACE } from '../lib/types'
 import Footer from '../components/Footer'
 import {
-  BooksIcon, ClockIcon, PinIcon, SearchIcon, SuggestIcon, resolveAsset,
+  BookPlusIcon, BooksIcon, ClockIcon, ExitIcon, EyeIcon, OwnerIcon, PinIcon,
+  SearchIcon, SuggestIcon, resolveAsset,
 } from '../components/ui'
 
 interface Props {
@@ -26,7 +27,10 @@ interface Props {
 const TRIPLE_CLICK_MS = 900
 
 export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
-  const { settings, landingImages, landingQuotes, books } = useLibrary()
+  const {
+    settings, landingImages, landingQuotes, books,
+    isOwner, canEdit, ownerName, browseOnly, toggleBrowseOnly, signOut,
+  } = useLibrary()
 
   const images = useMemo(
     () => landingImages.filter((img) => img.image_url),
@@ -94,6 +98,9 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                   key={img.id}
                   src={resolveAsset(img.image_url) ?? ''}
                   alt=""
+                  // فكّ الصورة خارج خيط الرسم: صورُ الإطار خلفيّةٌ باهتة، فلا
+                  // تستحقّ أن تُجمّد الصفحة ريثما تُفكّ
+                  decoding="async"
                   className={i === imageIndex ? 'frame-shot frame-shot-on' : 'frame-shot'}
                 />
               ))}
@@ -138,6 +145,19 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
               <span>ابحث عن كتاب</span>
             </button>
 
+            {canEdit && (
+              <button
+                type="button"
+                className="hero-btn"
+                onClick={() => navigate({ name: 'add' })}
+                title="إضافة كتاب"
+                aria-label="إضافة كتاب"
+              >
+                <BookPlusIcon size={20} />
+                <span>إضافة كتاب</span>
+              </button>
+            )}
+
             <button
               type="button"
               className="hero-btn"
@@ -151,6 +171,33 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
             </button>
           </div>
         </div>
+
+        {/* أدوات صاحب المكتبة في فراغ الهبوط عن يمين الصورة، لا في الرأس:
+            الزائر لا يرى منها شيئًا أصلًا. */}
+        {isOwner && (
+          <div className="owner-nook">
+            <span className="owner-nook-name">
+              <OwnerIcon size={16} />
+              {ownerName}
+            </span>
+            <button
+              type="button"
+              className="owner-nook-btn"
+              onClick={toggleBrowseOnly}
+              style={{
+                borderColor: browseOnly ? 'var(--accent)' : 'var(--border)',
+                background: browseOnly ? 'oklch(0.42 0.09 45 / 0.1)' : 'none',
+              }}
+            >
+              <EyeIcon size={16} />
+              {browseOnly ? 'إظهار أدوات التعديل' : 'وضع التصفُّح فقط'}
+            </button>
+            <button type="button" className="owner-nook-btn" onClick={() => void signOut()}>
+              <ExitIcon size={16} />
+              خروج
+            </button>
+          </div>
+        )}
 
         <CalendarLeaf />
       </section>

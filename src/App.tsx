@@ -1,21 +1,31 @@
 // الهيكل العام: الترويسة، ثم الصفحة الحالية بحسب المسار، والطبقات فوقهما.
 // الصفحات المحجوبة عن الزوار تُردّ إلى التصفّح، لا أن تُعرض فارغة.
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useLibrary } from './lib/library'
 import { navigate, useRoute } from './lib/router'
 import Header from './components/Header'
-import LoginOverlay from './components/LoginOverlay'
 import SearchOverlay from './components/SearchOverlay'
-import SettingsOverlay from './components/SettingsOverlay'
-import ViewerSettingsOverlay from './components/ViewerSettingsOverlay'
 import Landing from './views/Landing'
-import About from './views/About'
 import Browse from './views/Browse'
-import BookDetail from './views/BookDetail'
-import Stats from './views/Stats'
-import AddBook from './views/AddBook'
-import { AuthorPage, AuthorsIndex } from './views/Authors'
+
+// المسار الذي يسلكه كل زائر — الهبوط ثم التصفّح — يبقى في الحزمة الأولى، وما
+// سواه يُجلب عند طلبه: صفحاتٌ لا تُفتح في كل زيارة، ونوافذُ لصاحب المكتبة
+// وحده. هذا يقصّ من الحزمة التي تُنتظر قبل أول رسم.
+const About = lazy(() => import('./views/About'))
+const BookDetail = lazy(() => import('./views/BookDetail'))
+const AddBook = lazy(() => import('./views/AddBook'))
+const Stats = lazy(() => import('./views/Stats'))
+const AuthorsIndex = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorsIndex })))
+const AuthorPage = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorPage })))
+const PublishersView = lazy(() => import('./views/Publishers'))
+const LoginOverlay = lazy(() => import('./components/LoginOverlay'))
+const SettingsOverlay = lazy(() => import('./components/SettingsOverlay'))
+const ViewerSettingsOverlay = lazy(() => import('./components/ViewerSettingsOverlay'))
+
+const loadingBox = (
+  <div style={{ textAlign: 'center', padding: '90px 20px', color: 'var(--muted)' }}>…جاري التحميل</div>
+)
 
 export default function App() {
   const route = useRoute()
@@ -81,10 +91,8 @@ export default function App() {
         </div>
       )}
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '90px 20px', color: 'var(--muted)' }}>…جاري التحميل</div>
-      ) : (
-        <>
+      {loading ? loadingBox : (
+        <Suspense fallback={loadingBox}>
           {route.name === 'landing' && (
             <Landing
               onOpenSearch={openSearch}
@@ -98,7 +106,8 @@ export default function App() {
           {route.name === 'author' && canSeeAuthors && <AuthorPage authorId={route.id} />}
           {route.name === 'add' && canEdit && <AddBook />}
           {route.name === 'stats' && canSeeStats && <Stats />}
-        </>
+          {route.name === 'publishers' && <PublishersView />}
+        </Suspense>
       )}
 
       {search.open && (
@@ -107,12 +116,15 @@ export default function App() {
           onClose={() => setSearch({ open: false, query: '' })}
         />
       )}
-      {showSettings && (
-        isOwner
-          ? <SettingsOverlay onClose={() => setShowSettings(false)} />
-          : <ViewerSettingsOverlay onClose={() => setShowSettings(false)} />
-      )}
-      {showLogin && <LoginOverlay onClose={() => setShowLogin(false)} />}
+      {/* حدُّ تعليقٍ منفصل للنوافذ: انتظارُ نافذةٍ لا يمحو الصفحة تحتها */}
+      <Suspense fallback={null}>
+        {showSettings && (
+          isOwner
+            ? <SettingsOverlay onClose={() => setShowSettings(false)} />
+            : <ViewerSettingsOverlay onClose={() => setShowSettings(false)} />
+        )}
+        {showLogin && <LoginOverlay onClose={() => setShowLogin(false)} />}
+      </Suspense>
     </>
   )
 }
