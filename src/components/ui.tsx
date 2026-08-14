@@ -285,6 +285,16 @@ export function BookPlusIcon({ size = 18 }: IconProps) {
   )
 }
 
+/** قلمٌ — تعديل بيانات الكتاب */
+export function PencilIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M16.4 3.9a2.1 2.1 0 0 1 3 3L8.2 18.1l-4 1 1-4z" />
+      <path d="M14.6 5.7l3.7 3.7" />
+    </svg>
+  )
+}
+
 /** آلةٌ حاسبة — حاسبة القراءة، في زرّها وفي رأس نافذتها */
 export function CalculatorIcon({ size = 18 }: IconProps) {
   return (

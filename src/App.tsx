@@ -50,7 +50,7 @@ export default function App() {
 
   // مسارٌ لا يملكه هذا الزائر يُردّ إلى التصفّح
   useEffect(() => {
-    if (route.name === 'add' && !canEdit) navigate({ name: 'browse' })
+    if ((route.name === 'add' || route.name === 'edit') && !canEdit) navigate({ name: 'browse' })
     if ((route.name === 'authors' || route.name === 'author') && !canSeeAuthors) navigate({ name: 'browse' })
     if (route.name === 'stats' && !canSeeStats) navigate({ name: 'browse' })
   }, [route, canEdit, canSeeAuthors, canSeeStats])
@@ -105,6 +105,7 @@ export default function App() {
           {route.name === 'authors' && canSeeAuthors && <AuthorsIndex />}
           {route.name === 'author' && canSeeAuthors && <AuthorPage authorId={route.id} />}
           {route.name === 'add' && canEdit && <AddBook />}
+          {route.name === 'edit' && canEdit && <AddBook bookId={route.id} />}
           {route.name === 'stats' && canSeeStats && <Stats />}
           {route.name === 'publishers' && <PublishersView />}
         </Suspense>

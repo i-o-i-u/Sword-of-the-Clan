@@ -200,3 +200,12 @@ export const insertWorks = mutation({
     }
   },
 })
+
+/** يفكّ صلةً بين كتابين. التعديل يحتاجه: صلةٌ أُخطئ فيها لا تبقى أبدًا. */
+export const removeWork = mutation({
+  args: { id: v.id('book_works') },
+  handler: async (ctx, { id }) => {
+    await requireOwner(ctx)
+    await ctx.db.delete(id)
+  },
+})

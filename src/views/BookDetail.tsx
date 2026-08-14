@@ -8,11 +8,11 @@ import { navigate } from '../lib/router'
 import { HIJRI_MONTHS, lifeLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import {
   META_DEFS, PERK_KINDS, STATUSES,
-  type Book, type PerkKind, type ReadingStatus, volumesOf,
+  type Book, type PerkKind, type ReadingStatus,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
-  BackButton, DebouncedTextarea, EmptyState, Money, Toggle,
+  BackButton, EmptyState, Money, PencilIcon,
   cardStyle, chipStyle, ghostButtonStyle, outlineTabStyle,
 } from '../components/ui'
 
@@ -84,7 +84,25 @@ export default function BookDetail({ bookId }: { bookId: string }) {
 
   return (
     <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-      <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
+        {/* البطاقة عرضٌ لا تعديل: بيانات الكتاب كلُّها تُصحَّح من نموذجه */}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => navigate({ name: 'edit', id: book.id })}
+            title="تعديل بيانات الكتاب"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 18,
+              border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
+              borderRadius: 9, padding: '8px 15px', fontSize: 13, fontWeight: 600,
+            }}
+          >
+            <PencilIcon size={16} />
+            تعديل بيانات الكتاب
+          </button>
+        )}
+      </div>
 
       <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 36 }}>
         <div>
@@ -95,13 +113,10 @@ export default function BookDetail({ bookId }: { bookId: string }) {
             <ImageSlot
               url={book.cover_url}
               folder="covers"
-              canEdit={canEdit}
+              canEdit={false}
               placeholder="غلاف الكتاب"
-              onUploaded={(url) => patchBook(book.id, { cover_url: url })}
             />
           </div>
-
-          {canEdit && <SpinePanel book={book} />}
         </div>
 
         <div>
@@ -193,25 +208,12 @@ export default function BookDetail({ bookId }: { bookId: string }) {
             />
           )}
 
-          {showTo('blurb') && (canEdit || book.blurb) && (
+          {showTo('blurb') && book.blurb && (
             <div style={{ marginBottom: 22 }}>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>نبذة عن الكتاب</div>
-              {canEdit ? (
-                <DebouncedTextarea
-                  value={book.blurb}
-                  onCommit={(v) => void patchBook(book.id, { blurb: v })}
-                  placeholder="موضوع الكتاب، ومنهج مؤلفه فيه، ومكانته…"
-                  style={{
-                    width: '100%', minHeight: 90, padding: '12px 14px', borderRadius: 10,
-                    border: '1px solid var(--border)', background: 'var(--surface)',
-                    fontSize: 14, lineHeight: 1.9, color: 'var(--text)', resize: 'vertical',
-                  }}
-                />
-              ) : (
-                <div style={{ fontSize: 14.5, lineHeight: 2, color: 'var(--text)', whiteSpace: 'pre-line' }}>
-                  {book.blurb}
-                </div>
-              )}
+              <div style={{ fontSize: 14.5, lineHeight: 2, color: 'var(--text)', whiteSpace: 'pre-line' }}>
+                {book.blurb}
+              </div>
             </div>
           )}
 
@@ -260,25 +262,12 @@ export default function BookDetail({ bookId }: { bookId: string }) {
             </div>
           )}
 
-          {showTo('notes') && (canEdit || book.notes) && (
+          {showTo('notes') && book.notes && (
             <div style={{ marginBottom: 26 }}>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>ملاحظاتي الشخصية</div>
-              {canEdit ? (
-                <DebouncedTextarea
-                  value={book.notes}
-                  onCommit={(v) => void patchBook(book.id, { notes: v })}
-                  placeholder="اكتب انطباعك أو اقتباساتك المفضلة…"
-                  style={{
-                    width: '100%', minHeight: 100, padding: '12px 14px', borderRadius: 10,
-                    border: '1px solid var(--border)', background: 'var(--surface)',
-                    fontSize: 14, color: 'var(--text)', resize: 'vertical', lineHeight: 1.9,
-                  }}
-                />
-              ) : (
-                <div style={{ fontSize: 14.5, lineHeight: 2, color: 'var(--text)', whiteSpace: 'pre-line' }}>
-                  {book.notes}
-                </div>
-              )}
+              <div style={{ fontSize: 14.5, lineHeight: 2, color: 'var(--text)', whiteSpace: 'pre-line' }}>
+                {book.notes}
+              </div>
             </div>
           )}
 
@@ -306,55 +295,6 @@ export default function BookDetail({ bookId }: { bookId: string }) {
         </div>
       </div>
     </main>
-  )
-}
-
-// ------------------------------------------------------------- كعوب الكتاب
-function SpinePanel({ book }: { book: Book }) {
-  const { patchBook } = useLibrary()
-  const count = volumesOf(book)
-
-  const hint = book.use_spine
-    ? `تُعرَض هذه الكعوب في عرض الأرفف${count > 1 ? ' بعدد المجلَّدات' : ''}`
-    : 'أفلِت صورة كل كعب هنا، ثم فعِّل العرض ليظهر على الرف'
-
-  return (
-    <div style={{ ...cardStyle, marginTop: 16, borderRadius: 12, padding: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>كعوب الكتاب</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{hint}</div>
-        </div>
-        <Toggle
-          on={book.use_spine}
-          label="عرض الكعوب على الرف"
-          onChange={() => void patchBook(book.id, { use_spine: !book.use_spine })}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
-        {Array.from({ length: count }, (_, i) => {
-          const volume = String(i + 1)
-          return (
-            <div key={volume} style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 38, height: 150, borderRadius: 3, overflow: 'hidden', background: 'var(--header)' }}>
-                <ImageSlot
-                  url={book.spine_images?.[volume]}
-                  folder="spines"
-                  canEdit
-                  placeholder="كعب"
-                  onUploaded={(url) =>
-                    patchBook(book.id, { spine_images: { ...book.spine_images, [volume]: url } })}
-                />
-              </div>
-              <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>
-                {count > 1 ? `مجلَّد ${volume}` : 'الكعب'}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
 

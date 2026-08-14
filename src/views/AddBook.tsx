@@ -1,4 +1,10 @@
-// إضافة كتابٍ إلى الفهرس: فهرسة كاملة على طريقة المكتبات، في خمسة أقسام.
+// نموذج الكتاب: يخدم الإضافة والتعديل جميعًا. فهرسة كاملة على طريقة
+// المكتبات، في خمسة أقسام.
+//
+// وصفحةُ الكتاب عرضٌ لا تعديل — سوى التقييم وحالة القراءة — وقلمُ التعديل
+// فيها يفتح هذا النموذج مملوءًا ببيانات الكتاب. فسلوك كل حقلٍ مكتوبٌ هنا
+// مرةً واحدة: منتقي السنة، وتحويلُ رقم الطبعة، وقفلُ مكان الدار، وصفوفُ
+// المؤلِّفين والمشاركين.
 //
 // الفارق بين «الأجزاء» و«المجلَّدات» مقصود: الأول تقسيم المؤلِّف، والثاني
 // مجلَّدات هذه الطبعة، وهو وحده ما يُبنى عليه كعوب الرفّ وصفحاتُ كل مجلَّد.
@@ -18,7 +24,9 @@ import {
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
-import { RiyalGlyph, SectionHeading, cardStyle, primaryButtonStyle } from '../components/ui'
+import {
+  BackButton, RiyalGlyph, SectionHeading, cardStyle, primaryButtonStyle,
+} from '../components/ui'
 
 const inputStyle = {
   padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)',
@@ -51,63 +59,118 @@ interface AuthorRow {
 const EMPTY_AUTHOR: AuthorRow = { name: '', alive: false, approx: false, death: '', text: '' }
 const EMPTY_YEAR: HijriYear = { year: null, month: null, approx: false, text: '' }
 
-export default function AddBook() {
-  const { authors, books, publishers, categories, settings, run, reload } = useLibrary()
+const str = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v))
+
+/**
+ * رقم الطبعة يُحفظ مكتوبًا («الثانية»)، فيُستردّ رقمًا بالبحث في العشرات
+ * القليلة الأولى — أهونُ من حقلٍ ثانٍ في المخطّط لا يُقرأ إلا هنا.
+ */
+function editionNumberOf(text: string): string {
+  for (let n = 1; n <= 99; n++) if (editionInWords(n) === text) return String(n)
+  return text
+}
+
+export default function AddBook({ bookId }: { bookId?: string }) {
+  const { authors, books, works, publishers, categories, settings, run, reload } = useLibrary()
+
+  // الكتاب المُعدَّل، إن كنّا في التعديل. القيم الأولى تُقرأ منه مرةً واحدة.
+  const editing = bookId ? books.find((b) => b.id === bookId) ?? null : null
+
+  /** صفُّ مؤلِّفٍ مملوءٌ بوفاته المسجَّلة في صفحته */
+  function rowFor(name: string): AuthorRow {
+    const known = authors.find((a) => a.name === name.trim())
+    if (!known) return { ...EMPTY_AUTHOR, name }
+    return {
+      name,
+      alive: known.alive,
+      approx: known.death_approx,
+      death: str(known.death),
+      text: known.death_text,
+    }
+  }
 
   // ---------------------------------------------------------- ١. بيانات الكتاب
-  const [title, setTitle] = useState('')
-  const [authorRows, setAuthorRows] = useState<AuthorRow[]>([EMPTY_AUTHOR])
-  const [subtitle, setSubtitle] = useState('')
+  const [title, setTitle] = useState(() => editing?.title ?? '')
+  const [authorRows, setAuthorRows] = useState<AuthorRow[]>(() => {
+    if (!editing) return [EMPTY_AUTHOR]
+    const names = [editing.author_name, ...(editing.co_authors ?? []).map((c) => c.name)]
+      .filter((n) => n.trim())
+    return names.length ? names.map(rowFor) : [EMPTY_AUTHOR]
+  })
+  const [subtitle, setSubtitle] = useState(() => editing?.subtitle ?? '')
   const [contribRows, setContribRows] = useState<Contributor[]>(
-    [{ role: CONTRIBUTOR_ROLES[0], name: '' }],
+    () => (editing?.contributors?.length
+      ? editing.contributors.map((c) => ({ ...c }))
+      : [{ role: CONTRIBUTOR_ROLES[0], name: '' }]),
   )
-  const [series, setSeries] = useState('')
-  const [seriesNo, setSeriesNo] = useState('')
-  const [category, setCategory] = useState(categories[0] ?? '')
+  const [series, setSeries] = useState(() => editing?.series ?? '')
+  const [seriesNo, setSeriesNo] = useState(() => editing?.series_no ?? '')
+  const [category, setCategory] = useState(() => editing?.category ?? categories[0] ?? '')
 
   // --------------------------------------------------------- ٢. بيانات الطبعة
-  const [publisherName, setPublisherName] = useState('')
-  const [place, setPlace] = useState('')
-  const [year, setYear] = useState<HijriYear>(EMPTY_YEAR)
-  const [editionNo, setEditionNo] = useState('')
-  const [editionWorded, setEditionWorded] = useState(false)
-  const [editionNotes, setEditionNotes] = useState('')
-  const [size, setSize] = useState(SIZES[1])
-  const [parts, setParts] = useState('')
-  const [singlePart, setSinglePart] = useState(false)
-  const [volumes, setVolumes] = useState('')
-  const [singleVolume, setSingleVolume] = useState(false)
-  const [volumePages, setVolumePages] = useState<string[]>([])
-  const [pages, setPages] = useState('')
-  const [isbn, setIsbn] = useState('')
-  const [language, setLanguage] = useState(LANGUAGES[0])
-  const [languageOriginal, setLanguageOriginal] = useState(ORIGINAL_LANGUAGES[0])
+  const [publisherName, setPublisherName] = useState(() => editing?.publisher ?? '')
+  const [place, setPlace] = useState(() => editing?.place ?? '')
+  const [year, setYear] = useState<HijriYear>(() => (editing
+    ? { year: editing.year, month: editing.year_month, approx: editing.year_approx, text: editing.year_text }
+    : EMPTY_YEAR))
+  const [editionNo, setEditionNo] = useState(
+    () => (editing?.edition_worded ? editionNumberOf(editing.edition) : editing?.edition ?? ''),
+  )
+  const [editionWorded, setEditionWorded] = useState(() => editing?.edition_worded ?? false)
+  const [editionNotes, setEditionNotes] = useState(() => editing?.edition_notes ?? '')
+  const [size, setSize] = useState(() => editing?.size || SIZES[1])
+  const [parts, setParts] = useState(() => str(editing?.parts))
+  const [singlePart, setSinglePart] = useState(() => editing?.single_part ?? false)
+  const [volumes, setVolumes] = useState(() => str(editing?.volumes))
+  const [singleVolume, setSingleVolume] = useState(() => editing?.single_volume ?? false)
+  const [volumePages, setVolumePages] = useState<string[]>(
+    () => (editing?.volume_pages ?? []).map((v) => String(v)),
+  )
+  const [pages, setPages] = useState(() => str(editing?.pages))
+  const [isbn, setIsbn] = useState(() => editing?.isbn ?? '')
+  const [language, setLanguage] = useState(() => editing?.language || LANGUAGES[0])
+  const [languageOriginal, setLanguageOriginal] = useState(
+    () => editing?.language_original || ORIGINAL_LANGUAGES[0],
+  )
 
   // --------------------------------------------------------- ٣. بيانات النسخة
-  const [cabinetNo, setCabinetNo] = useState('')
-  const [shelfNo, setShelfNo] = useState('')
-  const [binding, setBinding] = useState(BINDINGS[0])
-  const [condition, setCondition] = useState(CONDITIONS[1])
-  const [value, setValue] = useState('')
-  const [source, setSource] = useState(SOURCES[0])
-  const [sourceDetail, setSourceDetail] = useState('')
-  const [acquired, setAcquired] = useState<HijriYear>(EMPTY_YEAR)
-  const [marginNote, setMarginNote] = useState('')
+  const [cabinetNo, setCabinetNo] = useState(() => editing?.cabinet_no ?? '')
+  const [shelfNo, setShelfNo] = useState(() => editing?.shelf_no ?? '')
+  const [binding, setBinding] = useState(() => editing?.binding || BINDINGS[0])
+  const [condition, setCondition] = useState(() => editing?.condition || CONDITIONS[1])
+  const [value, setValue] = useState(() => (editing?.value ? String(editing.value) : ''))
+  const [source, setSource] = useState(() => editing?.source || SOURCES[0])
+  const [sourceDetail, setSourceDetail] = useState(() => editing?.source_detail ?? '')
+  const [acquired, setAcquired] = useState<HijriYear>(() => (editing
+    ? {
+      year: editing.acquired_year,
+      month: editing.acquired_month,
+      approx: editing.acquired_approx,
+      text: editing.acquired_text,
+    }
+    : EMPTY_YEAR))
+  const [marginNote, setMarginNote] = useState(() => editing?.margin_note ?? '')
 
   // ----------------------------------------------------------- ٤. عن الكتاب
-  const [tags, setTags] = useState('')
-  const [topic, setTopic] = useState('')
-  const [blurb, setBlurb] = useState('')
-  const [notes, setNotes] = useState('')
+  const [tags, setTags] = useState(() => (editing?.tags ?? []).join('، '))
+  const [topic, setTopic] = useState(() => editing?.topic ?? '')
+  const [blurb, setBlurb] = useState(() => editing?.blurb ?? '')
+  const [notes, setNotes] = useState(() => editing?.notes ?? '')
 
   // ------------------------------------------------- ٥. ارتباطه بكتبٍ أخرى
   const [workTargetId, setWorkTargetId] = useState('')
   const [workType, setWorkType] = useState(WORK_TYPES[0])
   const [newWorks, setNewWorks] = useState<{ target_book_id: string; type: string }[]>([])
 
-  const [coverUrl, setCoverUrl] = useState<string | null>(null)
-  const [spineUrl, setSpineUrl] = useState<string | null>(null)
+  const [coverUrl, setCoverUrl] = useState<string | null>(() => editing?.cover_url ?? null)
+  // كعبٌ لكل مجلَّد، مفتاحُه رقمُه كما في المخطّط
+  const [spines, setSpines] = useState<Record<string, string>>(
+    () => ({ ...(editing?.spine_images ?? {}) }),
+  )
   const [saving, setSaving] = useState(false)
+
+  /** صلاتُ هذا الكتاب المحفوظة، تُعرض في التعديل ويمكن فكُّها */
+  const savedWorks = editing ? works.filter((w) => w.book_id === editing.id) : []
 
   // الدار المعروفة يأتي مكانُها معها، ولا يُعدَّل من هنا بل من صفحة دُور النشر
   const knownPublisher = useMemo(
@@ -191,7 +254,7 @@ export default function AddBook() {
         ? volumePages.slice(0, volumeCount).map((v) => parseNumber(v)).filter((n): n is number => n != null)
         : []
 
-      const book = await api.insertBook({
+      const fields: api.BookInput = {
         title: title.trim(),
         subtitle: subtitle.trim(),
         author_id: mainAuthor?.author_id ?? null,
@@ -246,14 +309,17 @@ export default function AddBook() {
         notes: notes.trim(),
 
         cover_url: coverUrl,
-        // كعب المجلَّد الأول، وبه يُفعَّل عرض الكعوب على الرف
-        spine_images: spineUrl ? { '1': spineUrl } : {},
-        use_spine: !!spineUrl,
-      })
+        // الكعوب المرفوعة، وبها يُفعَّل عرضُها على الرف
+        spine_images: spines,
+        use_spine: Object.keys(spines).length > 0,
+      }
 
-      if (newWorks.length) await api.insertWorks(book.id, newWorks)
+      const id = editing ? (await api.updateBook(editing.id, fields), editing.id)
+        : (await api.insertBook(fields)).id
+
+      if (newWorks.length) await api.insertWorks(id, newWorks)
       await reload()
-      navigate({ name: 'book', id: book.id })
+      navigate({ name: 'book', id })
     } catch (err) {
       await run(async () => { throw err })
     } finally {
@@ -263,11 +329,17 @@ export default function AddBook() {
 
   return (
     <main className="app-main" style={{ maxWidth: 900, margin: '0 auto', padding: 32 }}>
+      {editing && (
+        <BackButton label="العودة إلى صفحة الكتاب" onClick={() => navigate({ name: 'book', id: editing.id })} />
+      )}
+
       <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 6px' }}>
-        إضافة كتابٍ إلى الفهرس
+        {editing ? 'تعديل بيانات الكتاب' : 'إضافة كتابٍ إلى الفهرس'}
       </h1>
       <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
-        أضف معلومات الكتاب كلِّها، وفصِّل واستقصِ ما أمكنَ ذلك.
+        {editing
+          ? `صحِّح ما شئتَ من بيانات «${editing.title}»، ثم احفظ.`
+          : 'أضف معلومات الكتاب كلِّها، وفصِّل واستقصِ ما أمكنَ ذلك.'}
       </p>
 
       <form
@@ -289,22 +361,32 @@ export default function AddBook() {
             />
           </div>
 
-          {/* الكعب هو ما يُعرض في «عرض الأرفف»: كعوب الكتب مصفوفةً كما تُرى في
-              المكتبة. وكعوب بقيّة المجلَّدات تُرفع من صفحة الكتاب بعد حفظه. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 46, height: 170, borderRadius: 4, overflow: 'hidden', flex: 'none' }}>
-              <ImageSlot
-                url={spineUrl}
-                folder="spines"
-                canEdit
-                placeholder="كعب الكتاب"
-                onUploaded={(url) => setSpineUrl(url)}
-              />
+          {/* الكعوب هي ما يُعرض في «عرض الأرفف»: كعوب الكتب مصفوفةً كما تُرى
+              في المكتبة. وعددُها يتبع عدد المجلَّدات المُدخَل. */}
+          <div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 8 }}>
+              {volumeCount > 1 ? 'كعوب المجلَّدات' : 'كَعْب الكتاب'} (اختياري)، تُعرَض في «عرض الأرفف».
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7 }}>
-              صورة كَعْب الكتاب (اختياري).
-              <br />
-              تُعرَض في «عرض الأرفف» مرتَّبةً مع كعوب الكتب.
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
+              {Array.from({ length: volumeCount }, (_, i) => {
+                const key = String(i + 1)
+                return (
+                  <div key={key} style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 42, height: 158, borderRadius: 4, overflow: 'hidden' }}>
+                      <ImageSlot
+                        url={spines[key] ?? null}
+                        folder="spines"
+                        canEdit
+                        placeholder="كعب"
+                        onUploaded={(url) => setSpines((prev) => ({ ...prev, [key]: url }))}
+                      />
+                    </div>
+                    {volumeCount > 1 && (
+                      <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>مجلَّد {key}</span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -862,6 +944,31 @@ export default function AddBook() {
             </button>
           </div>
 
+          {savedWorks.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {savedWorks.map((w) => (
+                <span key={w.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, background: 'var(--header)',
+                  borderRadius: 999, padding: '5px 8px 5px 13px', fontSize: 12.5,
+                }}>
+                  {w.type} على: {books.find((b) => b.id === w.target_book_id)?.title ?? '—'}
+                  <button
+                    type="button"
+                    aria-label="فكّ هذه الصلة"
+                    title="فكّ هذه الصلة"
+                    onClick={() => void run(async () => {
+                      await api.deleteWork(w.id)
+                      await reload()
+                    })}
+                    style={{ border: 'none', background: 'none', color: 'var(--muted)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           {newWorks.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {newWorks.map((w, i) => (
@@ -884,7 +991,7 @@ export default function AddBook() {
           )}
 
           <button type="submit" disabled={!ready || saving} style={{ ...primaryButtonStyle(ready && !saving), marginTop: 6 }}>
-            {saving ? '…جارٍ الحفظ' : 'إضافة إلى المكتبة'}
+            {saving ? '…جارٍ الحفظ' : editing ? 'حفظ التعديل' : 'إضافة إلى المكتبة'}
           </button>
         </div>
       </form>

@@ -122,6 +122,10 @@ export async function insertWorks(
   })
 }
 
+export async function deleteWork(id: string): Promise<void> {
+  await convex.mutation(api.books.removeWork, { id: id as Id<'book_works'> })
+}
+
 export async function insertPerk(
   perk: { book_id: string; kind: string; title: string; text: string; page: string },
 ): Promise<void> {
