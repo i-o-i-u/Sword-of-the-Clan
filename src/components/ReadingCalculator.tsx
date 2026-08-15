@@ -108,7 +108,17 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
           <CloseButton onClose={onClose} />
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 15 }}>
+        {/*
+          عمودُ الحقول، وهو المُمرَّر. و`minWidth: 0` فيه لازم: هو ابنٌ مرنٌ
+          في عمود، والابنُ المرن لا يضيق عن أضيق ما فيه ما لم يُؤذن له.
+          و`overflowX: hidden` يمنع حقلًا واحدًا عريضًا — شبكةَ الأيام مثلًا —
+          أن يمدّ العمودَ فيخرج ما بعده عن حدّ البطاقة، والبطاقةُ تقصّ
+          الزائد (`overflow: hidden`) فيضيع النصّ ولا يُرى باقيه.
+        */}
+        <div style={{
+          flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden',
+          padding: 22, display: 'flex', flexDirection: 'column', gap: 15,
+        }}>
           <Field label="اسم الكتاب المُراد قِراءَتُه" need="اختياري">
             <input
               value={bookName}
@@ -246,8 +256,13 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
               border: `1px solid ${result.wrong ? 'oklch(0.82 0.09 65)' : 'transparent'}`,
               borderRadius: 12, padding: '16px 18px',
               fontSize: 14.5, lineHeight: 2.1, minHeight: 64,
-              minWidth: 0, maxWidth: '100%',
-              overflowWrap: 'anywhere', textAlign: 'justify', textWrap: 'pretty',
+              minWidth: 0, width: '100%', maxWidth: '100%',
+              // `anywhere` هو الذي يُصغِّر حسابَ min-content معه، لكنّه لا
+              // يُعرف في المتصفّحات الأقدم — وأكثرُها في الجوّالات. فيُتبع
+              // بـ`break-word` احتياطًا: يكسر ولا يُصغِّر، وكِلا الكسرين
+              // يمنع النصّ أن يخرج.
+              overflowWrap: 'anywhere', wordBreak: 'break-word',
+              textAlign: 'justify', textWrap: 'pretty',
               color: result.wrong ? 'oklch(0.36 0.08 55)' : 'var(--text)',
             }}
           >

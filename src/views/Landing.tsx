@@ -214,14 +214,17 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
 
       {settings.show_landing_quote && quote && (
         <section className="quote-wrap">
-          {/* المفتاح يُعيد بناء البطاقة عند تبدّل الاقتباس فتُعاد حركة الظهور */}
-          <figure className="quote-card" key={quote.id}>
+          {/* المفتاحُ على النصّ ومصدره لا على البطاقة: البطاقةُ قائمةٌ لا
+              تتزحزح، وإنما يتلاشى ما فيها ويحلّ محلَّه الآخر. ولو كان
+              المفتاحُ على البطاقة لأُعيد بناؤها كلَّها عند كل تبديل، فرآها
+              القارئ تختفي وتظهر — وهي في موضعها لم تبرح. */}
+          <figure className="quote-card">
             <span className="quote-mark" aria-hidden="true">”</span>
 
-            <blockquote className="quote-text">{quote.text}</blockquote>
+            <blockquote className="quote-text" key={quote.id}>{quote.text}</blockquote>
 
             {quote.author && (
-              <figcaption className="quote-source">
+              <figcaption className="quote-source" key={quote.id}>
                 <span className="quote-rule" aria-hidden="true" />
                 {quote.author}
               </figcaption>

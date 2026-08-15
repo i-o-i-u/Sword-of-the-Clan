@@ -733,34 +733,46 @@ export function missingVolumesHeadline(count: number): string {
  * والعنوانُ واسمُ المؤلِّف خارجَ الحساب: لا يُحفظ كتابٌ بغيرهما أصلًا، فعدُّهما
  * يرفع النسبة على كل كتابٍ بقدرٍ واحد فلا يُفرِّق بين تامٍّ وناقص.
  */
+/**
+ * حارسُ النصّ. حقولُ المخطّط المستجدّة تُعرَّف اختياريّةً بالضرورة — الكتابُ
+ * المفهرَس قبلها لا يحملها، وإلزامُها يُفشل تحقّقَ المخطّط على مستنداته. فما
+ * يقرؤه صاحبُ المكتبة من مستندٍ خام قد يأتي فيه الحقلُ `undefined`، ونداءُ
+ * `.trim()` عليه يرمي استثناءً في أثناء الرسم.
+ *
+ * وقد وقع: `condition_notes` اختياريّ، وهذه الشارةُ لصاحب المكتبة وحده —
+ * فكانت كلُّ كتبه المفهرَسة قبل ذلك الحقل تُسقط صفحةَ التصفُّح كلَّها. فلا
+ * يُقرأ نصٌّ هنا إلا من خلاله، اختياريًّا كان أو لازمًا اليوم.
+ */
+const filled = (v: string | null | undefined) => !!(v ?? '').trim()
+
 const CATALOG_FILLED: Record<string, (b: Book) => boolean> = {
-  subtitle:        (b) => !!b.subtitle.trim(),
-  contributors:    (b) => (b.contributors ?? []).some((c) => c.name.trim()),
-  series:          (b) => !!b.series.trim(),
-  seriesNo:        (b) => !!b.series_no.trim(),
-  publisher:       (b) => !!b.publisher.trim(),
-  place:           (b) => !!b.place.trim(),
-  yearLabel:       (b) => b.year != null || !!b.year_text.trim(),
-  edition:         (b) => !!b.edition.trim(),
+  subtitle:        (b) => filled(b.subtitle),
+  contributors:    (b) => (b.contributors ?? []).some((c) => filled(c.name)),
+  series:          (b) => filled(b.series),
+  seriesNo:        (b) => filled(b.series_no),
+  publisher:       (b) => filled(b.publisher),
+  place:           (b) => filled(b.place),
+  yearLabel:       (b) => b.year != null || filled(b.year_text),
+  edition:         (b) => filled(b.edition),
   parts:           (b) => b.single_part || (b.parts ?? 0) > 0,
   volumes:         (b) => b.single_volume || (b.volumes ?? 0) > 0,
   pages:           (b) => (b.pages ?? 0) > 0,
   volumePagesText: (b) => (b.volume_pages ?? []).some((v) => (parseNumber(v) ?? 0) > 0),
-  size:            (b) => !!b.size.trim(),
-  isbn:            (b) => !!b.isbn.trim(),
-  language:        (b) => !!b.language.trim(),
-  cabinet:         (b) => !!b.cabinet_no.trim(),
-  shelfNo:         (b) => !!b.shelf_no.trim(),
-  binding:         (b) => !!b.binding.trim(),
-  condition:       (b) => !!b.condition.trim(),
-  conditionNotes:  (b) => !!b.condition_notes.trim(),
-  source:          (b) => !!b.source.trim(),
-  acquired:        (b) => b.acquired_year != null || !!b.acquired_text.trim(),
-  marginNote:      (b) => !!b.margin_note.trim(),
-  topic:           (b) => !!b.topic.trim(),
+  size:            (b) => filled(b.size),
+  isbn:            (b) => filled(b.isbn),
+  language:        (b) => filled(b.language),
+  cabinet:         (b) => filled(b.cabinet_no),
+  shelfNo:         (b) => filled(b.shelf_no),
+  binding:         (b) => filled(b.binding),
+  condition:       (b) => filled(b.condition),
+  conditionNotes:  (b) => filled(b.condition_notes),
+  source:          (b) => filled(b.source),
+  acquired:        (b) => b.acquired_year != null || filled(b.acquired_text),
+  marginNote:      (b) => filled(b.margin_note),
+  topic:           (b) => filled(b.topic),
   cover:           (b) => !!b.cover_url,
-  blurb:           (b) => !!b.blurb.trim(),
-  category:        (b) => !!b.category.trim(),
+  blurb:           (b) => filled(b.blurb),
+  category:        (b) => filled(b.category),
 }
 
 const CATALOG_KEYS = Object.keys(CATALOG_FILLED)
