@@ -28,7 +28,7 @@ const TRIPLE_CLICK_MS = 900
 
 export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
   const {
-    settings, landingImages, landingQuotes, books,
+    settings, landingImages, landingQuotes, books, loading,
     isOwner, canEdit, ownerName, browseOnly, toggleBrowseOnly, signOut,
   } = useLibrary()
 
@@ -101,6 +101,10 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                   // فكّ الصورة خارج خيط الرسم: صورُ الإطار خلفيّةٌ باهتة، فلا
                   // تستحقّ أن تُجمّد الصفحة ريثما تُفكّ
                   decoding="async"
+                  // الأولى هي المعروضة أوّلَ ما تُفتح الصفحة، فتُقدَّم على ما
+                  // سواها من الطلبات. وأخواتُها لا تُعرض إلا بعد ثوانٍ فتؤخَّر
+                  // كي لا تزاحمها على شبكةٍ ضيّقة.
+                  fetchPriority={i === 0 ? 'high' : 'low'}
                   className={i === imageIndex ? 'frame-shot frame-shot-on' : 'frame-shot'}
                 />
               ))}
@@ -114,8 +118,11 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                 alt="شعار مكتبة سيف العشيرة"
               />
               <h1 className="hero-title">{LIBRARY_NAME}</h1>
-              {/* موضع المكتبة يُخفى عن الزوار إن شاء صاحبُها، ويراه هو أبدًا */}
-              {(isOwner || settings.show_landing_place) && (
+              {/* موضع المكتبة يُخفى عن الزوار إن شاء صاحبُها، ويراه هو أبدًا.
+                  ولا يظهر قبل وصول الإعدادات: الهبوطُ يُرسم الآن قبلها،
+                  وافتراضيُّ الحقل الإظهار — فلو عُرض لبرقَ موضعٌ أخفاه
+                  صاحبُها ثم اختفى. وما سواه يُضاف عند وصوله لا يُسحب. */}
+              {!loading && (isOwner || settings.show_landing_place) && (
                 <p className="hero-place">
                   <PinIcon size={14} />
                   {LIBRARY_PLACE}

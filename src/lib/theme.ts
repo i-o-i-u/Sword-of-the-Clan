@@ -101,7 +101,7 @@ function registerLocalFont() {
   const style = document.createElement('style')
   style.textContent = `@font-face {
     font-family: 'Kitab';
-    src: url('${import.meta.env.BASE_URL}fonts/Kitab-Regular.ttf') format('truetype');
+    src: url('${import.meta.env.BASE_URL}fonts/Kitab-Regular.woff2') format('woff2');
     font-weight: 400;
     font-display: swap;
   }`

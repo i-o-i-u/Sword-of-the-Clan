@@ -98,14 +98,19 @@ export default function App() {
         </div>
       )}
 
-      {loading ? loadingBox : (
+      {/* الهبوطُ يُرسم قبل وصول البيانات: إطارُه وشعارُه واسمُه وأزرارُه لا
+          تنتظر شيئًا، والصورةُ والاقتباسُ يحلّان في مواضعهما متى وصلا. وكان
+          الحجبُ يعمّ الصفحة كلَّها فيرى الداخلُ «…جاري التحميل» وحده طولَ
+          ما تُفتح الوصلة وتعود الاستعلامات — وأكثرُ ما شُكي منه هذا.
+          وما سوى الهبوط يبقى محجوبًا: صفحةٌ تقول «لا توجد كتب» ثم تمتلئ
+          أسوأُ من انتظارٍ صريح. */}
+      {route.name === 'landing' ? (
+        <Landing
+          onOpenSearch={openSearch}
+          onOpenLogin={() => setShowLogin(true)}
+        />
+      ) : loading ? loadingBox : (
         <Suspense fallback={loadingBox}>
-          {route.name === 'landing' && (
-            <Landing
-              onOpenSearch={openSearch}
-              onOpenLogin={() => setShowLogin(true)}
-            />
-          )}
           {route.name === 'about' && <About />}
           {route.name === 'browse' && <Browse />}
           {route.name === 'book' && <BookDetail bookId={route.id} />}

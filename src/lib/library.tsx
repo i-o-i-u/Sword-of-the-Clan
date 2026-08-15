@@ -191,8 +191,17 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   isOwnerRef.current = isOwner
   const serverSettings = useRef<Settings | null>(null)
 
+  // التحميلات صارت تتسابق: أوّلُها يبدأ قبل المصادقة، ويليه تحميلُ صاحب
+  // المكتبة إذا تبيّن دورُه. فلو تأخّر جوابُ الأوّل عن الثاني لكتب بياناتِ
+  // الزائر فوق بيانات المالك. ورقمُ النوبة يحسم ذلك: لا يُقبل إلا جوابُ
+  // آخرِ تحميلٍ طُلب.
+  const loadSeq = useRef(0)
+  /** أَوَصَلت البياناتُ مرّةً؟ ما بعدها يُحمَّل في صمتٍ فلا تُمحى الشاشة */
+  const loadedOnce = useRef(false)
+
   const reload = useCallback(async () => {
-    setLoading(true)
+    const seq = ++loadSeq.current
+    if (!loadedOnce.current) setLoading(true)
     try {
       const owner = isOwnerRef.current
       const [b, a, w, p, l, sh, c, img, q, st] = await Promise.all([
@@ -207,6 +216,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         api.fetchLandingQuotes(owner),
         api.fetchSettings(owner),
       ])
+      if (seq !== loadSeq.current) return // سبقه تحميلٌ أحدث، فجوابُه أولى
       setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
       setPublishers(sh); setCategories(c)
       setLandingImages(img); setLandingQuotes(q)
@@ -215,26 +225,40 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setSettings(withViewerPrefs(st, isOwnerRef.current))
       setError(null)
     } catch (e) {
+      if (seq !== loadSeq.current) return
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) {
+        loadedOnce.current = true
+        setLoading(false)
+      }
     }
   }, [])
 
-  // التحميل يبدأ فور استقرار الجلسة ولا ينتظر معرفة الدور: الخادم يقرّر ما
-  // يُعيده بهويّة الطلب نفسها، ووسيط `owner` لا أثر له أصلًا. وانتظارُ
-  // `ownerExists` قبل أول طلبٍ كان يكلّف جولةً كاملة على الشبكة بلا فائدة.
-  useEffect(() => { if (!authLoading) void reload() }, [authLoading, reload])
+  // التحميل يبدأ مع أوّل رسمٍ ولا ينتظر شيئًا — لا جلسةً ولا دورًا.
+  //
+  // كان ينتظر `authLoading`، وفي ذلك الانتظارِ عِلّةُ بطءٍ محسوسة: من كان
+  // له رمزُ جلسةٍ في متصفّحه نادى @convex-dev/auth إجراءَ `auth:signIn`
+  // ليجدّده، فتمرّ جولةٌ كاملة على الشبكة وعملُ خادمٍ **قبل أن يُطلب أوّلُ
+  // حرفٍ من البيانات**. ولذلك كان دخولُ صاحب المكتبة أبطأ من تصفُّح الزائر،
+  // ويزداد بطئًا كلّما أُغلق المتصفّح وأُعيد فتحُه: الرمزُ العامل يموت بموت
+  // الصفحة، فتُعاد دورةُ التجديد من أوّلها.
+  //
+  // فالآن يسير الطلبان معًا: البياناتُ تُطلب بهويّة زائرٍ فورًا، والجلسةُ
+  // تستقرّ في أثناء ذلك. والخادمُ هو الذي يقرّر ما يُعيده بهويّة الطلب،
+  // ووسيطُ `owner` لا أثر له أصلًا.
+  useEffect(() => { void reload() }, [reload])
 
-  // أما الدخول والخروج بعد ذلك فيغيّران ما يعيده الخادم، فيُعاد التحميل.
-  // واستقرارُ الدور أولَ مرة لا يُعاد له: التحميل سبقه بالفعل.
-  const settledRole = useRef<boolean | null>(null)
+  // الدورُ الذي حُمِّلت به البيانات آخرَ مرّة. أوّلُ تحميلٍ يسبق المصادقة
+  // فيعود بما يراه الزائر؛ فإن تبيّن أن الطالب صاحبُ المكتبة أُعيد بهويّته،
+  // وإن كان زائرًا فما بيده صحيحٌ فلا يُعاد له شيء. والخروجُ بعد ذلك يردّه
+  // زائرًا فيُعاد كذلك.
+  const loadedAsOwner = useRef(false)
   useEffect(() => {
     if (!roleReady) return
-    if (settledRole.current === isOwner) return
-    const first = settledRole.current === null
-    settledRole.current = isOwner
-    if (!first) void reload()
+    if (loadedAsOwner.current === isOwner) return
+    loadedAsOwner.current = isOwner
+    void reload()
   }, [roleReady, isOwner, reload])
 
   // والإعدادات تُخلط بتفضيلات الزائر قبل أن يُعرف الدور، فإن تبيّن أنه صاحب

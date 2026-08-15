@@ -31,16 +31,28 @@ jobs:
         run: npm ci
 
       # convex deploy يدفع الدوال إلى نشر الإنتاج ثم يبني الواجهة، وهو نفسه
-      # يضبط VITE_CONVEX_URL على رابط ذلك النشر — فلا يُضبط يدويًّا.
+      # يضبط VITE_CONVEX_URL على رابط ذلك النشر — فلا يُضبط يدويًّا. ولذلك
+      # يجري البناءان تحته جميعًا: دفعةٌ واحدة للدوال، وحزمتان للواجهة —
+      # `dist` بأساس مسار Pages، و`dist-root` بأساس جذر النطاق لفايربيس.
       - name: Build
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: npx convex deploy --cmd 'npm run build'
+        run: npx convex deploy --cmd 'npm run build:deploy'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      # فايربيس يُنشر من هذه الوظيفة نفسها لأن `dist-root` على قرصها. ونشرُ
+      # Pages وظيفةٌ على حدة لأن أداته تشترط ذلك. والاثنان من الدفعة نفسها،
+      # فالموقعان متطابقان أبدًا.
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: i-o-i-u
+          channelId: live
 
   deploy:
     needs: build
