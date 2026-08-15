@@ -221,10 +221,13 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
           <figure className="quote-card">
             <span className="quote-mark" aria-hidden="true">”</span>
 
-            <blockquote className="quote-text" key={quote.id}>{quote.text}</blockquote>
+            {/* المفتاحان مختلفان بالضرورة: الأخوان في أبٍ واحد لا يجوز أن
+                يتّفقا في المفتاح، وإلّا اضطرب التوفيقُ في React فتراكم
+                القديمُ على الجديد بدل أن يحلّ محلَّه. */}
+            <blockquote className="quote-text" key={`نص-${quote.id}`}>{quote.text}</blockquote>
 
             {quote.author && (
-              <figcaption className="quote-source" key={quote.id}>
+              <figcaption className="quote-source" key={`مصدر-${quote.id}`}>
                 <span className="quote-rule" aria-hidden="true" />
                 {quote.author}
               </figcaption>
