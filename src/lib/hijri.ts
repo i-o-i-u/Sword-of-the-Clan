@@ -43,7 +43,9 @@ export function lifeLabel(
   if (a.birth != null && a.death != null) return `${a.birth} – ${a.death} ${e}`
   if (a.death != null) return `ت ${a.death} ${e}`
   if (a.birth != null) return `وُلد ${a.birth} ${e}`
-  return 'تاريخٌ غير مسجَّل'
+  // ولا يُقال «تاريخٌ غير مسجَّل»: الفراغُ ليس خبرًا، وإنما يُخبَر بالمعلوم.
+  // ومواضعُ العرض تُسقط السطرَ كلَّه — أيقونتَه معه — متى رجعت فارغة.
+  return ''
 }
 
 /**

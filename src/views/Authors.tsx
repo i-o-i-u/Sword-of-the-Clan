@@ -12,7 +12,7 @@ import { lifeLabel, toHijriYear } from '../lib/hijri'
 import { authoredBooks, contributedBooks, topRole } from '../lib/people'
 import {
   AUTHOR_ROLE, BOOKS_COUNT, ERAS, countLabel, parseNumber, rolePersonLabel,
-  roleWorksLabel, type Book, type Era,
+  rolePersonRef, roleWorksLabel, type Book, type Era,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
@@ -70,10 +70,13 @@ export function AuthorsIndex() {
 
               <div style={{ minWidth: 0 }}>
                 <div className="author-name">{author.name}</div>
-                <div className="author-life">
-                  <HourglassIcon size={12} />
-                  {lifeLabel(author)}
-                </div>
+                {/* لا يُعرض سطرُ التاريخ فارغًا ولا بأيقونته: الفراغُ ليس خبرًا */}
+                {lifeLabel(author) && (
+                  <div className="author-life">
+                    <HourglassIcon size={12} />
+                    {lifeLabel(author)}
+                  </div>
+                )}
                 <div className="author-books">
                   <OpenBookIcon size={12} />
                   {countLabel(count, BOOKS_COUNT)} في المكتبة
@@ -172,13 +175,15 @@ export function AuthorPage({ authorId }: { authorId: string }) {
             <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 30, fontWeight: 700, margin: 0 }}>
               {author.name}
             </h1>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 13.5, color: 'var(--muted)', marginTop: 4,
-            }}>
-              <HourglassIcon size={13} />
-              {lifeLabel(author)}
-            </span>
+            {lifeLabel(author) && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 13.5, color: 'var(--muted)', marginTop: 4,
+              }}>
+                <HourglassIcon size={13} />
+                {lifeLabel(author)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -260,7 +265,9 @@ export function AuthorPage({ authorId }: { authorId: string }) {
               <div className="prose" style={{ fontSize: 14.5 }}>{author.bio}</div>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                لم تُكتب ترجمةٌ لهذا المؤلِّف بعد.
+                {/* يُنعَت بأعلى صفةٍ له كزرِّ القلم سواءً: «لهذا المُحقِّق»،
+                    و«لصاحب التقريظ» — إذ لا تدخل الإشارةُ على المضاف */}
+                لم تُكتب ترجمةٌ {`لـ${rolePersonRef(rank ?? AUTHOR_ROLE)}`} بعد.
               </div>
             )}
           </div>
