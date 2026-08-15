@@ -29,6 +29,12 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.message === null) return this.props.children
 
+    // إخفاقُ جلبِ قطعةٍ ليس عطبًا في الشيفرة، فلا يُقال للقارئ إنه خلل:
+    // إمّا نشرةٌ جديدة نزلت وصفحتُه مفتوحةٌ بالسابقة، وإمّا انقطاعُ شبكة.
+    // وفي الحالين إعادةُ التحميل هي الدواء، وهي تحت يده في الزرّ.
+    const chunk = /dynamically imported module|Importing a module script failed|Failed to fetch/i
+      .test(this.state.message)
+
     return (
       <div
         role="alert"
@@ -39,11 +45,17 @@ export default class ErrorBoundary extends Component<Props, State> {
           textAlign: 'center', lineHeight: 1.9,
         }}
       >
-        <h2 style={{ margin: '0 0 10px', fontSize: 19 }}>تعذّر عرضُ هذه الصفحة</h2>
+        <h2 style={{ margin: '0 0 10px', fontSize: 19 }}>
+          {chunk ? 'تعذّر جلبُ جزءٍ من الموقع' : 'تعذّر عرضُ هذه الصفحة'}
+        </h2>
 
         <p style={{ margin: '0 0 18px', color: 'var(--muted)', fontSize: 14 }}>
-          وقع خللٌ في الموقع نفسه، لا في اتّصالك ولا في بياناتك — وما في المكتبة
-          سليمٌ كما هو.
+          {chunk
+            ? 'انقطع طلبٌ في الطريق — إمّا لأن نشرةً جديدة نزلت وهذه الصفحة '
+              + 'مفتوحةٌ منذ ما قبلها، وإمّا لانقطاعةِ شبكةٍ عابرة. وإعادةُ '
+              + 'التحميل تكفي، وما في المكتبة سليمٌ كما هو.'
+            : 'وقع خللٌ في الموقع نفسه، لا في اتّصالك ولا في بياناتك — وما في '
+              + 'المكتبة سليمٌ كما هو.'}
         </p>
 
         <pre

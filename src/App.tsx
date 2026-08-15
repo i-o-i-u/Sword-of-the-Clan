@@ -1,7 +1,7 @@
 // الهيكل العام: الترويسة، ثم الصفحة الحالية بحسب المسار، والطبقات فوقهما.
 // الصفحات المحجوبة عن الزوار تُردّ إلى التصفّح، لا أن تُعرض فارغة.
 
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { useLibrary } from './lib/library'
 import { navigate, useRoute } from './lib/router'
 import Header from './components/Header'
@@ -9,23 +9,62 @@ import SearchOverlay from './components/SearchOverlay'
 import Landing from './views/Landing'
 import Browse from './views/Browse'
 
+/** علامةُ إعادةِ تحميلٍ جرت، تمنع الدوران عليها */
+const RELOAD_MARK = 'chunk-reloaded'
+
+/**
+ * قطعةٌ تُجلب عند طلبها، ولا تدع إخفاقَ الجلب يُسقط الصفحة.
+ *
+ * فجلبُ القطعة قد يُخفق لأسبابٍ ليست في الشيفرة: نشرةٌ جديدة نزلت والصفحةُ
+ * مفتوحةٌ بحزمةٍ سابقة، أو انقطعت الشبكة لحظةً — وهو على الجوّال أكثر. ثم
+ * يرتفع الإخفاقُ إلى حدّ الخطأ فيُمحى ما على الشاشة كلُّه، وإنما العلّةُ
+ * طلبٌ واحدٌ ضاع.
+ *
+ * فيُعاد الطلبُ مرّةً بعد مهلةٍ يسيرة، فإن أخفق أُعيد تحميلُ الصفحة مرّةً
+ * واحدة — وهو الذي يشفي حالَ النشرةِ الجديدة قطعًا، إذ يجلب فهرسها الجديد.
+ * والعلامةُ في `sessionStorage` تمنع أن يدور الموقعُ على نفسه لو كان العطبُ
+ * مقيمًا، فتظهر الرسالةُ عندئذٍ ويُقال للقارئ ما جرى.
+ */
+// `any` هنا مقصود: الوسيط يحمل نوعَ المكوِّن كما هو بخصائصه، فيبقى
+// `<BookDetail bookId=… />` مفحوصًا كما كان قبل اللفّ. و`unknown` مكانَه
+// يمحو الخصائص فيسقط الفحص عن مواضع النداء كلِّها.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function page<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      return await load()
+    } catch {
+      await new Promise((done) => setTimeout(done, 700))
+      try {
+        return await load()
+      } catch (err) {
+        if (!sessionStorage.getItem(RELOAD_MARK)) {
+          sessionStorage.setItem(RELOAD_MARK, '1')
+          window.location.reload()
+        }
+        throw err
+      }
+    }
+  })
+}
+
 // المسار الذي يسلكه كل زائر — الهبوط ثم التصفّح — يبقى في الحزمة الأولى، وما
 // سواه يُجلب عند طلبه: صفحاتٌ لا تُفتح في كل زيارة، ونوافذُ لصاحب المكتبة
 // وحده. هذا يقصّ من الحزمة التي تُنتظر قبل أول رسم.
-const About = lazy(() => import('./views/About'))
-const BookDetail = lazy(() => import('./views/BookDetail'))
-const AddBook = lazy(() => import('./views/AddBook'))
-const Stats = lazy(() => import('./views/Stats'))
-const AuthorsIndex = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorsIndex })))
-const AuthorPage = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorPage })))
-const PublishersView = lazy(() => import('./views/Publishers'))
-const PublisherPage = lazy(() => import('./views/Publishers').then((m) => ({ default: m.PublisherPage })))
-const People = lazy(() => import('./views/People'))
-const Series = lazy(() => import('./views/Series'))
-const Perks = lazy(() => import('./views/Perks'))
-const LoginOverlay = lazy(() => import('./components/LoginOverlay'))
-const SettingsOverlay = lazy(() => import('./components/SettingsOverlay'))
-const ViewerSettingsOverlay = lazy(() => import('./components/ViewerSettingsOverlay'))
+const About = page(() => import('./views/About'))
+const BookDetail = page(() => import('./views/BookDetail'))
+const AddBook = page(() => import('./views/AddBook'))
+const Stats = page(() => import('./views/Stats'))
+const AuthorsIndex = page(() => import('./views/Authors').then((m) => ({ default: m.AuthorsIndex })))
+const AuthorPage = page(() => import('./views/Authors').then((m) => ({ default: m.AuthorPage })))
+const PublishersView = page(() => import('./views/Publishers'))
+const PublisherPage = page(() => import('./views/Publishers').then((m) => ({ default: m.PublisherPage })))
+const People = page(() => import('./views/People'))
+const Series = page(() => import('./views/Series'))
+const Perks = page(() => import('./views/Perks'))
+const LoginOverlay = page(() => import('./components/LoginOverlay'))
+const SettingsOverlay = page(() => import('./components/SettingsOverlay'))
+const ViewerSettingsOverlay = page(() => import('./components/ViewerSettingsOverlay'))
 
 const loadingBox = (
   <div style={{ textAlign: 'center', padding: '90px 20px', color: 'var(--muted)' }}>…جاري التحميل</div>
@@ -45,6 +84,10 @@ export default function App() {
   const vis = settings.visibility
   const canSeeAuthors = isOwner || vis.authors
   const canSeeStats = isOwner || vis.stats
+
+  // بلغت الصفحةُ الرسمَ سالمةً، فتُرفع علامةُ إعادة التحميل: إخفاقٌ آخرُ
+  // بعد اليوم يستحقّ إعادةً أخرى، وإنما مُنعت لئلّا يدور على نفسه.
+  useEffect(() => { sessionStorage.removeItem(RELOAD_MARK) }, [])
 
   // الانتقال يُغلق ما كان مفتوحًا من الطبقات
   useEffect(() => {
