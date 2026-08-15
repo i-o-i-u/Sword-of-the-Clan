@@ -22,6 +22,9 @@ export function parseHash(hash: string): Route {
   switch (head) {
     case 'browse': return { name: 'browse' }
     case 'book': return id ? { name: 'book', id } : { name: 'browse' }
+    // `#/b/xxxxxx` هو الرابط المختصر: بادئةٌ من معرّف الكتاب لا المعرّف كلّه،
+    // وصفحةُ الكتاب تعرف صاحبَها منها. انظر `shortBookLink`.
+    case 'b': return id ? { name: 'book', id } : { name: 'browse' }
     case 'authors': return { name: 'authors' }
     case 'author': return id ? { name: 'author', id } : { name: 'authors' }
     case 'add': return { name: 'add' }
@@ -48,6 +51,29 @@ export function hashFor(route: Route): string {
     case 'about': return '#/about'
     default: return '#/'
   }
+}
+
+/** أقصرُ بادئةٍ تُجرَّب أوّلًا. دونها يكثر التباسُ كتابٍ بكتاب. */
+const SHORT_ID_MIN = 6
+
+/**
+ * رابطُ الكتاب مختصرًا: معرّفات Convex طويلة (٣٢ حرفًا) ولا تُنسخ في رسالةٍ
+ * ولا تُملى، فيُقتطع منها أقصرُ بادئةٍ لا يشاركه فيها كتابٌ آخر — ستّةُ أحرفٍ
+ * فأكثر. وصفحةُ الكتاب تقبل البادئة كما تقبل المعرّف التامّ، فلا يضيع رابطٌ
+ * قديم. و`ids` معرّفاتُ ما في المكتبة اليوم، بها يُعرف التميُّز.
+ */
+export function shortBookId(id: string, ids: string[]): string {
+  for (let n = SHORT_ID_MIN; n < id.length; n++) {
+    const head = id.slice(0, n)
+    if (!ids.some((other) => other !== id && other.startsWith(head))) return head
+  }
+  return id
+}
+
+/** الرابط كاملًا كما يُنسخ ويُشارَك، على أصل الموقع ومساره */
+export function shortBookLink(id: string, ids: string[]): string {
+  const { origin, pathname } = window.location
+  return `${origin}${pathname}#/b/${shortBookId(id, ids)}`
 }
 
 export function navigate(route: Route) {

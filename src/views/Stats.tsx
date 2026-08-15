@@ -1,143 +1,397 @@
 // الإحصائيات (§٥-٧). كل رقمٍ هنا مشتقٌّ من مجموعة الكتب الظاهرة للقارئ،
 // فالزائر لا تدخل في حسابه كتبٌ أُخفيت عنه.
+//
+// والصفحة ثلاث طبقات: أعدادٌ مفردة في بطاقات، ثم مفاخرُ المكتبة — أكثرُ
+// عنوانٍ مجلَّدات وأغلى كتاب — ثم قوائمُ الأكثر والأقدم.
+//
+// وقاعدةٌ تجري على الصفحة كلِّها: **ما كان فارغًا لا يُعرض**. بطاقةٌ تقرأ
+// صفرًا ليست خبرًا، وقائمةٌ بلا صفوفٍ حَشْو. فكلُّ بندٍ هنا مشروطٌ بوجوده.
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useLibrary } from '../lib/library'
-import { formatNumber } from '../lib/types'
-import { RiyalGlyph, cardStyle } from '../components/ui'
+import { deathLabel, toHijriYear, yearLabel } from '../lib/hijri'
+import {
+  BOOKS_COUNT, VOLUMES_COUNT, countLabel, formatNumber, roleGroupLabel,
+  type Book,
+} from '../lib/types'
+import { navigate } from '../lib/router'
+import {
+  CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon, OpenBookIcon,
+  OwnerIcon, PagesIcon, PressIcon, RiyalGlyph, ScrollIcon, TagIcon, VerifyIcon,
+  VolumesIcon, cardStyle,
+} from '../components/ui'
+
+type Icon = (p: { size?: number }) => JSX.Element
+
+/** بطاقة عددٍ مفرد */
+interface Tile {
+  key: string
+  label: string
+  value: string
+  icon: Icon
+  /** ما يُلحق بالرقم: رمز العملة ونحوه */
+  suffix?: ReactNode
+}
+
+/** صفٌّ في قائمة الأكثر: اسمٌ وعددٌ ونسبةٌ من الأعلى */
+interface Row {
+  name: string
+  count: number
+  /** ما يُعرض بدل العدد حين لا يكون العدد هو المقصود */
+  text?: string
+  onClick?: () => void
+}
 
 export default function Stats() {
-  const { books, loans, categories, settings, isOwner } = useLibrary()
+  const { books, publishers, authors, categories, settings, isOwner } = useLibrary()
 
   // ما أُطفئ عن الزوار يُحذف من هنا أيضًا، فلا تبقى بطاقةٌ تقرأ صفرًا أبدًا
   const showValue = isOwner || settings.visibility.value
-  const showLoans = isOwner || settings.visibility.loans
+  const showStatus = isOwner || settings.visibility.status
+  const showAuthorPages = isOwner || settings.visibility.authors
 
   const s = useMemo(() => {
-    const read = books.filter((b) => b.status === 'مقروء')
-    const reading = books.filter((b) => b.status === 'قيد القراءة')
-    const unread = books.filter((b) => b.status === 'لم تُقرأ')
-    const rated = books.filter((b) => b.rating > 0)
-    const total = books.length || 1
+    /** مجلَّدات الكتاب كما أُدخلت، بلا حدّ الأربعين الذي يخصّ عرض الرفّ */
+    const volumesOfBook = (b: Book) => (b.single_volume ? 1 : Math.max(0, b.volumes ?? 0))
+    const partsOfBook = (b: Book) => (b.single_part ? 1 : Math.max(0, b.parts ?? 0))
 
-    const visibleIds = new Set(books.map((b) => b.id))
-    const activeLoans = loans.filter((l) => !l.returned && visibleIds.has(l.book_id))
+    const volumes = books.reduce((sum, b) => sum + volumesOfBook(b), 0)
+    const parts = books.reduce((sum, b) => sum + partsOfBook(b), 0)
+    const pages = books.reduce((sum, b) => sum + Math.max(0, b.pages ?? 0), 0)
+    const totalValue = books.reduce((sum, b) => sum + Math.max(0, b.value ?? 0), 0)
 
-    const byCategory = categories
-      .map((name) => {
-        const count = books.filter((b) => b.category === name).length
-        return { name, count, pct: Math.round((count / total) * 100) }
+    // متوسّط صفحات المجلَّد: يُقسَم ما عُرفت صفحاتُه على مجلَّداته وحدها،
+    // فلا يُخفِّض المتوسّطَ كتابٌ لم تُكتب صفحاتُه بعد.
+    const paged = books.filter((b) => (b.pages ?? 0) > 0)
+    const pagedVolumes = paged.reduce((sum, b) => sum + Math.max(1, volumesOfBook(b)), 0)
+    const pagedPages = paged.reduce((sum, b) => sum + (b.pages ?? 0), 0)
+    const avgPages = pagedVolumes > 0 ? Math.round(pagedPages / pagedVolumes) : 0
+
+    /** أصحاب كل صفة، بلا تكرار: الرجل الواحد يُحقِّق كتبًا فيُعدّ مرةً */
+    const roleNames = new Map<string, Set<string>>()
+    books.forEach((b) => (b.contributors ?? []).forEach((c) => {
+      const name = c.name.trim()
+      if (!name) return
+      if (!roleNames.has(c.role)) roleNames.set(c.role, new Set())
+      roleNames.get(c.role)!.add(name)
+    }))
+
+    /** يعدّ الكتب على مفتاحٍ يُستخرج من كل كتاب، ويرتّبها من الأكثر */
+    const tally = (keyOf: (b: Book) => string): { name: string; count: number }[] => {
+      const map = new Map<string, number>()
+      books.forEach((b) => {
+        const key = keyOf(b).trim()
+        if (key) map.set(key, (map.get(key) ?? 0) + 1)
       })
-      .filter((r) => r.count > 0)
+      return [...map.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ar'))
+    }
 
-    const authorCounts = new Map<string, number>()
+    const byAuthor = tally((b) => b.author_name)
+    const byPlace = tally((b) => b.place)
+    const byPublisher = tally((b) => b.publisher)
+    const byCategory = tally((b) => b.category)
+
+    // أكثر عنوانٍ مجلَّدات، وأغلى كتاب: واحدٌ لا قائمة، فهو مَفخَرةٌ لا جدول
+    const mostVolumes = books
+      .filter((b) => volumesOfBook(b) > 1)
+      .sort((a, b) => volumesOfBook(b) - volumesOfBook(a))[0] ?? null
+    const dearest = books
+      .filter((b) => (b.value ?? 0) > 0)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0] ?? null
+
+    // أقدم الطبعات: بالسنة موحَّدةً هجريًّا، فلا يختلط الميلاديّ بالهجريّ
+    const oldestPrints = books
+      .filter((b) => b.year != null && !b.year_approx)
+      .map((b) => ({ book: b, y: toHijriYear(b.year, b.year_era) ?? Infinity }))
+      .filter((r) => Number.isFinite(r.y))
+      .sort((a, b) => a.y - b.y)
+      .slice(0, 5)
+
+    // أقدم المؤلِّفين: من عُرفت وفاتُه وحده — والمعاصِرُ والمجهولُ يُؤخَّران
+    const bookCountOf = new Map<string, number>()
     books.forEach((b) => {
-      if (b.author_name) authorCounts.set(b.author_name, (authorCounts.get(b.author_name) ?? 0) + 1)
+      if (b.author_id) bookCountOf.set(b.author_id, (bookCountOf.get(b.author_id) ?? 0) + 1)
     })
-    const byAuthor = [...authorCounts.entries()]
-      .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6)
+    const oldestAuthors = authors
+      .filter((a) => !a.alive && a.death != null)
+      .map((a) => ({ author: a, y: toHijriYear(a.death, a.era) ?? Infinity }))
+      .filter((r) => Number.isFinite(r.y))
+      .sort((a, b) => a.y - b.y)
+      .slice(0, 5)
+
+    // دُور النشر والتصنيفات تُعدّ ممّا في الكتب نفسها، لا من جدوليهما: دارٌ
+    // مسجَّلةٌ بلا كتاب ليست في المكتبة بعدُ.
+    const publisherCount = byPublisher.length || publishers.length
+    const categoryCount = byCategory.length || categories.length
+
+    const read = books.filter((b) => b.status === 'مقروء').length
+    const reading = books.filter((b) => b.status === 'قيد القراءة').length
+    const unread = books.filter((b) => b.status === 'لم يُقرأ').length
 
     return {
-      total: books.length,
-      pagesRead: read.reduce((sum, b) => sum + (b.pages ?? 0), 0),
-      avgRating: rated.length ? (rated.reduce((sum, b) => sum + b.rating, 0) / rated.length).toFixed(1) : '—',
-      activeLoans: activeLoans.length,
-      totalValue: books.reduce((sum, b) => sum + (b.value ?? 0), 0),
-      readCount: read.length,
-      readingCount: reading.length,
-      unreadCount: unread.length,
-      readPct: Math.round((read.length / total) * 100),
-      readingPct: Math.round((reading.length / total) * 100),
-      unreadPct: Math.round((unread.length / total) * 100),
-      byCategory,
+      titles: books.length,
+      volumes,
+      parts,
+      pages,
+      avgPages,
+      totalValue,
+      roleNames,
+      publisherCount,
+      categoryCount,
       byAuthor,
+      byPlace,
+      byPublisher,
+      byCategory,
+      mostVolumes,
+      mostVolumesCount: mostVolumes ? volumesOfBook(mostVolumes) : 0,
+      dearest,
+      oldestPrints,
+      oldestAuthors,
+      bookCountOf,
+      read, reading, unread,
+      statusTotal: read + reading + unread,
     }
-  }, [books, loans, categories])
+  }, [books, authors, publishers, categories])
 
-  const tile = { ...cardStyle, borderRadius: 12, padding: 18 } as const
-  const bigNumber = { fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700 } as const
-  const tileLabel = { fontSize: 13, color: 'var(--muted)' } as const
+  // ------------------------------------------------------------ البطاقات
+  const tiles: Tile[] = []
+  const push = (t: Tile) => { if (t.value) tiles.push(t) }
+  const num = (n: number) => (n > 0 ? formatNumber(n) : '')
+
+  push({ key: 'titles', label: 'عناوين الكتب', value: num(s.titles), icon: OpenBookIcon })
+  push({ key: 'volumes', label: 'المُجلَّدات', value: num(s.volumes), icon: VolumesIcon })
+  push({ key: 'parts', label: 'الأَجْزاء أو الأَسْفار', value: num(s.parts), icon: ScrollIcon })
+
+  // لكلّ صفةٍ بطاقتُها، بترتيب ورودها في قائمة الصفات لا بعدد أصحابها
+  s.roleNames.forEach((names, role) => {
+    push({
+      key: `role-${role}`,
+      label: roleGroupLabel(role),
+      value: num(names.size),
+      icon: VerifyIcon,
+    })
+  })
+
+  push({ key: 'publishers', label: 'دُوْر النَّشْر', value: num(s.publisherCount), icon: PressIcon })
+  push({ key: 'categories', label: 'التصنيفات', value: num(s.categoryCount), icon: TagIcon })
+  push({
+    key: 'avg',
+    label: 'متوسّط صفحات المُجلَّد',
+    value: num(s.avgPages),
+    icon: CalculatorIcon,
+  })
+  push({ key: 'pages', label: 'إجماليّ صفحات الكتب', value: num(s.pages), icon: PagesIcon })
+  if (showValue) {
+    push({
+      key: 'value',
+      label: 'القيمة التقديرية',
+      value: num(s.totalValue),
+      icon: CoinIcon,
+      suffix: settings.currency === 'ريال'
+        ? <RiyalGlyph />
+        : <span style={{ fontSize: 12 }}>({settings.currency})</span>,
+    })
+  }
+
+  const goBook = (id: string) => () => navigate({ name: 'book', id })
 
   return (
-    <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-      <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 24px' }}>
-        إحصائيات مكتبة سيف العشيرة
-      </h1>
+    <main className="app-main stats-main">
+      <header className="stats-head">
+        <h1>إحصائيات مكتبة سَيْف العشيرة</h1>
+        <p>
+          {s.titles === 0
+            ? 'لم يُفهرَس كتابٌ بعد، فلا أرقام.'
+            : `أرقامُ المكتبة كما هي اليوم: ${countLabel(s.titles, BOOKS_COUNT)}`
+              + `، و${countLabel(s.volumes, VOLUMES_COUNT)}.`}
+        </p>
+      </header>
 
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 32 }}>
-        <div style={tile}>
-          <div style={bigNumber}>{formatNumber(s.total)}</div>
-          <div style={tileLabel}>إجمالي الكتب</div>
-        </div>
-        <div style={tile}>
-          <div style={bigNumber}>{formatNumber(s.pagesRead)}</div>
-          <div style={tileLabel}>صفحة مقروءة</div>
-        </div>
-        <div style={tile}>
-          <div style={bigNumber}>{s.avgRating}</div>
-          <div style={tileLabel}>متوسط التقييم من 5</div>
-        </div>
-        {showLoans && (
-          <div style={tile}>
-            <div style={bigNumber}>{s.activeLoans}</div>
-            <div style={tileLabel}>كتاب مُعار حاليًا</div>
-          </div>
-        )}
-        {showValue && (
-          <div style={tile}>
-            <div style={bigNumber}>{formatNumber(s.totalValue)}</div>
-            <div style={{ ...tileLabel, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span>قيمة المكتبة</span>
-              {settings.currency === 'ريال' ? <RiyalGlyph /> : <span>({settings.currency})</span>}
+      {tiles.length > 0 && (
+        <section className="stats-tiles">
+          {tiles.map(({ key, label, value, icon: Icon, suffix }) => (
+            <div key={key} className="stat-tile">
+              <span className="stat-tile-icon" aria-hidden="true"><Icon size={17} /></span>
+              <span className="stat-tile-value">
+                {value}
+                {suffix && <span className="stat-tile-suffix">{suffix}</span>}
+              </span>
+              <span className="stat-tile-label">{label}</span>
             </div>
-          </div>
+          ))}
+        </section>
+      )}
+
+      {/* ------------------------------------------------------- المفاخر */}
+      <section className="stats-highlights">
+        {s.mostVolumes && (
+          <Highlight
+            icon={<VolumesIcon size={18} />}
+            title="أكثرُ عنوانٍ مُجلَّدات"
+            name={s.mostVolumes.title}
+            note={countLabel(s.mostVolumesCount, VOLUMES_COUNT)}
+            onClick={goBook(s.mostVolumes.id)}
+          />
         )}
-      </div>
+        {showValue && s.dearest && (
+          <Highlight
+            icon={<CoinIcon size={18} />}
+            title="أغلى كتابٍ في المكتبة"
+            name={s.dearest.title}
+            note={`${formatNumber(s.dearest.value ?? 0)} ${settings.currency}`}
+            onClick={goBook(s.dearest.id)}
+          />
+        )}
+        {s.byCategory[0] && (
+          <Highlight
+            icon={<TagIcon size={18} />}
+            title="أكثرُ التصنيفات كتبًا"
+            name={s.byCategory[0].name}
+            note={countLabel(s.byCategory[0].count, BOOKS_COUNT)}
+          />
+        )}
+      </section>
 
-      <div style={{ ...cardStyle, borderRadius: 12, padding: 22, marginBottom: 24 }}>
-        <div style={{ fontFamily: 'var(--heading-font)', fontSize: 18, fontWeight: 700, marginBottom: 14 }}>
-          حالة القراءة
-        </div>
-        <div style={{ display: 'flex', height: 22, borderRadius: 999, overflow: 'hidden', marginBottom: 10, background: 'var(--header)' }}>
-          <div style={{ background: 'oklch(0.5 0.08 150)', width: `${s.readPct}%` }} />
-          <div style={{ background: 'var(--star)', width: `${s.readingPct}%` }} />
-          <div style={{ background: 'oklch(0.7 0.01 60)', width: `${s.unreadPct}%` }} />
-        </div>
-        <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--muted)', flexWrap: 'wrap' }}>
-          <span>● مقروءة ({s.readCount})</span>
-          <span>● قيد القراءة ({s.readingCount})</span>
-          <span>● لم تُقرأ ({s.unreadCount})</span>
-        </div>
-      </div>
+      {/* -------------------------------------------------- قوائم الأكثر */}
+      <section className="stats-lists">
+        <BarCard
+          title="أكثر خمسةِ مؤلِّفين كتبًا"
+          icon={<OwnerIcon size={17} />}
+          rows={s.byAuthor.slice(0, 5)}
+        />
+        <BarCard
+          title="أكثر خمسةِ بلدانٍ نشرًا"
+          icon={<GlobeIcon size={17} />}
+          rows={s.byPlace.slice(0, 5)}
+        />
+        <BarCard
+          title="أكثر خمسِ دُورٍ نشرًا"
+          icon={<PressIcon size={17} />}
+          rows={s.byPublisher.slice(0, 5)}
+        />
 
-      <div className="stats-pair" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <BarCard title="حسب التصنيف" rows={s.byCategory} color="oklch(0.42 0.09 45)" />
-        <BarCard title="أكثر المؤلفين حضورًا" rows={s.byAuthor} color="oklch(0.38 0.1 25)" />
-      </div>
+        <RankCard
+          title="أقدمُ خمسِ طبعات"
+          icon={<CalendarIcon size={17} />}
+          rows={s.oldestPrints.map(({ book }) => ({
+            name: book.title,
+            count: 0,
+            text: yearLabel(book.year, book.year_era),
+            onClick: goBook(book.id),
+          }))}
+        />
+        <RankCard
+          title="أقدمُ خمسةِ مؤلِّفين"
+          icon={<HourglassIcon size={17} />}
+          rows={s.oldestAuthors.map(({ author }) => ({
+            name: author.name,
+            count: s.bookCountOf.get(author.id) ?? 0,
+            text: deathLabel(author),
+            onClick: showAuthorPages
+              ? () => navigate({ name: 'author', id: author.id })
+              : undefined,
+          }))}
+        />
+      </section>
+
+      {/* حالة القراءة: ليست من عدّ الفهرس، فهي في ذيل الصفحة لا في صدرها */}
+      {showStatus && s.statusTotal > 0 && (
+        <section className="stats-status">
+          <div className="stats-card-head">
+            <span className="stats-card-icon" aria-hidden="true"><OpenBookIcon size={17} /></span>
+            حالة القراءة
+          </div>
+          <div className="stats-bar">
+            <span style={{ background: 'oklch(0.5 0.08 150)', width: pct(s.read, s.statusTotal) }} />
+            <span style={{ background: 'var(--star)', width: pct(s.reading, s.statusTotal) }} />
+            <span style={{ background: 'oklch(0.7 0.01 60)', width: pct(s.unread, s.statusTotal) }} />
+          </div>
+          <div className="stats-legend">
+            <span>● مقروءة ({formatNumber(s.read)})</span>
+            <span>● قيد القراءة ({formatNumber(s.reading)})</span>
+            <span>● لم يُقرأ ({formatNumber(s.unread)})</span>
+          </div>
+        </section>
+      )}
     </main>
   )
 }
 
-function BarCard(
-  { title, rows, color }: { title: string; rows: { name: string; count: number; pct: number }[]; color: string },
+const pct = (n: number, total: number) => `${total > 0 ? Math.round((n / total) * 100) : 0}%`
+
+/** مَفخَرةٌ مفردة: كتابٌ أو تصنيفٌ واحد، لا قائمة */
+function Highlight(
+  { icon, title, name, note, onClick }:
+  { icon: ReactNode; title: string; name: string; note: string; onClick?: () => void },
 ) {
   return (
-    <div style={{ ...cardStyle, borderRadius: 12, padding: 22 }}>
-      <div style={{ fontFamily: 'var(--heading-font)', fontSize: 18, fontWeight: 700, marginBottom: 14 }}>{title}</div>
-      {rows.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>لا شيء بعد.</div>}
+    <div
+      className={`stat-highlight${onClick ? ' stat-highlight-link' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      style={cardStyle}
+    >
+      <span className="stat-highlight-icon" aria-hidden="true">{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="stat-highlight-title">{title}</div>
+        <div className="stat-highlight-name">{name}</div>
+        <div className="stat-highlight-note">{note}</div>
+      </div>
+    </div>
+  )
+}
+
+/** قائمةٌ بأعمدةٍ نسبيّة: طولُ العمود من أعلى الصفوف لا من مجموع المكتبة */
+function BarCard({ title, icon, rows }: { title: string; icon: ReactNode; rows: Row[] }) {
+  if (rows.length === 0) return null
+  const top = Math.max(...rows.map((r) => r.count), 1)
+
+  return (
+    <div className="stats-card" style={cardStyle}>
+      <div className="stats-card-head">
+        <span className="stats-card-icon" aria-hidden="true">{icon}</span>
+        {title}
+      </div>
       {rows.map((row) => (
-        <div key={row.name} style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4, gap: 10 }}>
-            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-            <span style={{ color: 'var(--muted)' }}>{row.count}</span>
+        <div key={row.name} className="stats-row">
+          <div className="stats-row-head">
+            <span className="stats-row-name">{row.name}</span>
+            <span className="stats-row-count">{countLabel(row.count, BOOKS_COUNT)}</span>
           </div>
-          <div style={{ background: 'var(--header)', borderRadius: 999, height: 8 }}>
-            <div style={{ background: color, height: 8, borderRadius: 999, width: `${row.pct}%` }} />
+          <div className="stats-track">
+            <span style={{ width: `${Math.round((row.count / top) * 100)}%` }} />
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** قائمةٌ مرتَّبة بأرقامها: الأقدم فالأقدم، ولكلٍّ خبرُه عن يساره */
+function RankCard({ title, icon, rows }: { title: string; icon: ReactNode; rows: Row[] }) {
+  if (rows.length === 0) return null
+
+  return (
+    <div className="stats-card" style={cardStyle}>
+      <div className="stats-card-head">
+        <span className="stats-card-icon" aria-hidden="true">{icon}</span>
+        {title}
+      </div>
+      <ol className="stats-rank">
+        {rows.map((row, i) => (
+          <li
+            key={`${row.name}-${i}`}
+            className={row.onClick ? 'stats-rank-link' : undefined}
+            onClick={row.onClick}
+          >
+            <span className="stats-rank-no">{formatNumber(i + 1)}</span>
+            <span className="stats-rank-name">{row.name}</span>
+            <span className="stats-rank-note">{row.text}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

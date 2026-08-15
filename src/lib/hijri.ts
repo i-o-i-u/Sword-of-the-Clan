@@ -26,10 +26,20 @@ export function toHijriYear(year: number | null | undefined, era: Era | string |
   return y
 }
 
-/** «٧٣٢ – ٨٠٨ هـ» / «ت ٨٠٨ هـ» / «وُلد ١٩٤٧ م» / «تاريخٌ غير مسجَّل» */
-export function lifeLabel(a: Pick<Author, 'birth' | 'death' | 'era'> | null | undefined): string {
+/**
+ * عمر المؤلِّف كما يُعرض: «٧٣٢ – ٨٠٨ هـ» / «ت ٨٠٨ هـ» / «وُلد ١٩٤٧ م».
+ *
+ * والمعاصِرُ الحيّ «مُعاصِر» لا «تاريخٌ غير مسجَّل»: وفاتُه لم تُترك سهوًا،
+ * بل هو حيٌّ. وكذلك من عُرفت وفاتُه تقريبًا يُذكر تقريبُه كما كُتب.
+ */
+export function lifeLabel(
+  a: Pick<Author, 'birth' | 'death' | 'era'>
+    & Partial<Pick<Author, 'alive' | 'death_approx' | 'death_text'>> | null | undefined,
+): string {
   if (!a) return ''
   const e = a.era || 'هـ'
+  if (a.alive) return a.birth != null ? `مُعاصِر، وُلد ${a.birth} ${e}` : 'مُعاصِر'
+  if (a.death_approx && a.death_text?.trim()) return a.death_text.trim()
   if (a.birth != null && a.death != null) return `${a.birth} – ${a.death} ${e}`
   if (a.death != null) return `ت ${a.death} ${e}`
   if (a.birth != null) return `وُلد ${a.birth} ${e}`

@@ -24,6 +24,7 @@ export const SEARCH_FIELDS: { key: string; label: string; def: boolean }[] = [
   { key: 'series',     label: 'السلسلة',        def: false },
   { key: 'topic',      label: 'الموضوع',        def: true },
   { key: 'tags',       label: 'الوسوم',         def: true },
+  { key: 'keywords',   label: 'كلمات مفتاحية',  def: true },
   { key: 'notes',      label: 'الملاحظات',      def: false },
   { key: 'isbn',       label: 'ردمك',           def: false },
   { key: 'marginNote', label: 'طُرَّة الكتاب',    def: false },
@@ -52,6 +53,8 @@ export function normalizeText(text: unknown, o: SearchOptions): string {
 function fieldText(b: Book, key: string): string {
   switch (key) {
     case 'tags': return (b.tags ?? []).join(' ')
+    // الكلمات المفتاحية لا تُعرض على البطاقة، وإنما تُقصد هنا
+    case 'keywords': return (b.keywords ?? []).join(' ')
     // اسم المؤلِّف الأول ومن شاركه
     case 'author': return [b.author_name, ...(b.co_authors ?? []).map((c) => c.name)].join(' ')
     case 'contributors': return (b.contributors ?? []).map((c) => c.name).join(' ')

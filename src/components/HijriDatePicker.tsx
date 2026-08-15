@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { HIJRI_MONTHS, WEEKDAYS, hijriMonthDays, hijriToday, toArabicDigits } from '../lib/hijri'
+import { ArrowIcon } from './ui'
 
 interface Props {
   label: string
@@ -89,30 +90,44 @@ export default function HijriDatePicker({ label, day, month, year, onChange }: P
           background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
           boxShadow: '0 18px 40px oklch(0.2 0.02 50 / 0.25)', padding: 12,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          {/* سهمان مرسومان لا حرفا قوس: يُعرف اتجاهُهما بالنظر. والسابقُ في
+              العربية عن اليمين، فرأسُ سهمه إليه. وسهما السنة إلى جانبهما،
+              فيُبلغ الشهرُ البعيد بغير اثنتي عشرة نقرة. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 4, marginBottom: 10,
+          }}>
             <button
               type="button"
+              title="الشهر السابق"
               aria-label="الشهر السابق"
               onClick={() => {
                 let m = viewMonth - 1, y = viewYear
                 if (m < 1) { m = 12; y -= 1 }
                 setViewMonth(m); setViewYear(y)
               }}
-              style={{ border: 'none', background: 'none', color: 'var(--text)', fontSize: 17, padding: '2px 8px' }}
-            >›</button>
-            <div style={{ fontFamily: 'var(--heading-font)', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+              style={navStyle}
+            >
+              <ArrowIcon size={14} />
+            </button>
+
+            <div style={{ fontFamily: 'var(--heading-font)', fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>
               {HIJRI_MONTHS[viewMonth - 1]} {toArabicDigits(viewYear)} هـ
             </div>
+
             <button
               type="button"
+              title="الشهر التالي"
               aria-label="الشهر التالي"
               onClick={() => {
                 let m = viewMonth + 1, y = viewYear
                 if (m > 12) { m = 1; y += 1 }
                 setViewMonth(m); setViewYear(y)
               }}
-              style={{ border: 'none', background: 'none', color: 'var(--text)', fontSize: 17, padding: '2px 8px' }}
-            >‹</button>
+              style={navStyle}
+            >
+              <ArrowIcon size={14} dir="left" />
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
@@ -167,3 +182,9 @@ export default function HijriDatePicker({ label, day, month, year, onChange }: P
 
 /** ارتفاع اللوحة تقريبًا، به يُعرف أيُفتح تحت الحقل أم فوقه */
 const PANEL_HEIGHT = 340
+
+const navStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
+  width: 30, height: 30, borderRadius: 8, border: '1px solid var(--border)',
+  background: 'var(--bg)', color: 'var(--accent-soft)',
+} as const

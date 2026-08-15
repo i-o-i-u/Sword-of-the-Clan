@@ -226,13 +226,31 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
             </Field>
           )}
 
-          <div style={{
-            background: result.wrong ? 'oklch(0.95 0.04 65)' : 'var(--header)',
-            border: `1px solid ${result.wrong ? 'oklch(0.82 0.09 65)' : 'transparent'}`,
-            borderRadius: 12, padding: '16px 18px',
-            fontSize: 14.5, lineHeight: 2.1, minHeight: 64,
-            color: result.wrong ? 'oklch(0.36 0.08 55)' : 'var(--text)',
-          }}>
+          {/*
+            مربَّع النتيجة. كان نصُّه يخرج عن حدوده أحيانًا، وعلّتُه أنّ
+            المربَّع عنصرٌ في عمودٍ مرن، والعنصرُ المرن لا يضيق عن عرض أضيق
+            ما فيه (min-content). فإذا وقع في النتيجة ما لا ينكسر — عنوانُ
+            كتابٍ طويلٍ يُحكى في الجملة، أو تاريخٌ بأرقامه وأقواسه — اتّسع
+            المربَّع عن أبيه فخرج عن حدوده.
+
+            و`overflow-wrap: anywhere` هو الدواء بعينه: يكسر الكلمة عند
+            الضرورة، **ويُصغِّر معه حسابَ min-content** — بخلاف
+            `break-word` الذي يكسر ولا يُصغِّره، فيبقى الاتّساع على حاله.
+            ومعه `min-width: 0` و`max-width: 100%` سدًّا للباب.
+
+            والسطور مضبوطة الطرفين كسائر النصّ المعروض.
+          */}
+          <div
+            style={{
+              background: result.wrong ? 'oklch(0.95 0.04 65)' : 'var(--header)',
+              border: `1px solid ${result.wrong ? 'oklch(0.82 0.09 65)' : 'transparent'}`,
+              borderRadius: 12, padding: '16px 18px',
+              fontSize: 14.5, lineHeight: 2.1, minHeight: 64,
+              minWidth: 0, maxWidth: '100%',
+              overflowWrap: 'anywhere', textAlign: 'justify', textWrap: 'pretty',
+              color: result.wrong ? 'oklch(0.36 0.08 55)' : 'var(--text)',
+            }}
+          >
             {result.lines.length === 0 ? (
               <span style={{ color: 'var(--muted)', fontSize: 13 }}>{result.hint}</span>
             ) : (

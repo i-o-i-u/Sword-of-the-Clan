@@ -17,13 +17,16 @@ export const era = v.union(
 
 /**
  * حالة القراءة. الفراغ حالةٌ رابعة مقصودة: «غير معروفة»، يرجع إليها صاحب
- * المكتبة متى أراد رفع ما أثبته. و«تم القراءة» لفظٌ متروك بقيَ في الاتحاد
- * لأن في القاعدة كتبًا كُتبت به قبل أن يصير «مقروء» — يقبله المخطّط،
- * ويحوّله `toClient` عند القراءة فلا تراه الواجهة.
+ * المكتبة متى أراد رفع ما أثبته.
+ *
+ * ولفظان متروكان باقيان في الاتحاد لأن في القاعدة مستنداتٍ كُتبت بهما:
+ * «تم القراءة» قبل أن يصير «مقروء»، و«لم تُقرأ» قبل أن تصير «لم يُقرأ»
+ * — الفاعلُ الكتابُ لا الصفحة. يقبلهما المخطّط، ويحوّلهما `toClient` عند
+ * القراءة فلا تراهما الواجهة.
  */
 export const readingStatus = v.union(
-  v.literal('لم تُقرأ'), v.literal('قيد القراءة'), v.literal('مقروء'),
-  v.literal('تم القراءة'), v.literal(''),
+  v.literal('لم يُقرأ'), v.literal('قيد القراءة'), v.literal('مقروء'),
+  v.literal('تم القراءة'), v.literal('لم تُقرأ'), v.literal(''),
 )
 
 export const perkKind = v.union(v.literal('فائدة'), v.literal('مقتطف'))
@@ -51,10 +54,15 @@ export const coAuthor = v.object({
 /**
  * مَن عمل في الكتاب غير مؤلِّفه، ودورُه معه: محقِّقٌ ومراجعٌ ومخرِّج… وقد
  * يجتمع في كتابٍ واحد محقِّقان ومقدِّمون، فهي قائمةٌ لا حقولٌ معدودة.
+ *
+ * و`scope` نطاقُ عمله من الكتاب: قد يُحقِّق الأولَ رجلٌ والثانيَ غيرُه، فيُكتب
+ * لكلٍّ ما عمل فيه نصًّا («١-٣»، «السِّفر الأول»). اختياريّ لأن المفهرَس قبله
+ * لا يحمله، والفراغُ فيه معناه: عمل في الكتاب كلِّه.
  */
 export const contributor = v.object({
   role: v.string(),
   name: v.string(),
+  scope: v.optional(v.string()),
 })
 
 /** حقول الكتاب. مُصدَّرة ليعيد استعمالها مُحوِّل الإضافة والتعديل. */
@@ -103,9 +111,13 @@ export const bookFields = {
   shelf_no: v.string(),             // رقم الرفّ داخله
   binding: v.string(),
   condition: v.string(),
+  // ما يُوصف به حال النسخة على التفصيل. اختياريّ: المفهرَس قبله لا يحمله.
+  condition_notes: v.optional(v.string()),
   value: v.union(v.number(), v.null()),
   source: v.string(),               // صِفة الورود: شِراء، إِهْداء، إرْث…
   source_detail: v.string(),        // مكان الشراء أو المُهدي أو المَوروث
+  // يوم الوُرود. الطبعةُ لا يُعرف يومُها فلا يُسأل عنه، أمّا الوُرود فيُعرف.
+  acquired_day: v.optional(v.union(v.number(), v.null())),
   acquired_month: v.union(v.number(), v.null()),
   acquired_year: v.union(v.number(), v.null()),
   acquired_approx: v.boolean(),
@@ -115,6 +127,8 @@ export const bookFields = {
   // ٤. عن الكتاب
   topic: v.string(),
   tags: v.array(v.string()),
+  // كلماتٌ يُهتدى بها إلى الكتاب في البحث، ولا تُعرض وسومًا على بطاقته
+  keywords: v.optional(v.array(v.string())),
   blurb: v.string(),
   notes: v.string(),
   status: readingStatus,

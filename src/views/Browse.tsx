@@ -15,9 +15,9 @@ import {
 } from '../lib/search'
 import {
   ARABIC_LETTERS, CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT, VIEW_OPTIONS,
-  STATUS_UNKNOWN,
-  centuryName, contributorLabel, formatNumber, parseNumber, titleInitial,
-  type Book, type SortKey, type ViewMode, volumesOf,
+  STATUS_UNKNOWN, VOLUMES_COUNT,
+  booksLabel, centuryName, contributorLabel, countLabel, formatNumber, parseNumber,
+  titleInitial, type Book, type SortKey, type ViewMode, volumesOf,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
@@ -271,7 +271,7 @@ export default function Browse() {
             </h1>
             {trimmed && (
               <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>
-                {`نتائج البحث عن "${trimmed}" — ${formatNumber(filtered.length)} كتاب`}
+                {`نتائج البحث عن «${trimmed}» — ${booksLabel(filtered.length)}`}
               </p>
             )}
           </div>
@@ -294,6 +294,18 @@ export default function Browse() {
             >
               <CalculatorIcon size={19} />
               <span>حاسبة القراءة</span>
+            </button>
+
+            {/* القرعة خدمةٌ كالحاسبة، فموضعُها معها لا في شريط أدوات العرض */}
+            <button
+              type="button"
+              onClick={suggestBook}
+              disabled={books.length === 0}
+              className="side-tool"
+              title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
+            >
+              <SuggestIcon size={19} />
+              <span>اقترح لي كتابًا</span>
             </button>
 
             {canSeeStats && (
@@ -371,17 +383,6 @@ export default function Browse() {
                   {activeFilters}
                 </span>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={suggestBook}
-              disabled={books.length === 0}
-              title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
-              style={{ ...toolStyle, opacity: books.length === 0 ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 7 }}
-            >
-              <SuggestIcon size={16} />
-              اقترح لي كتابًا
             </button>
           </div>
 
@@ -762,69 +763,70 @@ function CardLine({ icon, text, strong }: { icon: React.ReactNode; text: string;
 }
 
 // ------------------------------------------------------------------ جدول
-/** أعمدة الجدول وأيقونة كلٍّ منها، بترتيبها المعتمد */
-const TABLE_HEADS: { label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
-  { label: 'مُسلسل',           icon: HashIcon },
+/**
+ * أعمدة الجدول وأيقونة كلٍّ منها، بترتيبها المعتمد. و«م» اختصار «مُسلسل»:
+ * رأسُ عمودِ الترقيم لا يحتاج كلمةً كاملة، والعمودُ ضيّقٌ أصلًا.
+ */
+const TABLE_HEADS: { label: string; title?: string; icon: (p: { size?: number }) => JSX.Element }[] = [
+  { label: 'م',                title: 'مُسلسل', icon: HashIcon },
   { label: 'عنوان الكتاب',     icon: OpenBookIcon },
   { label: 'المُؤلِّف',          icon: OwnerIcon },
   { label: 'تاريخ وفاته',      icon: HourglassIcon },
   { label: 'الناشر',           icon: PressIcon },
   { label: 'المُجلَّدات',        icon: VolumesIcon },
-  { label: 'إجماليّ الصفحات',  icon: PagesIcon },
+  { label: 'الصفحات',          icon: PagesIcon },
   { label: 'دولاب / رفّ',       icon: CabinetIcon },
 ]
 
-const TABLE_COLUMNS = '62px minmax(0,2.4fr) minmax(0,1.7fr) 104px minmax(0,1.4fr) 84px 104px 116px'
+const TABLE_COLUMNS = '58px minmax(0,2.4fr) minmax(0,1.7fr) 104px minmax(0,1.4fr) 88px 96px 116px'
 
+/**
+ * الجدول: ترويسةٌ ثابتة تحت شريط الرأس، وخطٌّ فاصلٌ بين كل عمودٍ وتاليه،
+ * وصفوفٌ يتناوب لونُها فلا تختلط عين القارئ بين سطرٍ وسطر.
+ *
+ * والفاصلُ حدٌّ على بداية كل خليّةٍ إلا الأولى (`:first-child`)، فيقوم من
+ * تلقائه على أيّ عددٍ من الأعمدة، ولا يبقى خطٌّ معلَّقٌ على حرف الجدول.
+ */
 function TableView({ books }: { books: Book[] }) {
   const { authorById } = useLibrary()
-  const cell = { padding: '11px 10px', fontSize: 12.5, color: 'var(--muted)' } as const
 
   return (
-    <section style={{ ...cardStyle, borderRadius: 14, overflowX: 'auto', overflowY: 'hidden', minWidth: 0 }}>
-      {/* الترويسة والصفوف تتقاسمان العرض الأدنى نفسه لتبقى الأعمدة متحاذية */}
-      <div style={{
-        minWidth: 940, display: 'grid', gridTemplateColumns: TABLE_COLUMNS,
-        background: 'var(--header)', fontSize: 12, color: 'var(--muted)', fontWeight: 700, padding: '0 6px',
-      }}>
-        {TABLE_HEADS.map(({ label, icon: Icon }) => (
-          <div key={label} style={{ padding: '11px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon size={13} />
-            <span style={clipped}>{label}</span>
-          </div>
-        ))}
-      </div>
+    <section className="lib-table-wrap" style={cardStyle}>
+      <div className="lib-table" style={{ gridTemplateColumns: TABLE_COLUMNS }}>
+        <div className="lib-table-head" style={{ gridTemplateColumns: TABLE_COLUMNS }}>
+          {TABLE_HEADS.map(({ label, title, icon: Icon }) => (
+            <div key={label} title={title}>
+              <Icon size={13} />
+              <span style={clipped}>{label}</span>
+            </div>
+          ))}
+        </div>
 
-      {books.map((book, i) => {
-        const author = authorById(book.author_id)
-        return (
-          <div
-            key={book.id}
-            className="row-hover"
-            onClick={() => navigate({ name: 'book', id: book.id })}
-            style={{
-              minWidth: 940, display: 'grid', gridTemplateColumns: TABLE_COLUMNS,
-              alignItems: 'center', cursor: 'pointer', padding: '0 6px',
-              borderTop: '1px solid var(--border)',
-            }}
-          >
-            <div style={{ ...cell, fontVariantNumeric: 'tabular-nums' }}>{formatNumber(i + 1)}</div>
-            <div style={{ padding: '11px 10px', fontFamily: 'var(--heading-font)', fontSize: 14.5, fontWeight: 700, ...clipped }}>
-              {book.title}
+        {books.map((book, i) => {
+          const author = authorById(book.author_id)
+          return (
+            <div
+              key={book.id}
+              className="lib-table-row"
+              style={{ gridTemplateColumns: TABLE_COLUMNS }}
+              onClick={() => navigate({ name: 'book', id: book.id })}
+            >
+              <div className="lib-cell lib-cell-no">{formatNumber(i + 1)}</div>
+              <div className="lib-cell lib-cell-title" style={clipped}>{book.title}</div>
+              <div className="lib-cell lib-cell-strong" style={clipped}>{book.author_name || '—'}</div>
+              <div className="lib-cell" style={clipped}>{deathLabel(author) || '—'}</div>
+              <div className="lib-cell" style={clipped}>{book.publisher || '—'}</div>
+              <div className="lib-cell lib-cell-num">{formatNumber(volumesOf(book))}</div>
+              <div className="lib-cell lib-cell-num">{book.pages ? formatNumber(book.pages) : '—'}</div>
+              <div className="lib-cell" style={clipped}>
+                {book.cabinet_no
+                  ? `${book.cabinet_no}${book.shelf_no ? ` / ${book.shelf_no}` : ''}`
+                  : '—'}
+              </div>
             </div>
-            <div style={{ padding: '11px 10px', fontSize: 13, ...clipped }}>{book.author_name || '—'}</div>
-            <div style={{ ...cell, ...clipped }}>{deathLabel(author) || '—'}</div>
-            <div style={{ ...cell, ...clipped }}>{book.publisher || '—'}</div>
-            <div style={cell}>{formatNumber(volumesOf(book))}</div>
-            <div style={cell}>{book.pages ? formatNumber(book.pages) : '—'}</div>
-            <div style={{ ...cell, ...clipped }}>
-              {book.cabinet_no
-                ? `${book.cabinet_no}${book.shelf_no ? ` / ${book.shelf_no}` : ''}`
-                : '—'}
-            </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </section>
   )
 }
@@ -856,7 +858,7 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
                 {cabinet ? `دولاب ${cabinet}` : 'كتبٌ بلا موضع'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                {formatNumber(roomBooks.length)} كتاب — {formatNumber(spineCount)} مجلَّد على الرف
+                {booksLabel(roomBooks.length)} — {countLabel(spineCount, VOLUMES_COUNT)} على الرفّ
               </div>
             </div>
 

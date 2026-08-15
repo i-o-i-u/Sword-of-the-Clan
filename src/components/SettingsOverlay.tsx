@@ -14,7 +14,8 @@ import { useLibrary } from '../lib/library'
 import { FONTS, FONT_LABELS, FONT_ORDER, THEMES, THEME_LABELS, THEME_ORDER } from '../lib/theme'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import {
-  CURRENCIES, META_DEFS, VIS_TOGGLES,
+  BOOKS_COUNT, CATEGORIES_COUNT, CURRENCIES, FIELDS_COUNT, META_DEFS, VIS_TOGGLES,
+  countLabel,
   type FontName, type Settings, type ThemeName, type ViewMode, type Visibility,
 } from '../lib/types'
 import ImageSlot from './ImageSlot'
@@ -582,8 +583,9 @@ function PrivacyTab({ setField }: { setField: SetField }) {
       }}>
         ما تُطفئه هنا يختفي عن الزوار وحدهم، وأنت تراه كما هو حين تكون داخلًا بحسابك.
         <br />
-        مخفيّ عن الزوار: {settings.hidden_book_ids.length} كتاب، و{settings.hidden_categories.length} تصنيف،
-        و{settings.hidden_fields.length} حقل
+        مخفيّ عن الزوار: {countLabel(settings.hidden_book_ids.length, BOOKS_COUNT)}،
+        و{countLabel(settings.hidden_categories.length, CATEGORIES_COUNT)}،
+        و{countLabel(settings.hidden_fields.length, FIELDS_COUNT)}
       </div>
 
       <div style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>ما يراه الزوار</div>

@@ -8,14 +8,14 @@ export const LIBRARY_NAME = 'مكتبة سَيْف العشيرة'
 export const LIBRARY_PLACE = 'أبها - حيُّ المُوظَّفين - شارع عَين جالوت'
 
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
-export type ReadingStatus = 'لم تُقرأ' | 'قيد القراءة' | 'مقروء'
+export type ReadingStatus = 'لم يُقرأ' | 'قيد القراءة' | 'مقروء'
 export type PerkKind = 'فائدة' | 'مقتطف'
 export type ViewMode = 'grid' | 'table' | 'shelf'
 export type ThemeName = 'warm' | 'sepia' | 'dark'
 export type FontName = 'kitab' | 'classic' | 'modern'
 
 export const ERAS: Era[] = ['هـ', 'م', 'ق.هـ', 'ق.م']
-export const STATUSES: ReadingStatus[] = ['لم تُقرأ', 'قيد القراءة', 'مقروء']
+export const STATUSES: ReadingStatus[] = ['لم يُقرأ', 'قيد القراءة', 'مقروء']
 
 /** ما يُعرض حين لا حالة للكتاب. الفراغ هو ما يُخزَّن، وهذا لفظُه. */
 export const STATUS_UNKNOWN = 'غير معروفة'
@@ -62,9 +62,28 @@ export function contributorLabel(role: string, count: number): string {
   return count === 2 ? forms.two : forms.many
 }
 
+/**
+ * الصفة في سياق العدّ: «المُحقِّقون» جمعًا. و«تَقْرِيظ» و«تقديم» مصدران لا
+ * يُجمعان، فيُعدَل عنهما إلى صلةٍ تصحّ: «مَن قرَّظ».
+ */
+const ROLE_GROUP: Record<string, string> = {
+  'تَقْرِيظ': 'مَن قرَّظ',
+  'تقديم': 'مَن قدَّم',
+}
+
+/** ما يُعنوَن به عددُ أصحاب الصفة في الإحصائيات */
+export function roleGroupLabel(role: string): string {
+  return ROLE_GROUP[role] ?? CONTRIBUTOR_FORMS[role]?.many ?? role
+}
+
 export const BINDINGS = ['مُجلَّد كرتوني', 'تغليف ورقي مَرِن']
 export const SIZES = ['قِطع كبير', 'حجم متوسط معتاد', 'حجم صغير', 'كُتيِّب']
-export const CONDITIONS = ['جديد', 'جيد جدًّا', 'جيد', 'مستعمل', 'يحتاج ترميمًا']
+
+/** الحالة المادِّيَّة، من الأعلى إلى الأدنى */
+export const CONDITIONS = ['جديد', 'ممتاز', 'جيد جدًّا', 'جيد', 'مستعمل', 'يحتاج ترميمًا']
+
+/** ما تُفتح عليه الحالة في نموذجٍ جديد. مكتوبٌ لفظًا لا برقم موضعه في القائمة. */
+export const DEFAULT_CONDITION = 'جيد جدًّا'
 
 /** صِفة الوُرُود: بأيّ صفةٍ وَرَد هذا الكتاب إلى المكتبة. والفراغ: لم تُحدَّد. */
 export const SOURCES = ['شِراء', 'إِهْداء', 'إرْث', 'توزيع', 'تنازُل']
@@ -119,10 +138,16 @@ export interface CoAuthor {
   name: string
 }
 
-/** من عمل في الكتاب غير مؤلِّفه، ودورُه معه */
+/**
+ * من عمل في الكتاب غير مؤلِّفه، ودورُه معه. وقد يختلف القائمون على مجلَّدات
+ * الكتاب الواحد — محقِّقُ الأول غيرُ محقِّق الثاني — فلكلٍّ نطاقُه نصًّا،
+ * والفراغُ فيه معناه: عمل في الكتاب كلِّه.
+ */
 export interface Contributor {
   role: string
   name: string
+  /** ما عمل فيه من المجلَّدات أو الأسفار: «١-٣»، «السِّفر الأول». */
+  scope?: string
 }
 
 export interface Publisher {
@@ -179,8 +204,12 @@ export interface Book {
   shelf_no: string
   binding: string
   condition: string
+  /** ما يُوصف به حال النسخة على التفصيل: أثرُ رطوبةٍ، أو خرمٌ في مجلَّد… */
+  condition_notes: string
   source: string
   source_detail: string
+  /** يوم الوُرود. الطبعةُ لا يُعرف يومُها، أمّا الوُرود فيُعرف. */
+  acquired_day: number | null
   acquired_month: number | null
   acquired_year: number | null
   acquired_approx: boolean
@@ -190,6 +219,8 @@ export interface Book {
 
   topic: string
   tags: string[]
+  /** كلماتٌ يُهتدى بها إلى الكتاب في البحث، لا تُعرض وسومًا */
+  keywords: string[]
   blurb: string
   notes: string
   status: ReadingStatus | ''
@@ -327,6 +358,7 @@ export const META_DEFS: { label: string; key: string }[] = [
   { label: 'رقم الرفّ',         key: 'shelfNo' },
   { label: 'التغليف',          key: 'binding' },
   { label: 'الحالة المادية',   key: 'condition' },
+  { label: 'ملاحظات الحالة',   key: 'conditionNotes' },
   { label: 'صِفة الوُرود',       key: 'source' },
   { label: 'تاريخ الوُرود',     key: 'acquired' },
   { label: 'طُرَّة الكتاب',      key: 'marginNote' },
@@ -366,7 +398,7 @@ export const CATEGORY_SPINE: Record<string, string> = {
 export const STATUS_DOT: Record<string, string> = {
   'مقروء':       'oklch(0.5 0.1 150)',
   'قيد القراءة': 'oklch(0.6 0.14 70)',
-  'لم تُقرأ':     'oklch(0.65 0.01 60)',
+  'لم يُقرأ':     'oklch(0.65 0.01 60)',
 }
 
 /** تحويل الأرقام العربية والفارسية إلى لاتينية (§١١/٦) */
@@ -419,6 +451,67 @@ export function editionInWords(input: string | number): string {
 export function formatNumber(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return ''
   return Number(n).toLocaleString('en-US')
+}
+
+/**
+ * تمييزُ المعدود في العربية. «١ كتابًا» لحنٌ، والصواب «كتابٌ واحد»؛ وما بين
+ * الثلاثة والعشرة جمعُ قلّةٍ مجرور، وما جاوزها مفردٌ منصوب. فلا يُوصل عددٌ
+ * باسمٍ في هذه الواجهة إلا من هنا.
+ */
+export interface CountForms {
+  /** حين لا شيء: «لا كتاب» */
+  none: string
+  /** الواحد: «كتابٌ واحد» */
+  one: string
+  /** الاثنان: «كتابان» */
+  two: string
+  /** ٣–١٠: «كتبٍ» */
+  few: string
+  /** ١١ فصاعدًا: «كتابًا» */
+  many: string
+}
+
+export function countLabel(n: number, forms: CountForms): string {
+  if (!Number.isFinite(n) || n <= 0) return forms.none
+  if (n === 1) return forms.one
+  if (n === 2) return forms.two
+  if (n <= 10) return `${formatNumber(n)} ${forms.few}`
+  return `${formatNumber(n)} ${forms.many}`
+}
+
+export const BOOKS_COUNT: CountForms = {
+  none: 'لا كتاب', one: 'كتابٌ واحد', two: 'كتابان', few: 'كتبٍ', many: 'كتابًا',
+}
+
+export const VOLUMES_COUNT: CountForms = {
+  none: 'لا مجلَّد', one: 'مجلَّدٌ واحد', two: 'مجلَّدان',
+  few: 'مجلَّداتٍ', many: 'مجلَّدًا',
+}
+
+export const AUTHORS_COUNT: CountForms = {
+  none: 'لا مؤلِّف', one: 'مؤلِّفٌ واحد', two: 'مؤلِّفان',
+  few: 'مؤلِّفين', many: 'مؤلِّفًا',
+}
+
+export const PERKS_COUNT: CountForms = {
+  none: 'لا فائدة', one: 'فائدةٌ واحدة', two: 'فائدتان', few: 'فوائدَ', many: 'فائدةً',
+}
+
+export const QUOTES_COUNT: CountForms = {
+  none: 'لا مقتطف', one: 'مقتطفٌ واحد', two: 'مقتطفان', few: 'مقتطفاتٍ', many: 'مقتطفًا',
+}
+
+export const CATEGORIES_COUNT: CountForms = {
+  none: 'لا تصنيف', one: 'تصنيفٌ واحد', two: 'تصنيفان', few: 'تصنيفاتٍ', many: 'تصنيفًا',
+}
+
+export const FIELDS_COUNT: CountForms = {
+  none: 'لا حقل', one: 'حقلٌ واحد', two: 'حقلان', few: 'حقولٍ', many: 'حقلًا',
+}
+
+/** «كتابٌ واحد» و«٣ كتبٍ» و«١٢ كتابًا» — أكثر ما يُعدّ في هذه الواجهة */
+export function booksLabel(n: number): string {
+  return countLabel(n, BOOKS_COUNT)
 }
 
 /**
@@ -476,4 +569,37 @@ export function starsText(rating: number): string {
 /** عدد المجلدات المادية المعروضة على الرف، بحدٍّ أقصى ٤٠ كعبًا */
 export function volumesOf(book: Pick<Book, 'volumes'>): number {
   return Math.min(40, Math.max(1, book.volumes ?? 1))
+}
+
+// ------------------------------------------------------------- عن المكتبة
+/**
+ * نصّ صفحة «عن المكتبة» بقلم صاحب المكتبة، منقولٌ حرفًا بحرف. وهو هنا لا في
+ * القاعدة لأن الزرع الأوّل كتب في `about_text` نصًّا تجريبيًّا، فيبقى هذا هو
+ * المعروض حتى يكتب صاحب المكتبة غيرَه من نافذة الإعدادات.
+ *
+ * وقسمتُه فقراتٍ مقصودة: يقرؤها العارض في `About.tsx` فيُفرد للبسملة وجهًا،
+ * وللتوقيع وجهًا، ويُجري ما بينهما فقراتٍ.
+ */
+export const ABOUT_TEXT = `مكتبة سَيْف العشيرة.
+
+بسم الله الرَّحْمَن الرحيم.
+
+أَنِسْتُ بها، وأَلِفْتُها، وسكَنتُ إليها، ووجدتُّ فيها لَذَّتي، آتيها في كلّ مرَّة، وآخُذ أيَّ مُجلَّدٍ تصادِفُه كفِّي من أيِّ الأَرْفُف دُون تعمُّدِ واحدٍ منها بعينه، ثم أجلِس على المَكتَب، وأتنَحْنَحُ مُهيِّئًا حَنجَرتي لصَوتٍ مُرتفِع، ثم أضع الكتابُ وأَفُرُّ صفَحاتِه بإصبَعي حتى تستقرّ على صفحةٍ ما، ثم أفتَح تلك الصفحة وأقرأ أول جُملَةٍ تقعُ عليها عيني، قراءةً جهريةً مُرتفِعة الصوت، حتى إذا قرأتُ صفحتَين أو صفحةً ونصْف شدَّني كلامُ المُصنِّف، فصمتُّ عن الجَهْر، وأخذتُ أقرأُ سِرًّا مُتأمِّلًا مبتسمًا، حتى أُعْيِيَ ويَطُولَ مُكْثِي، فأُطْبِقُ دفَّتَيِ الكتاب، وأُعِيده إلى حيثُ أخذتُه، وأنصِرفُ. فإذا أتيتُها المرةَ المُقبِلة فعلتُ ما فعلتُه في الماضِيَة، كلَّ مرَّة أكون أكثرَ لَهَفًا، وأشدَّ اشتياقًا، وأَتْوَقَ نفسًا إلى ساعة دُخولي..
+
+مكتبة الوالد أعزَّه الله، ورفع مَنار فَضْله، منذ عرفتُ الدنيا، وهي مكتبةٌ زاخرة العُرُوق، مُلْتاقة الطَّلْعة، وقد زِدتُّ فيها كثيرًا ووسَّعتُها وأضفتُ إليها. وإنما نسبتُ المكتبة إلى اسميَ المُستعار، لأجل قول الشاعر: «حقيقٌ بحادي العِيْس طُوْل التَّلثُّمِ» :) وإلا فالمكتبة للوالد -شرَّفه الله- على التحقيق، وليس لي فضلٌ مِن بعدِه، إلا كقطرةٍ من فيَّاضِ مَعِين عِدِّه، كيف وإنما أنا إليه أُنسَب، ومِن كَسْبه أُعَدّ وأُحْسَب؟
+
+وإلى الله -سبحانه- الرغبة، ومن عنده تحقيق المأمَل والطِلْبَة، أن يُعلِّقنا بِشَرَف العِلْم، ويَسلُك بنا سبيلَه، ويُجنِّبنا بُنَيَّات الطريق، وأن يَحشُرنا يوم القِيامة في زُمرة أماجِد العُلماء الأَخْيار الأَتْقياء، والسلَف الصالح، والصحابة المَرْضيِّين الكِرام، وأن يرزُقَنا مجالسة النبيّ صلى الله عليه وسلَّم، ورؤية وجهه الكريم، إنه سميعٌ عليم.
+
+وصلى الله على نبيِّنا مُحمَّد.
+
+سَيْف العشيرة، ضُحَى السبت، ثانيَ ربيع الأول، عام ثمانية وأربعين وأربع مئة والف، من هجرة المصطفى صلَّى الله عليه وسلَّم.
+2 (السَّبْت) / 3 (ربيع الأول) / 1448 هـ.`
+
+/** ما زرعه `seed:run` في `about_text` أوّلَ مرة. يُعدّ فراغًا لا نصًّا. */
+const SEEDED_ABOUT = 'هذا نصٌّ تجريبيٌّ إلى أن يُكتب مكانَه ما يليق'
+
+/** نصّ «عن المكتبة»: ما كتبه صاحب المكتبة، وإلّا فالنصّ المعتمَد */
+export function aboutTextOf(saved: string | null | undefined): string {
+  const text = (saved ?? '').trim()
+  return !text || text.includes(SEEDED_ABOUT) ? ABOUT_TEXT : text
 }

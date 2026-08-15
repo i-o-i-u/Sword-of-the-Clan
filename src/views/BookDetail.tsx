@@ -9,23 +9,28 @@
 // النسخة، ثم عنه — كي يجد الفاهرسُ ما أدخله حيث أدخله. ومفاتيح الصفوف هي
 // مفاتيح `META_DEFS` نفسها، فما أخفاه صاحب المكتبة من حقولٍ يبقى مخفيًّا.
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { navigate, shortBookLink } from '../lib/router'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import {
-  LANGUAGES, PERK_KINDS, STATUSES, STATUS_UNKNOWN, WORK_PHRASES,
-  contributorLabel, formatNumber, parseNumber, sumVolumePages,
+  LANGUAGES, PERKS_COUNT, PERK_KINDS, QUOTES_COUNT, STATUSES, STATUS_UNKNOWN,
+  WORK_PHRASES, contributorLabel, countLabel, formatNumber, parseNumber,
+  sumVolumePages,
   type Author, type Book, type PerkKind, type ReadingStatus,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
-  ArchiveIcon, BackButton, ChevronIcon, ClearIcon, EmptyState, HourglassIcon,
-  InfoIcon, LinkIcon, Money, OpenBookIcon, OwnerIcon, PencilIcon, PressIcon,
-  VerifyIcon,
-  cardStyle, chipStyle, ghostButtonStyle, outlineTabStyle,
+  ArchiveIcon, BackButton, CheckIcon, ChevronIcon, ClearIcon, CopyIcon,
+  EmptyState, HourglassIcon, InfoIcon, LinkIcon, Money, OpenBookIcon, OwnerIcon,
+  PencilIcon, PressIcon, PrinterIcon, QuoteIcon, VerifyIcon,
+  cardStyle, chipStyle, ghostButtonStyle, outlineTabStyle, resolveAsset,
 } from '../components/ui'
+
+// عارض الصورة لا يُفتح في كل زيارة، فلا يُحمَّل مع الصفحة
+const ImageViewer = lazy(() => import('../components/ImageViewer'))
 
 /** صفٌّ من صفوف البيانات. `key` مفتاحُه في `hidden_fields`. */
 interface Row {
@@ -38,27 +43,31 @@ interface Row {
 
 export default function BookDetail({ bookId }: { bookId: string }) {
   const {
-    bookById, authorById, works, perks, loans, settings,
+    books, bookById, authorById, works, perks, loans, settings,
     isOwner, canEdit, patchBook, run, reload,
   } = useLibrary()
 
-  const book = bookById(bookId)
+  // المعرّف التامّ أوّلًا، فإن لم يُصَب فبادئته: الرابط المختصر `#/b/xxxxxx`
+  // لا يحمل إلا أوّل المعرّف، فتُعرف منه صفحةُ الكتاب.
+  const book = useMemo(
+    () => bookById(bookId) ?? books.find((b) => b.id.startsWith(bookId)),
+    [books, bookById, bookId],
+  )
   const vis = settings.visibility
   const showTo = (key: keyof typeof vis) => isOwner || vis[key]
   const hidden = (key: string) => settings.hidden_fields.includes(key)
 
   const [showVolumes, setShowVolumes] = useState(false)
+  const [zoomCover, setZoomCover] = useState(false)
 
-  const bookWorks = useMemo(
-    () => works.filter((w) => w.book_id === bookId),
-    [works, bookId],
-  )
-  const worksAbout = useMemo(
-    () => works.filter((w) => w.target_book_id === bookId),
-    [works, bookId],
-  )
-  const bookPerks = useMemo(() => perks.filter((p) => p.book_id === bookId), [perks, bookId])
-  const bookLoans = useMemo(() => loans.filter((l) => l.book_id === bookId), [loans, bookId])
+  // ما تعلَّق بالكتاب يُطلب بمعرّفه التامّ لا بما جاء في الرابط، فقد يكون
+  // بادئةً مختصرة
+  const id = book?.id ?? bookId
+
+  const bookWorks = useMemo(() => works.filter((w) => w.book_id === id), [works, id])
+  const worksAbout = useMemo(() => works.filter((w) => w.target_book_id === id), [works, id])
+  const bookPerks = useMemo(() => perks.filter((p) => p.book_id === id), [perks, id])
+  const bookLoans = useMemo(() => loans.filter((l) => l.book_id === id), [loans, id])
 
   if (!book) {
     return (
@@ -127,12 +136,27 @@ export default function BookDetail({ bookId }: { bookId: string }) {
     { key: 'binding', label: 'نوع التَّغْليف', value: book.binding },
     { key: 'condition', label: 'الحالة المادِّيَّة', value: book.condition },
     {
+      key: 'conditionNotes',
+      label: 'ملاحظاتٌ على حالته',
+      wide: true,
+      value: book.condition_notes
+        ? <span className="prose" style={{ fontWeight: 400 }}>{book.condition_notes}</span>
+        : '',
+    },
+    {
       key: 'source',
       label: 'صِفَة الوُرُود',
       value: book.source + (book.source_detail ? ` — ${book.source_detail}` : ''),
     },
     { key: 'acquired', label: 'تاريخ الوُرود', value: acquiredLabel(book) },
-    { key: 'marginNote', label: 'طُرَّة الكتاب', value: book.margin_note, wide: true },
+    {
+      key: 'marginNote',
+      label: 'طُرَّة الكتاب',
+      wide: true,
+      value: book.margin_note
+        ? <span className="prose" style={{ fontWeight: 400 }}>{book.margin_note}</span>
+        : '',
+    },
   ]
   // القيمة صفرًا لا تُعرض: صفرٌ ليس ثمنًا، بل حقلٌ لم يُملأ
   if (showTo('value') && (book.value ?? 0) > 0) {
@@ -171,7 +195,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
       key: 'blurb',
       label: 'نبذة عن الكتاب',
       wide: true,
-      value: <span style={{ lineHeight: 2, fontWeight: 400, whiteSpace: 'pre-line' }}>{book.blurb}</span>,
+      value: <span className="prose" style={{ fontWeight: 400 }}>{book.blurb}</span>,
     })
   }
   if (showTo('notes') && book.notes) {
@@ -179,7 +203,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
       key: 'notes',
       label: 'ملاحظاتي الشخصية',
       wide: true,
-      value: <span style={{ lineHeight: 2, fontWeight: 400, whiteSpace: 'pre-line' }}>{book.notes}</span>,
+      value: <span className="prose" style={{ fontWeight: 400 }}>{book.notes}</span>,
     })
   }
 
@@ -196,13 +220,9 @@ export default function BookDetail({ bookId }: { bookId: string }) {
         {canEdit && (
           <button
             type="button"
+            className="edit-pen"
             onClick={() => navigate({ name: 'edit', id: book.id })}
             title="تعديل بيانات الكتاب"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 18,
-              border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
-              borderRadius: 9, padding: '8px 15px', fontSize: 13, fontWeight: 600,
-            }}
           >
             <PencilIcon size={16} />
             تعديل بيانات الكتاب
@@ -212,10 +232,18 @@ export default function BookDetail({ bookId }: { bookId: string }) {
 
       <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 36 }}>
         <div>
-          <div className="detail-cover" style={{
-            width: '100%', aspectRatio: '3/4', borderRadius: 14, overflow: 'hidden',
-            boxShadow: '0 12px 30px oklch(0.24 0.02 50 / 0.15)',
-          }}>
+          {/* النقر على الغلاف يعرضه مكبَّرًا: الغلاف بيانٌ من بيانات الكتاب،
+              وما في هذه البطاقة يكفي لقراءته لا لتأمّله. */}
+          <div
+            className={`detail-cover${book.cover_url ? ' zoomable' : ''}`}
+            onClick={() => { if (book.cover_url) setZoomCover(true) }}
+            role={book.cover_url ? 'button' : undefined}
+            title={book.cover_url ? 'اعرض الغلاف مكبَّرًا' : undefined}
+            style={{
+              width: '100%', aspectRatio: '3/4', borderRadius: 14, overflow: 'hidden',
+              boxShadow: '0 12px 30px oklch(0.24 0.02 50 / 0.15)',
+            }}
+          >
             <ImageSlot
               url={book.cover_url}
               folder="covers"
@@ -245,11 +273,10 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           </h1>
 
           {/* اسم المؤلِّف كاملًا بنسبه — لا المختصرَ الذي يُعرض في الشبكة
-              والأرفف. البطاقة موضع التفصيل، وما دونها موضع الاختصار. */}
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 20,
-            padding: '13px 16px', background: 'var(--header)', borderRadius: 11,
-          }}>
+              والأرفف. البطاقة موضع التفصيل، وما دونها موضع الاختصار.
+              وهو لوحُ نسبةٍ لا صندوق: شريطٌ لوّنه لون المكتبة عن يمينه،
+              وصفوفٌ يفصلها خطٌّ خفيف، ولكلّ صفٍّ صفتُه في عمودٍ ثابت. */}
+          <section className="attrib">
             <AuthorLine
               author={author}
               fallbackName={book.author_name}
@@ -265,7 +292,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               />
             ))}
             {!hidden('contributors') && <Contributors book={book} />}
-          </div>
+          </section>
 
           {/* ------------------------------------------------- أقسام البيانات */}
           <Section icon={<OpenBookIcon size={17} />} title="بيانات الكتاب" rows={keep(bookRows)} />
@@ -368,6 +395,10 @@ export default function BookDetail({ bookId }: { bookId: string }) {
 
           {showTo('loans') && <LoansPanel bookId={book.id} loans={bookLoans} />}
 
+          {/* أدوات البطاقة: رابطُها، وطبعُها، وإحالتُها. لا تُعدِّل شيئًا،
+              فهي للزائر كما هي لصاحب المكتبة. */}
+          <CardActions book={book} author={author} allIds={books.map((b) => b.id)} />
+
           {canEdit && (
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 26, paddingTop: 18 }}>
               <button
@@ -389,7 +420,215 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           )}
         </div>
       </div>
+
+      {/* ورقةُ الطباعة: لا تُرى على الشاشة، وهي وحدها ما يُطبع */}
+      <PrintSheet
+        book={book}
+        author={author}
+        sections={[
+          { title: 'بيانات الكتاب', rows: keep(bookRows) },
+          { title: 'بيانات الطبعة', rows: keep(editionRows) },
+          { title: 'بيانات النسخة', rows: keep(copyRows) },
+          { title: 'عن الكتاب', rows: keep(aboutRows) },
+        ]}
+        citation={citationOf(book, author)}
+        link={shortBookLink(book.id, books.map((b) => b.id))}
+      />
+
+      <Suspense fallback={null}>
+        {zoomCover && (
+          <ImageViewer url={book.cover_url} name={book.title} onClose={() => setZoomCover(false)} />
+        )}
+      </Suspense>
     </main>
+  )
+}
+
+// ---------------------------------------------------------- أدوات البطاقة
+/**
+ * صياغةُ الصفة في جريدة المراجع: هناك تُذكر بالمصدر لا بالوصف — «تحقيق
+ * فلان» لا «المُحقِّق فلان». وما لا مصدر له في القائمة يُترك على لفظه.
+ */
+const CITATION_VERB: Record<string, string> = {
+  'المُحقِّق': 'تحقيق',
+  'المُراجِع': 'مراجعة',
+  'المُعتَني': 'اعتناء',
+  'المُصحِّح': 'تصحيح',
+  'المُخَرِّج': 'تخريج',
+  'المُتَرجِم': 'ترجمة',
+  'تَقْرِيظ': 'تقريظ',
+  'تقديم': 'تقديم',
+}
+
+/**
+ * سطرُ الإحالة كما يُوضع في جريدة المصادر: العنوان، فالمؤلِّف، فمن عمل فيه،
+ * فالطبعة ودارُها وسنتُها وبلدُها. وما لم يُسجَّل يسقط من السطر ولا يُترك
+ * له موضعٌ فارغ.
+ */
+function citationOf(book: Book, author: Author | null): string {
+  const parts: string[] = [book.title.trim()]
+
+  const name = author?.full_name?.trim() || author?.name?.trim() || book.author_name.trim()
+  if (name) parts.push(name)
+
+  // من عمل في الكتاب، مجموعًا بصفته: «تحقيق فلان وفلان»
+  const byRole = new Map<string, string[]>()
+  for (const c of book.contributors ?? []) {
+    const who = c.name.trim()
+    if (who) byRole.set(c.role, [...(byRole.get(c.role) ?? []), who])
+  }
+  byRole.forEach((names, role) => {
+    parts.push(`${CITATION_VERB[role] ?? role} ${names.join(' و')}`)
+  })
+
+  if (book.publisher.trim()) {
+    const edition = book.edition.trim()
+      ? `الطبعة ${book.edition_worded ? book.edition.trim() : toArabicDigits(book.edition.trim())}، `
+      : ''
+    parts.push(`${edition}طبعة ${book.publisher.trim()}`)
+  }
+
+  const year = book.year_approx
+    ? book.year_text.trim()
+    : (book.year != null ? yearLabel(book.year, book.year_era) : '')
+  const place = book.place.trim()
+  if (year && place) parts.push(`${year} - ${place}`)
+  else if (year) parts.push(year)
+  else if (place) parts.push(place)
+
+  return `${parts.join('، ')}.`
+}
+
+/** زرٌّ ينسخ نصًّا، ويُعلِن تمامَ النسخ بصحٍّ يظهر لحظة */
+function CopyButton(
+  { icon, label, done, value, onFail }:
+  { icon: ReactNode; label: string; done: string; value: string; onFail: (m: string) => void },
+) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً
+      onFail('تعذّر النسخ إلى الحافظة، فانسخه بيدك: ' + value)
+    }
+  }
+
+  return (
+    <button type="button" className="card-action" onClick={() => void copy()} title={label}>
+      {copied ? <CheckIcon size={15} /> : icon}
+      <span>{copied ? done : label}</span>
+    </button>
+  )
+}
+
+function CardActions({ book, author, allIds }: { book: Book; author: Author | null; allIds: string[] }) {
+  const { setError } = useLibrary()
+  const link = shortBookLink(book.id, allIds)
+
+  return (
+    <div className="card-actions">
+      <CopyButton
+        icon={<LinkIcon size={15} />}
+        label="نسخ رابط البطاقة"
+        done="نُسخ الرابط"
+        value={link}
+        onFail={setError}
+      />
+      <button type="button" className="card-action" onClick={() => window.print()} title="طباعة البطاقة">
+        <PrinterIcon size={15} />
+        <span>طباعة البطاقة</span>
+      </button>
+      <CopyButton
+        icon={<QuoteIcon size={15} />}
+        label="نسخ الإحالة"
+        done="نُسخت الإحالة"
+        value={citationOf(book, author)}
+        onFail={setError}
+      />
+      <CopyButton
+        icon={<CopyIcon size={15} />}
+        label="نسخ عنوان الكتاب"
+        done="نُسخ العنوان"
+        value={book.title}
+        onFail={setError}
+      />
+    </div>
+  )
+}
+
+// --------------------------------------------------------- ورقة الطباعة
+/**
+ * ما يُطبع من البطاقة: شعارُ المكتبة واسمُها في الرأس، ثم الغلافُ والعنوان
+ * والنسبة، ثم البيانات بأقسامها، ثم الإحالةُ ورابطُ البطاقة في الذيل.
+ *
+ * وهي مخفيّةٌ على الشاشة، فيطبعها المتصفّح بأنماط `@media print` بلا نافذةٍ
+ * جديدة تُفتح ولا صورٍ تُعاد جلبًا.
+ *
+ * وموضعُها من `document.body` لا من شجرة الصفحة عمدًا: الطباعةُ تُخفي `#root`
+ * كلَّه بـ `display: none`، ولو كانت الورقة داخله لاختفت معه. ولو أُخفي بغير
+ * ذلك — بالشفافية مثلًا — لبقيت الصفحةُ المخفيّة شاغلةً مواضعَها فخرجت
+ * أوراقٌ بيضٌ قبل الورقة وبعدها.
+ */
+function PrintSheet(
+  { book, author, sections, citation, link }: {
+    book: Book
+    author: Author | null
+    sections: { title: string; rows: Row[] }[]
+    citation: string
+    link: string
+  },
+) {
+  const cover = resolveAsset(book.cover_url)
+  const name = author?.full_name?.trim() || author?.name?.trim() || book.author_name
+
+  return createPortal(
+    <div className="print-sheet" aria-hidden="true">
+      <header className="print-head">
+        <img src={resolveAsset('assets/logo.svg') ?? ''} alt="" className="print-logo" />
+        <div>
+          <div className="print-library">مكتبة سَيْف العشيرة</div>
+          <div className="print-sub">بطاقةُ كتابٍ من فهرس المكتبة</div>
+        </div>
+      </header>
+
+      <div className="print-body">
+        {cover && <img src={cover} alt="" className="print-cover" />}
+        <div className="print-main">
+          <h1 className="print-title">{book.title}</h1>
+          {book.subtitle && <div className="print-subtitle">{book.subtitle}</div>}
+          {name && (
+            <div className="print-author">
+              {name}
+              {deathLabel(author) && <span> — {deathLabel(author)}</span>}
+            </div>
+          )}
+
+          {sections.filter((s) => s.rows.length > 0).map((section) => (
+            <section key={section.title} className="print-section">
+              <h2>{section.title}</h2>
+              <dl>
+                {section.rows.map((row) => (
+                  <div key={row.key}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </div>
+
+      <footer className="print-foot">
+        <div className="print-citation">{citation}</div>
+        <div className="print-link">{link}</div>
+      </footer>
+    </div>,
+    document.body,
   )
 }
 
@@ -426,7 +665,13 @@ function Section(
           {rows.map((row) => (
             <div key={row.key} style={{ minWidth: 0, gridColumn: row.wide ? '1 / -1' : undefined }}>
               <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 3 }}>{row.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.7, overflowWrap: 'anywhere' }}>
+              {/* الصفُّ الممتدّ وحده يُضبط طرفاه: ما فيه نصٌّ مسترسل، وما
+                  دونه كلمةٌ أو رقمٌ لا يُضبط */}
+              <div style={{
+                fontSize: 14, fontWeight: 600, lineHeight: 1.7, overflowWrap: 'anywhere',
+                textAlign: row.wide ? 'justify' : undefined,
+                textWrap: row.wide ? 'pretty' : undefined,
+              }}>
                 {row.value}
               </div>
             </div>
@@ -440,6 +685,21 @@ function Section(
 }
 
 // ------------------------------------------------------------ سطر المؤلِّف
+/** صفٌّ في لوح النسبة: صفتُه في عمودٍ ثابت، وأصحابُها إلى جانبه */
+function AttribRow(
+  { icon, label, children }: { icon: ReactNode; label: string; children: ReactNode },
+) {
+  return (
+    <div className="attrib-row">
+      <span className="attrib-role">
+        <span className="attrib-icon" aria-hidden="true">{icon}</span>
+        {label}
+      </span>
+      <span className="attrib-body">{children}</span>
+    </div>
+  )
+}
+
 function AuthorLine(
   { author, fallbackName, linked, label = 'المُؤلِّف' }:
   { author: Author | null; fallbackName: string; linked: boolean; label?: string },
@@ -450,31 +710,21 @@ function AuthorLine(
   if (!name) return null
 
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontSize: 14.5 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 13 }}>
-        <OwnerIcon size={15} />
-        {label}:
-      </span>
+    <AttribRow icon={<OwnerIcon size={14} />} label={label}>
       {linked && author ? (
-        <span
-          onClick={() => navigate({ name: 'author', id: author.id })}
-          style={{
-            color: 'var(--accent)', cursor: 'pointer', fontWeight: 700,
-            borderBottom: '1px dashed var(--accent)',
-          }}
-        >
+        <span className="attrib-name attrib-link" onClick={() => navigate({ name: 'author', id: author.id })}>
           {name}
         </span>
       ) : (
-        <span style={{ fontWeight: 700 }}>{name}</span>
+        <span className="attrib-name">{name}</span>
       )}
       {death && (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--muted)' }}>
-          <HourglassIcon size={13} />
+        <span className="attrib-note">
+          <HourglassIcon size={12} />
           {death}
         </span>
       )}
-    </div>
+    </AttribRow>
   )
 }
 
@@ -482,14 +732,17 @@ function AuthorLine(
  * المشاركون مجموعين بصفاتهم: إذا اجتمع اثنان من صفةٍ واحدة ثُنِّي لفظُها،
  * وإن زادوا جُمِع، وتُعرض أسماؤهم بعضُها تحت بعض معطوفةً بالواو. وكلُّ صفةٍ
  * سطرٌ على حِدَة، فلا يُقال «المحقِّق ومن معه».
+ *
+ * وقد يختلف القائمون على المجلَّدات، فيُذكر لكلٍّ نطاقُه بين قوسين — وحينئذٍ
+ * لا تُعطف الأسماء بالواو: هؤلاء ليسوا شركاء في عملٍ واحد، بل لكلٍّ عملُه.
  */
 function Contributors({ book }: { book: Book }) {
   const groups = useMemo(() => {
-    const map = new Map<string, string[]>()
+    const map = new Map<string, { name: string; scope: string }[]>()
     for (const c of book.contributors ?? []) {
       const name = c.name.trim()
       if (!name) continue
-      map.set(c.role, [...(map.get(c.role) ?? []), name])
+      map.set(c.role, [...(map.get(c.role) ?? []), { name, scope: (c.scope ?? '').trim() }])
     }
     return [...map.entries()]
   }, [book.contributors])
@@ -498,21 +751,25 @@ function Contributors({ book }: { book: Book }) {
 
   return (
     <>
-      {groups.map(([role, names]) => (
-        <div key={role} style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontSize: 14 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 13 }}>
-            <VerifyIcon size={14} />
-            {contributorLabel(role, names.length)}:
-          </span>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {names.map((name, i) => (
-              <span key={`${name}-${i}`} style={{ fontWeight: 600 }}>
-                {i === 0 ? name : `و${name}`}
-              </span>
-            ))}
-          </span>
-        </div>
-      ))}
+      {groups.map(([role, people]) => {
+        const split = people.some((p) => p.scope)
+        return (
+          <AttribRow
+            key={role}
+            icon={<VerifyIcon size={13} />}
+            label={contributorLabel(role, people.length)}
+          >
+            <span className="attrib-people">
+              {people.map((p, i) => (
+                <span key={`${p.name}-${i}`} className="attrib-person">
+                  <span className="attrib-name">{i === 0 || split ? p.name : `و${p.name}`}</span>
+                  {p.scope && <span className="attrib-scope">{p.scope}</span>}
+                </span>
+              ))}
+            </span>
+          </AttribRow>
+        )
+      })}
     </>
   )
 }
@@ -722,7 +979,10 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeo
           <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
             {perks.length === 0
               ? 'ما يُستخرَج من الكتاب من فوائد ونصوص'
-              : `${perkCount} فائدة و${quoteCount} مقتطف`}
+              : [
+                perkCount > 0 && countLabel(perkCount, PERKS_COUNT),
+                quoteCount > 0 && countLabel(quoteCount, QUOTES_COUNT),
+              ].filter(Boolean).join(' و')}
           </div>
         </div>
         {canEdit && (
@@ -810,7 +1070,7 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeo
                   </button>
                 )}
               </div>
-              <div style={{ fontSize: 14, lineHeight: 2, color: 'var(--text)', whiteSpace: 'pre-line' }}>{p.text}</div>
+              <div className="prose" style={{ fontSize: 14, color: 'var(--text)' }}>{p.text}</div>
             </div>
           ))}
         </div>
@@ -921,10 +1181,15 @@ function publishYear(book: Book): string {
   return book.year_month ? `${HIJRI_MONTHS[book.year_month - 1]} ${year}` : year
 }
 
-/** تاريخ الوُرود: مثلُ سنة النشر، بلا يومٍ فاليوم لا يُسأل عنه */
+/**
+ * تاريخ الوُرود: يقبل اليومَ بخلاف سنة النشر — يومُ الوُرود يُعرف، ويومُ
+ * الطبعة لا يُعرف. ويبقى الشهرُ واليوم اختياريَّين.
+ */
 function acquiredLabel(book: Book): string {
   if (book.acquired_approx) return book.acquired_text
   if (book.acquired_year == null) return ''
   const year = `${toArabicDigits(book.acquired_year)} هـ`
-  return book.acquired_month ? `${HIJRI_MONTHS[book.acquired_month - 1]} ${year}` : year
+  if (!book.acquired_month) return year
+  const month = `${HIJRI_MONTHS[book.acquired_month - 1]} ${year}`
+  return book.acquired_day ? `${toArabicDigits(book.acquired_day)} ${month}` : month
 }

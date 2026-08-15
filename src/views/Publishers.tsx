@@ -12,9 +12,11 @@ import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
+import { BOOKS_COUNT, countLabel } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
-  BackButton, DebouncedInput, DebouncedTextarea, EmptyState, PressIcon,
+  BackButton, DebouncedInput, DebouncedTextarea, EmptyState, GlobeIcon,
+  OpenBookIcon, PencilIcon, PressIcon,
   cardStyle, ghostButtonStyle, inputStyle, primaryButtonStyle, resolveAsset,
 } from '../components/ui'
 
@@ -84,7 +86,7 @@ export default function Publishers() {
       </h1>
       <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
         كل دارٍ تُكتب مرةً واحدة ببلدها، ثم يأتي بلدُها مع كل كتابٍ نشرَته.
-        اضغط على دارٍ لتصفَّح كتبها{canEdit && ' وتعديل بياناتها وشعارها'}.
+        اضغط على بطاقة دارٍ لتصفُّح بياناتها وكُتُبها.
       </p>
 
       {canEdit && (
@@ -130,27 +132,25 @@ export default function Publishers() {
           hint="تُسجَّل الدار أوّلَ ما يُضاف كتابٌ من نشرها، أو تُضاف هنا ابتداءً."
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px,1fr))', gap: 14 }}>
+        <div className="author-grid">
           {publishers.map((p) => (
             <div
               key={p.id}
               className="author-card"
               onClick={() => navigate({ name: 'publisher', id: p.id })}
-              style={{
-                ...cardStyle, cursor: 'pointer', borderRadius: 12, padding: '16px 18px',
-                display: 'flex', alignItems: 'center', gap: 13,
-              }}
             >
-              <Logo url={p.logo_url ?? null} name={p.name} size={52} />
+              <Logo url={p.logo_url ?? null} name={p.name} size={46} />
               <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{
-                  fontFamily: 'var(--heading-font)', fontSize: 17.5, fontWeight: 700, lineHeight: 1.35,
-                }}>
-                  {p.name}
-                </div>
-                {p.place && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{p.place}</div>}
-                <div style={{ fontSize: 12.5, color: 'var(--accent-soft)', fontWeight: 600 }}>
-                  {counts.get(p.id) ?? 0} كتاب في المكتبة
+                <div className="author-name">{p.name}</div>
+                {p.place && (
+                  <div className="author-life">
+                    <GlobeIcon size={12} />
+                    {p.place}
+                  </div>
+                )}
+                <div className="author-books">
+                  <OpenBookIcon size={12} />
+                  {countLabel(counts.get(p.id) ?? 0, BOOKS_COUNT)} في المكتبة
                 </div>
               </div>
             </div>
@@ -165,6 +165,9 @@ export default function Publishers() {
 export function PublisherPage({ publisherId }: { publisherId: string }) {
   const { publishers, books, canEdit, run, reload } = useLibrary()
   const publisher = publishers.find((p) => p.id === publisherId)
+
+  // الصفحة عرضٌ حتى يُطلب التعديل، كصفحة الكتاب وصفحة المؤلِّف
+  const [editing, setEditing] = useState(false)
 
   const houseBooks = useMemo(
     () => books
@@ -183,18 +186,35 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
   }
 
   const p = publisher
+  const open = canEdit && editing
   const save = (patch: Parameters<typeof api.updatePublisher>[1]) =>
     void run(() => api.updatePublisher(p.id, patch))
 
   return (
     <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-      <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => navigate({ name: 'publishers' })} />
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, flexWrap: 'wrap',
+      }}>
+        <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => navigate({ name: 'publishers' })} />
+        {canEdit && (
+          <button
+            type="button"
+            className="edit-pen"
+            onClick={() => setEditing((v) => !v)}
+            title={open ? 'إنهاء التعديل' : 'تعديل بيانات الدار'}
+          >
+            <PencilIcon size={16} />
+            {open ? 'إنهاء التعديل' : 'تعديل بيانات الدار'}
+          </button>
+        )}
+      </div>
 
       <div style={{ ...cardStyle, borderRadius: 14, padding: '24px 26px', marginBottom: 26 }}>
         <div className="publisher-head" style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 20 }}>
           {/* الشعار يُرفع من هنا وحدها، كما تُعدَّل بقيّة بيانات الدار */}
           <div style={{ flex: 'none' }}>
-            {canEdit ? (
+            {open ? (
               <>
                 <div style={{
                   width: 110, height: 110, borderRadius: 12, overflow: 'hidden',
@@ -232,16 +252,25 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
               {p.name}
             </h1>
             <div style={{ fontSize: 13.5, color: 'var(--muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {p.place && <span>{p.place}</span>}
+              {p.place && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <GlobeIcon size={13} />
+                  {p.place}
+                </span>
+              )}
               {p.founded && <span>تأسّست: {p.founded}</span>}
-              <span style={{ color: 'var(--accent-soft)', fontWeight: 600 }}>
-                {houseBooks.length} كتاب في المكتبة
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                color: 'var(--accent-soft)', fontWeight: 600,
+              }}>
+                <OpenBookIcon size={13} />
+                {countLabel(houseBooks.length, BOOKS_COUNT)} في المكتبة
               </span>
             </div>
           </div>
         </div>
 
-        {canEdit ? (
+        {open ? (
           <>
             <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
               <label style={fieldLabel}>
@@ -316,13 +345,17 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
                 {p.website}
               </a>
             )}
-            {p.notes && <div style={{ fontSize: 14.5, lineHeight: 2, whiteSpace: 'pre-line' }}>{p.notes}</div>}
+            {p.notes && <div className="prose" style={{ fontSize: 14.5 }}>{p.notes}</div>}
           </div>
         )}
       </div>
 
-      <div style={{ fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12 }}>
-        كتبُها في مكتبتي ({houseBooks.length})
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 9,
+        fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12,
+      }}>
+        <PressIcon size={18} />
+        كتبُها في المكتبة ({countLabel(houseBooks.length, BOOKS_COUNT)})
       </div>
 
       {houseBooks.length === 0 ? (

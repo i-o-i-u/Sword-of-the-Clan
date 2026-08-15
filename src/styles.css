@@ -106,14 +106,123 @@ input[dir='ltr'] { text-align: left; }
   color: var(--muted);
 }
 
+/*
+ * النصّ المسترسل: كل ما يزيد على سطرين من النصّ المعروض يُضبط طرفاه — النبذةُ
+ * والملاحظاتُ والطُّرَّةُ والفوائدُ وترجمةُ المؤلِّف. وضبطُ الطرفين هو ما
+ * تُطبَع به الكتب العربية، والسطرُ الناقص في آخر الفقرة لا يُضبط تلقائيًّا.
+ * و`text-wrap: pretty` يمنع أن تبقى كلمةٌ وحدها في آخر سطر.
+ */
+.prose {
+  text-align: justify;
+  text-wrap: pretty;
+  white-space: pre-line;
+  line-height: 2;
+}
+
 .book-card { transition: transform 0.16s, box-shadow 0.16s; }
 .book-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 24px oklch(0.24 0.02 50 / 0.12);
 }
 
-.author-card { transition: border-color 0.16s; }
-.author-card:hover { border-color: var(--accent); }
+/* ------------------------------------- بطاقات المؤلِّفين ودُور النشر */
+/* البطاقة مدخلٌ إلى صفحةٍ لا سطرٌ في قائمة: علامةٌ عن يمينها، ثم الاسم،
+   ثم عمرُه وعددُ كتبه بأيقونتيهما. وشريطٌ ملوَّن يظهر على حرفها عند
+   التمرير، فيُعرف أنها تُنقَر. */
+.author-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+
+.author-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 17px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.18s;
+}
+
+.author-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent-soft));
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.author-card:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  box-shadow: 0 10px 24px oklch(0.24 0.02 50 / 0.12);
+  transform: translateY(-2px);
+}
+.author-card:hover::before { transform: scaleY(1); }
+
+/* حرفُ الاسم الأول في قرص: علامةٌ تُميّز البطاقة حيث لا صورة للمؤلِّف */
+.author-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 24%, transparent);
+  color: var(--accent-soft);
+  font-family: var(--heading-font);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+}
+.author-mark-lg { width: 64px; height: 64px; border-radius: 17px; font-size: 29px; }
+
+.author-name {
+  font-family: var(--heading-font);
+  font-size: 17.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.author-life,
+.author-books {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.author-life { color: var(--muted); }
+.author-books { color: var(--accent-soft); font-weight: 600; }
+.author-life svg, .author-books svg { flex: none; }
+
+/* قلمُ التعديل: صفحاتُ المؤلِّف والدار عرضٌ حتى يُضغط */
+.edit-pen {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 20px;
+  padding: 8px 15px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.16s, color 0.16s;
+}
+.edit-pen:hover { background: var(--accent); color: var(--on-accent); }
 
 .row-hover:hover { background: var(--header); }
 
@@ -939,6 +1048,570 @@ input[dir='ltr'] { text-align: left; }
   padding-top: 12px;
 }
 
+/* ------------------------------------------------- جدول عرض الكتب */
+/* جدولٌ لا قائمة: خطٌّ فاصلٌ بين كل عمودٍ وتاليه، وصفوفٌ يتناوب لونُها،
+   وترويسةٌ تلزم أعلى الجدول وإن طال. والفاصلُ حدٌّ على بداية كل خليّةٍ إلا
+   أولاها، فيصحّ على أيّ عددٍ من الأعمدة ولا يبقى خطٌّ على حرف الجدول. */
+.lib-table-wrap {
+  border-radius: 14px;
+  overflow: auto hidden;
+  min-width: 0;
+}
+
+.lib-table { min-width: 940px; }
+
+.lib-table-head {
+  display: grid;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--header);
+  border-bottom: 1.5px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.lib-table-head > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px;
+  border-inline-start: 1px solid var(--border);
+}
+.lib-table-head > div:first-child { border-inline-start: none; }
+.lib-table-head svg { flex: none; color: var(--accent-soft); opacity: 0.85; }
+
+.lib-table-row {
+  display: grid;
+  align-items: stretch;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  transition: background 0.14s, box-shadow 0.14s;
+}
+.lib-table-row:last-child { border-bottom: none; }
+/* تناوبُ لون الصفوف: يمنع أن تزلّ العينُ من سطرٍ إلى سطر في جدولٍ عريض */
+.lib-table-row:nth-child(even) {
+  background: color-mix(in oklch, var(--header) 42%, transparent);
+}
+.lib-table-row:hover {
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* الخليّة كتلةٌ لا صندوقٌ مرن: القصُّ بالنقاط (text-overflow) لا يعمل على
+   نصٍّ عارٍ داخل صندوقٍ مرن، وأكثرُ هذه الأعمدة يُقصّ عند الضيق. */
+.lib-cell {
+  padding: 11px 12px;
+  font-size: 12.5px;
+  line-height: 2;
+  color: var(--muted);
+  border-inline-start: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+}
+.lib-cell:first-child { border-inline-start: none; }
+
+.lib-cell-no {
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lib-cell-title {
+  font-family: var(--heading-font);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.lib-cell-strong { font-size: 13px; color: var(--text); }
+
+.lib-cell-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================= الإحصائيات */
+.stats-main { max-width: 1060px; margin: 0 auto; padding: 32px; }
+
+.stats-head { margin-bottom: 26px; }
+.stats-head h1 {
+  margin: 0 0 6px;
+  font-family: var(--heading-font);
+  font-size: clamp(24px, 3.4vw, 30px);
+  font-weight: 700;
+}
+.stats-head p { margin: 0; font-size: 14px; color: var(--muted); }
+
+/* بطاقات الأعداد: شبكةٌ تنساب بعدد ما ظهر منها، فلا تُترك خانةٌ فارغة */
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.stat-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 16px 18px 15px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.18s;
+}
+.stat-tile:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  box-shadow: 0 8px 20px oklch(0.24 0.02 50 / 0.1);
+  transform: translateY(-2px);
+}
+
+.stat-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 5px;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+}
+
+.stat-tile-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--heading-font);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.stat-tile-suffix { display: flex; align-items: center; color: var(--muted); }
+.stat-tile-label { font-size: 12.5px; color: var(--muted); }
+
+/* المفاخر: بطاقةٌ عريضة لكلّ واحدةٍ، أيقونتُها عن يمينها */
+.stats-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.stats-highlights:empty { display: none; }
+
+.stat-highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 16px 18px;
+  border-radius: 13px;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.18s;
+}
+.stat-highlight-link { cursor: pointer; }
+.stat-highlight-link:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 20px oklch(0.24 0.02 50 / 0.12);
+  transform: translateY(-2px);
+}
+
+.stat-highlight-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+}
+
+.stat-highlight-title { font-size: 11.5px; color: var(--muted); }
+.stat-highlight-name {
+  margin-top: 3px;
+  font-family: var(--heading-font);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.stat-highlight-note { margin-top: 3px; font-size: 12.5px; color: var(--accent-soft); font-weight: 600; }
+
+/* قوائم الأكثر والأقدم */
+.stats-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.stats-card { border-radius: 13px; padding: 18px 20px 14px; }
+
+.stats-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--heading-font);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.stats-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+}
+
+.stats-row { margin-bottom: 11px; }
+
+.stats-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+.stats-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-row-count { flex: none; font-size: 12px; color: var(--muted); }
+
+.stats-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--header);
+  overflow: hidden;
+}
+.stats-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(to left, var(--accent), var(--accent-soft));
+}
+
+.stats-rank { margin: 0; padding: 0; list-style: none; }
+.stats-rank li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13.5px;
+  border-bottom: 1px dashed var(--border);
+}
+.stats-rank li:last-child { border-bottom: none; }
+.stats-rank-link { cursor: pointer; }
+.stats-rank-link:hover .stats-rank-name { color: var(--accent); }
+
+.stats-rank-no {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--header);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.stats-rank-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+.stats-rank-note { flex: none; font-size: 12px; color: var(--muted); }
+
+.stats-status {
+  margin-top: 22px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.stats-bar {
+  display: flex;
+  height: 20px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--header);
+}
+.stats-bar span { display: block; height: 100%; }
+
+.stats-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ============================================ لوح النسبة في بطاقة الكتاب */
+/* المؤلِّف ومن شاركه ومن عمل في الكتاب: لوحٌ واحدٌ لا صندوق، له شريطٌ ملوَّن
+   عن يمينه، وصفوفٌ يفصلها خطٌّ خفيف، والصفةُ في عمودٍ ثابتٍ لا تتزحزح —
+   فتُقرأ الصفاتُ عمودًا واحدًا ولو اختلفت أطوال الأسماء. */
+.attrib {
+  position: relative;
+  margin-bottom: 20px;
+  padding: 4px 20px 4px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklch, var(--accent) 7%, var(--surface)),
+    var(--surface) 62%
+  );
+  overflow: hidden;
+}
+
+.attrib::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 4px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent-soft));
+}
+
+.attrib-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px dashed color-mix(in oklch, var(--border) 75%, transparent);
+}
+.attrib-row:last-child { border-bottom: none; }
+
+.attrib-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.attrib-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+}
+
+.attrib-body {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.attrib-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.attrib-link {
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent);
+  transition: color 0.15s, border-color 0.15s;
+}
+.attrib-link:hover { color: var(--accent-dark); border-bottom-style: solid; }
+
+.attrib-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--header);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.attrib-note svg { flex: none; }
+
+/* أصحاب الصفة الواحدة: بعضهم تحت بعض، ولكلٍّ نطاقُه إن اختلفت أعمالُهم */
+.attrib-people { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.attrib-person { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+
+.attrib-scope {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-soft);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------- أدوات أسفل البطاقة */
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s, color 0.16s;
+}
+.card-action svg { flex: none; color: var(--accent-soft); transition: color 0.16s; }
+.card-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 6px 16px oklch(0.24 0.02 50 / 0.1);
+  transform: translateY(-2px);
+}
+.card-action:hover svg { color: var(--accent); }
+.card-action:active { transform: translateY(0) scale(0.97); }
+
+/* ================================================= عارض الصورة مكبَّرة */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: oklch(0.13 0.01 50 / 0.92);
+  backdrop-filter: blur(3px);
+}
+
+.viewer-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 18px;
+  color: oklch(0.96 0.01 75);
+  border-bottom: 1px solid oklch(1 0 0 / 0.12);
+}
+
+.viewer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--heading-font);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.viewer-tools { display: flex; align-items: center; gap: 6px; flex: none; }
+
+.viewer-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid oklch(1 0 0 / 0.2);
+  border-radius: 9px;
+  background: oklch(1 0 0 / 0.06);
+  color: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.viewer-tools button:hover:not(:disabled) {
+  background: oklch(1 0 0 / 0.16);
+  border-color: oklch(1 0 0 / 0.4);
+}
+.viewer-tools button:disabled { opacity: 0.4; }
+.viewer-close { font-size: 20px; line-height: 1; }
+
+.viewer-zoom {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.viewer-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 18px;
+}
+
+.viewer-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 24px 60px oklch(0 0 0 / 0.5);
+  transition: transform 0.16s ease-out;
+  user-select: none;
+}
+
+.viewer-hint {
+  flex: none;
+  padding: 0 18px 14px;
+  text-align: center;
+  font-size: 11.5px;
+  color: oklch(0.96 0.01 75 / 0.55);
+}
+
+/* الغلاف قابلٌ للنقر: يُعلَم بذلك بمؤشِّرٍ وعلامةِ تكبيرٍ تظهر عند التمرير */
+.zoomable { position: relative; cursor: zoom-in; }
+.zoomable::after {
+  content: '⤢';
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline-start: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: oklch(0.15 0.01 50 / 0.6);
+  color: oklch(0.98 0.01 75);
+  font-size: 15px;
+  opacity: 0;
+  transition: opacity 0.18s;
+  pointer-events: none;
+}
+.zoomable:hover::after { opacity: 1; }
+
 /* ------------------------------------------------------- عن المكتبة */
 .about-main { max-width: 820px; margin: 0 auto; padding: 54px 32px 40px; }
 .about-head { text-align: center; margin-bottom: 34px; }
@@ -970,6 +1643,83 @@ input[dir='ltr'] { text-align: left; }
 }
 .about-empty { color: var(--muted); }
 
+/* البسملة: سطرٌ مفردٌ موسَّط بين خطَّين، لا فقرةٌ في سياق الكلام */
+.about-basmala {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 0 0 30px !important;
+  font-family: var(--heading-font);
+  font-size: clamp(18px, 2.6vw, 23px);
+  font-weight: 700;
+  color: var(--accent-soft);
+  text-align: center !important;
+  letter-spacing: 0.3px;
+}
+.about-basmala::before,
+.about-basmala::after {
+  content: '';
+  flex: 1;
+  max-width: 92px;
+  height: 1px;
+  background: linear-gradient(to left, transparent, var(--border), transparent);
+}
+
+/* الفقرة الأولى: حرفٌ مُصدَّر كما تُفتتح صفحات الكتب المطبوعة */
+.about-lead::first-letter {
+  float: right;
+  margin: 6px 0 0 9px;
+  font-family: var(--heading-font);
+  font-size: 3.1em;
+  font-weight: 700;
+  line-height: 0.82;
+  color: var(--accent-soft);
+}
+
+/* خاتمة الصلاة: توسَّط ولا تُجرى مع المتن */
+.about-closing {
+  margin: 30px 0 0 !important;
+  font-family: var(--heading-font);
+  font-size: 17px !important;
+  font-weight: 700;
+  color: var(--accent-soft);
+  text-align: center !important;
+}
+
+/* التوقيع في آخر الورقة: مزاحٌ إلى الطرف كما يوقّع الكاتب */
+.about-sign {
+  margin-top: 26px;
+  padding: 18px 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--header) 60%, transparent);
+}
+
+.about-sign-rule {
+  display: block;
+  width: 46px;
+  height: 2px;
+  margin-bottom: 12px;
+  background: linear-gradient(to left, var(--accent-soft), transparent);
+}
+
+.about-sign p { margin: 0 !important; text-align: start !important; }
+
+.about-sign-name {
+  font-family: var(--heading-font);
+  font-size: 15.5px !important;
+  font-weight: 700;
+  line-height: 1.9 !important;
+}
+
+.about-sign-date {
+  margin-top: 4px !important;
+  font-size: 13px !important;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
 .about-figures {
   display: flex;
   justify-content: center;
@@ -982,7 +1732,7 @@ input[dir='ltr'] { text-align: left; }
 .about-figure-value {
   display: block;
   font-family: var(--heading-font);
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
 }
 .about-figure-label { font-size: 12.5px; color: var(--muted); }
@@ -1051,8 +1801,6 @@ input[dir='ltr'] { text-align: left; }
   .detail-cover { max-width: 280px; }
   .add-grid { grid-template-columns: 1fr !important; }
   .add-cover { max-width: 210px; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .stats-pair { grid-template-columns: 1fr !important; }
   .form-row { grid-template-columns: 1fr !important; }
   /* صفوف التصفيات: اسم الوجه فوق مربّعاته لا عن يمينها */
   .filter-row { grid-template-columns: 1fr !important; gap: 7px !important; }
@@ -1081,12 +1829,11 @@ input[dir='ltr'] { text-align: left; }
   .quote-wrap { padding: 0 16px 34px; }
   .quote-card { padding: 30px 22px 22px; }
   .quote-mark { right: 20px; top: 20px; font-size: 44px; }
-  .quote-text { text-align: right; font-size: 15.5px; }
+  .quote-text { font-size: 15.5px; }
   .site-footer { padding: 0 16px 26px; }
   .footer-copy { justify-content: center; }
   .footer-contact { justify-content: center; width: 100%; }
   .footer-row { justify-content: center; text-align: center; }
-  .stats-grid { grid-template-columns: 1fr !important; }
   .about-figures { gap: 26px; }
 
   /* النوافذ تكاد تملأ الشاشة الضيّقة، فحاشيتُها تضيق */
@@ -1114,12 +1861,105 @@ input[dir='ltr'] { text-align: left; }
 @media (max-width: 420px) {
   .app-main { padding: 16px 12px !important; }
   .app-header { padding: 9px 12px !important; }
-  .stats-grid { grid-template-columns: 1fr !important; }
   .detail-fields { grid-template-columns: 1fr !important; }
   .publisher-head { flex-direction: column; align-items: center; text-align: center; }
   .quote-wrap { padding: 0 12px 30px; }
   .site-footer { padding: 0 12px 22px; }
   .hero { padding: 24px 12px 34px; }
+}
+
+/* ==================================================== ورقة طباعة البطاقة */
+/* البطاقة على الشاشة صفحةُ تصفُّح: فيها أزرارٌ ومداخلُ ولوحاتٌ تُطوى. وليس
+   شيءٌ من ذلك ممّا يُطبع. فالمطبوع ورقةٌ أخرى مكتوبةٌ لهذا الغرض وحده:
+   شعارُ المكتبة واسمُها، ثم الغلاف والعنوان والنسبة، ثم البيانات بأقسامها،
+   ثم الإحالة والرابط. وهي مخفيّةٌ على الشاشة، لا تظهر إلا في الطباعة. */
+.print-sheet { display: none; }
+
+@media print {
+  /* الصفحةُ كلُّها تُطوى، والورقةُ وحدها تبقى. وهي خارج `#root` — تُركَّب في
+     `document.body` — فلا يطويها طيُّه. ولو أُخفيت الصفحةُ بالشفافية لبقيت
+     شاغلةً مواضعها فخرجت أوراقٌ بيضٌ قبل الورقة وبعدها. */
+  #root { display: none !important; }
+
+  .print-sheet {
+    display: block;
+    color: #1b1a17;
+    background: #fff;
+    font-family: var(--body-font);
+  }
+
+  html, body { background: #fff !important; }
+
+  @page { margin: 14mm; }
+
+  .print-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 12px;
+    margin-bottom: 18px;
+    border-bottom: 2px solid #8a5a3b;
+  }
+  .print-logo { width: 54px; height: 54px; object-fit: contain; }
+  .print-library { font-family: var(--heading-font); font-size: 21px; font-weight: 700; }
+  .print-sub { font-size: 12px; color: #6b655c; margin-top: 2px; }
+
+  .print-body { display: flex; gap: 20px; align-items: flex-start; }
+
+  .print-cover {
+    width: 42mm;
+    flex: none;
+    border: 1px solid #d7cfc2;
+    border-radius: 3px;
+  }
+
+  .print-main { flex: 1; min-width: 0; }
+
+  .print-title {
+    margin: 0 0 4px;
+    font-family: var(--heading-font);
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .print-subtitle { font-size: 13px; color: #57524a; margin-bottom: 6px; }
+  .print-author { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .print-author span { font-weight: 400; color: #6b655c; }
+
+  .print-section { margin-bottom: 13px; break-inside: avoid; }
+  .print-section h2 {
+    margin: 0 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #d7cfc2;
+    font-family: var(--heading-font);
+    font-size: 14px;
+    font-weight: 700;
+    color: #8a5a3b;
+  }
+
+  .print-section dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 16px;
+    margin: 0;
+  }
+  .print-section dl > div { break-inside: avoid; }
+  .print-section dt { font-size: 10.5px; color: #6b655c; }
+  .print-section dd {
+    margin: 0 0 4px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.9;
+    text-align: justify;
+  }
+
+  .print-foot {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #d7cfc2;
+  }
+  .print-citation { font-size: 12px; line-height: 1.9; text-align: justify; }
+  .print-link { margin-top: 6px; font-size: 10px; color: #6b655c; direction: ltr; text-align: left; }
 }
 
 /* ------------------------------------------------- من يكره الحركة */

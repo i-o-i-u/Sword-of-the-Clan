@@ -90,9 +90,11 @@ export function toClient<T extends { _id: unknown; _creationTime: number }>(doc:
     id: _id as string,
     created_at: new Date(_creationTime).toISOString(),
   } as Record<string, unknown> & { id: string; created_at: string }
-  // «تم القراءة» لفظٌ قديم في القاعدة، والمعتمَد «مقروء». يُحوَّل هنا مرةً
-  // واحدة فلا تعرف الواجهةُ إلا اللفظ الجديد، وتبقى المستندات القديمة صحيحة.
+  // ألفاظٌ قديمة في القاعدة، والمعتمَد غيرُها: «مقروء» بدل «تم القراءة»،
+  // و«لم يُقرأ» بدل «لم تُقرأ». تُحوَّل هنا مرةً واحدة فلا تعرف الواجهةُ إلا
+  // اللفظ الجديد، وتبقى المستندات القديمة صحيحةً في القاعدة.
   if (out.status === 'تم القراءة') out.status = 'مقروء'
+  if (out.status === 'لم تُقرأ') out.status = 'لم يُقرأ'
   return out as unknown as Omit<T, '_id' | '_creationTime'> & { id: string; created_at: string }
 }
 
@@ -145,13 +147,17 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     shelf_no:     hidden('shelfNo')      ? '' : book.shelf_no,
     binding:      hidden('binding')      ? '' : book.binding,
     condition:    hidden('condition')    ? '' : book.condition,
+    condition_notes: hidden('conditionNotes') ? '' : (book.condition_notes ?? ''),
     source:        hidden('source')      ? '' : book.source,
     source_detail: hidden('source')      ? '' : book.source_detail,
+    acquired_day:   hidden('acquired')   ? null : (book.acquired_day ?? null),
     acquired_month: hidden('acquired')   ? null : book.acquired_month,
     acquired_year:  hidden('acquired')   ? null : book.acquired_year,
     acquired_text:  hidden('acquired')   ? '' : book.acquired_text,
     margin_note:  hidden('marginNote')   ? '' : book.margin_note,
     topic:        hidden('topic')        ? '' : book.topic,
+    // الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث، لا خبرٌ عنه، فتمرّ كما هي
+    keywords:     book.keywords ?? [],
 
     value:  vis.value   ? book.value  : null,
     rating: vis.ratings ? book.rating : 0,

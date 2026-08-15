@@ -18,8 +18,8 @@ import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
-  BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, LANGUAGES, ORIGINAL_LANGUAGES, SIZES,
-  SOURCES, SOURCE_DETAILS, WORK_TYPES,
+  BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, LANGUAGES,
+  ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS, WORK_TYPES,
   editionInWords, formatNumber, parseNumber, sumVolumePages, type Contributor,
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
@@ -58,7 +58,7 @@ interface AuthorRow {
 }
 
 const EMPTY_AUTHOR: AuthorRow = { name: '', alive: false, approx: false, death: '', text: '' }
-const EMPTY_YEAR: HijriYear = { year: null, month: null, approx: false, text: '' }
+const EMPTY_YEAR: HijriYear = { year: null, month: null, day: null, approx: false, text: '' }
 
 const str = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v))
 
@@ -152,7 +152,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [cabinetNo, setCabinetNo] = useState(() => editing?.cabinet_no ?? '')
   const [shelfNo, setShelfNo] = useState(() => editing?.shelf_no ?? '')
   const [binding, setBinding] = useState(() => editing?.binding || BINDINGS[0])
-  const [condition, setCondition] = useState(() => editing?.condition || CONDITIONS[1])
+  const [condition, setCondition] = useState(() => editing?.condition || DEFAULT_CONDITION)
+  const [conditionNotes, setConditionNotes] = useState(() => editing?.condition_notes ?? '')
   const [value, setValue] = useState(() => (editing?.value ? String(editing.value) : ''))
   // الفارغ صفةُ ورودٍ «غير مُحدَّدة»، وهو الأصل: لا يُلزَم أحدٌ بما لا يعرف
   const [source, setSource] = useState(() => editing?.source ?? '')
@@ -161,6 +162,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     ? {
       year: editing.acquired_year,
       month: editing.acquired_month,
+      day: editing.acquired_day ?? null,
       approx: editing.acquired_approx,
       text: editing.acquired_text,
     }
@@ -169,6 +171,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
   // ----------------------------------------------------------- ٤. عن الكتاب
   const [tags, setTags] = useState(() => (editing?.tags ?? []).join('، '))
+  const [keywords, setKeywords] = useState(() => (editing?.keywords ?? []).join('، '))
   const [topic, setTopic] = useState(() => editing?.topic ?? '')
   const [blurb, setBlurb] = useState(() => editing?.blurb ?? '')
   const [notes, setNotes] = useState(() => editing?.notes ?? '')
@@ -311,7 +314,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         co_authors: coAuthors,
         contributors: contribRows
           .filter((c) => c.name.trim())
-          .map((c) => ({ role: c.role, name: c.name.trim() })),
+          // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
+          .map((c) => ({ role: c.role, name: c.name.trim(), scope: (c.scope ?? '').trim() })),
         series: series.trim(),
         series_no: seriesNo.trim(),
         category: trimmedCategory,
@@ -345,9 +349,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         shelf_no: shelfNo.trim(),
         binding,
         condition,
+        condition_notes: conditionNotes.trim(),
         value: parseNumber(value) ?? 0,
         source,
         source_detail: SOURCE_DETAILS[source] ? sourceDetail.trim() : '',
+        acquired_day: acquired.approx ? null : (acquired.day ?? null),
         acquired_month: acquired.approx ? null : acquired.month,
         acquired_year: acquired.approx ? null : acquired.year,
         acquired_approx: acquired.approx,
@@ -356,6 +362,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
         topic: topic.trim(),
         tags: tags.split(/[,،]/).map((t) => t.trim()).filter(Boolean),
+        keywords: keywords.split(/[,،]/).map((t) => t.trim()).filter(Boolean),
         blurb: blurb.trim(),
         notes: notes.trim(),
 
@@ -562,12 +569,19 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             />
           </label>
 
-          {/* قد يجتمع في الكتاب محقِّقان ومخرِّجٌ وثلاثة تقديمات، فلكلٍّ سطرُه */}
+          {/* قد يجتمع في الكتاب محقِّقان ومخرِّجٌ وثلاثة تقديمات، فلكلٍّ سطرُه.
+              وقد يختلف القائمون على مجلَّداته: يُحقِّق الأولَ رجلٌ والثانيَ
+              غيرُه، فلكلٍّ حقلُ نطاقه — يُكتب فيه ما عمل فيه من المجلَّدات أو
+              الأسفار، ويُترك فارغًا لمن عمل في الكتاب كلِّه. */}
           {contribRows.map((row, i) => (
             <div
               key={i}
               className="form-row"
-              style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,2fr) auto', gap: 10, alignItems: 'end' }}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0,1fr) minmax(0,2fr) minmax(0,1.1fr) auto',
+                gap: 10, alignItems: 'end',
+              }}
             >
               <label style={labelStyle}>
                 {i === 0 ? 'الصِّفة' : ''}
@@ -589,10 +603,26 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                   placeholder="اكتب اسمًا جديدًا أو اختر ممّن في المكتبة"
                 />
               </label>
+              <label style={labelStyle}>
+                {i === 0 ? 'ما عمل فيه' : ''}
+                <input
+                  value={row.scope ?? ''}
+                  onChange={(e) => patchContrib(i, { scope: e.target.value })}
+                  placeholder="الكتاب كلّه"
+                  title="ما عمل فيه من المجلَّدات أو الأسفار — يُترك فارغًا لمن عمل في الكتاب كلِّه"
+                  aria-label="ما عمل فيه من المجلَّدات أو الأسفار"
+                  style={inputStyle}
+                />
+              </label>
               {i === contribRows.length - 1 ? (
                 <button
                   type="button"
-                  onClick={() => setContribRows((prev) => [...prev, { role: CONTRIBUTOR_ROLES[0], name: '' }])}
+                  onClick={() => setContribRows((prev) => [
+                    ...prev,
+                    // الصفة تُورَث عن السطر الذي قبله: أكثرُ ما يُضاف مشارِكٌ
+                    // ثانٍ على الصفة نفسها في مجلَّدٍ آخر
+                    { role: prev[prev.length - 1]?.role ?? CONTRIBUTOR_ROLES[0], name: '', scope: '' },
+                  ])}
                   title="إضافة مشارِكٍ آخر"
                   aria-label="إضافة مشارِكٍ آخر"
                   style={plusStyle}
@@ -612,6 +642,13 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               )}
             </div>
           ))}
+
+          {/* بيانُ الحقل مرةً واحدةً تحت الصفوف، لا في كل سطر */}
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -6, lineHeight: 1.8 }}>
+            «ما عمل فيه» لمن اقتصر عملُه على بعض الكتاب: اكتب فيه «١-٣» أو
+            «السِّفر الأول» أو «المجلَّد الأخير». والفراغُ فيه معناه: عمل في
+            الكتاب كلِّه.
+          </div>
 
           <div className="form-row" style={row21}>
             <label style={labelStyle}>
@@ -950,6 +987,18 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
           </div>
 
+          {/* ملاحظاتُ الحالة: القائمةُ فوقها كلمةٌ واحدة، وحالُ النسخة قد
+              تحتاج بيانًا — أثرُ رطوبةٍ في مجلَّد، أو خرمٌ في ورقة. */}
+          <label style={labelStyle}>
+            ملاحظاتٌ على الحالة المادِّيَّة
+            <textarea
+              value={conditionNotes}
+              onChange={(e) => setConditionNotes(e.target.value)}
+              placeholder="مثال: أثرُ رطوبةٍ في طرف المجلَّد الثاني، والباقي سليم"
+              style={{ ...inputStyle, minHeight: 62, lineHeight: 1.9, resize: 'vertical' }}
+            />
+          </label>
+
           <div className="form-row" style={row2}>
             {/* الشِّراء يستدعي مكانَه، والإهداءُ مُهدِيَه، والإرثُ مَوروثَه */}
             {SOURCE_DETAILS[source] && (
@@ -962,7 +1011,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 />
               </label>
             )}
-            <HijriYearPicker label="تاريخ الوُرود" value={acquired} onChange={setAcquired} />
+            {/* تاريخُ الوُرود يُعرف يومُه — بخلاف سنة النشر — فيقبل الأيام */}
+            <HijriYearPicker label="تاريخ الوُرود" value={acquired} onChange={setAcquired} withDay />
           </div>
 
           <label style={labelStyle}>
@@ -983,11 +1033,23 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               وُسوم (مفصولة بفاصلة)
               <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="مثال: تراث، مرجع، مُهدى" style={inputStyle} />
             </label>
+            {/* الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث لا خبرٌ عنه،
+                فلا تُعرض على بطاقته وسومًا كما تُعرض الوُسوم */}
             <label style={labelStyle}>
-              موضوعٌ مُختصَر
-              <input value={topic} onChange={(e) => setTopic(e.target.value)} style={inputStyle} />
+              كلمات مفتاحية (مفصولة بفاصلة)
+              <input
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="ما يُبحَث به عن الكتاب ولا يُعرض على بطاقته"
+                style={inputStyle}
+              />
             </label>
           </div>
+
+          <label style={labelStyle}>
+            موضوعٌ مُختصَر
+            <input value={topic} onChange={(e) => setTopic(e.target.value)} style={inputStyle} />
+          </label>
 
           <label style={labelStyle}>
             نبذة عن الكتاب

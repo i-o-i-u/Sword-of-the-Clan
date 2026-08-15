@@ -628,6 +628,132 @@ export function LinkIcon({ size = 15 }: IconProps) {
   )
 }
 
+/** طومارٌ مطويّ الطرفين — الأجزاء والأسفار، تقسيمُ المؤلِّف لا المُجلِّد */
+export function ScrollIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M6.4 3.6h11a2 2 0 0 1 2 2v12.8a2 2 0 0 1-2 2h-11" />
+      <path d="M6.4 3.6a2 2 0 0 0-2 2v2.2h4.2V5.6a2 2 0 0 0-2.2-2z" />
+      <path d="M17.6 20.4a2 2 0 0 0 2-2v-2.2h-4.2v2.2a2 2 0 0 0 2.2 2z" />
+      <path d="M9.2 8.6h6.6M9.2 12h6.6M9.2 15.4h4" />
+    </svg>
+  )
+}
+
+/** قطعةُ نقدٍ — القيمة التقديرية وأغلى الكتب */
+export function CoinIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="8.6" />
+      <circle cx="12" cy="12" r="5.2" />
+      <path d="M12 8.4v7.2" />
+    </svg>
+  )
+}
+
+/** كرةٌ بخطوطها — بلدان النَّشْر */
+export function GlobeIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="12" cy="12" r="8.8" />
+      <path d="M3.4 12h17.2" />
+      <path d="M12 3.2c2.3 2.5 3.5 5.5 3.5 8.8S14.3 18.3 12 20.8c-2.3-2.5-3.5-5.5-3.5-8.8S9.7 5.7 12 3.2z" />
+    </svg>
+  )
+}
+
+/** ورقةُ تقويم — سنة النشر وأقدم الطبعات */
+export function CalendarIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 9.6h17M8.2 3.5v3M15.8 3.5v3" />
+    </svg>
+  )
+}
+
+/** ورقةٌ على ورقة — نسخُ ما في البطاقة */
+export function CopyIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="8.6" y="8.6" width="11.8" height="11.8" rx="2.2" />
+      <path d="M15.4 5.6V5a1.6 1.6 0 0 0-1.6-1.6H5.2A1.6 1.6 0 0 0 3.6 5v8.6a1.6 1.6 0 0 0 1.6 1.6h.6" />
+    </svg>
+  )
+}
+
+/** صحٌّ — يظهر لحظةَ تمام النسخ بدل أيقونة الزرّ */
+export function CheckIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M4.8 12.6l4.8 4.8 9.6-10.8" />
+    </svg>
+  )
+}
+
+/** مِطبعةٌ ورقيّة — طباعة البطاقة */
+export function PrinterIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M7 8.6V3.6h10v5" />
+      <path d="M5.4 8.6h13.2A2.4 2.4 0 0 1 21 11v5.2h-3.6" />
+      <path d="M6.6 16.2H3V11a2.4 2.4 0 0 1 2.4-2.4" />
+      <rect x="6.6" y="13.6" width="10.8" height="6.8" rx="1.2" />
+    </svg>
+  )
+}
+
+/** علامةُ اقتباس — نسخُ إحالة الكتاب لجريدة المراجع */
+export function QuoteIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M9.6 6.4C6.7 7.6 5.2 9.9 5.2 13.2v4.4h5.2v-5.2H7.9c0-2 .6-3.4 2.2-4.2z" />
+      <path d="M19 6.4c-2.9 1.2-4.4 3.5-4.4 6.8v4.4h5.2v-5.2h-2.5c0-2 .6-3.4 2.2-4.2z" />
+    </svg>
+  )
+}
+
+/** سهمٌ إلى صندوق — تنزيل الصورة */
+export function DownloadIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M12 3.6v11.2" />
+      <path d="M7.6 10.6L12 15l4.4-4.4" />
+      <path d="M4.4 17.4v1.4a1.6 1.6 0 0 0 1.6 1.6h12a1.6 1.6 0 0 0 1.6-1.6v-1.4" />
+    </svg>
+  )
+}
+
+/** عدسةٌ وفيها زائد أو ناقص — تكبير الصورة وتصغيرها */
+export function ZoomIcon({ size = 15, out = false }: IconProps & { out?: boolean }) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <circle cx="10.6" cy="10.6" r="6.4" />
+      <path d="M15.4 15.4l4.4 4.4" />
+      <path d="M7.6 10.6h6" />
+      {!out && <path d="M10.6 7.6v6" />}
+    </svg>
+  )
+}
+
+/**
+ * سهمٌ نحو جهة — التنقّل في منتقيات التاريخ. مرسومٌ لا حرفَ قوسٍ، فيُعرف
+ * اتجاهُه بالنظر. و«السابق» في العربية عن اليمين، فهو الاتجاه الأصل.
+ */
+export function ArrowIcon(
+  { size = 15, dir = 'right', style }: IconProps & { dir?: 'right' | 'left'; style?: CSSProperties },
+) {
+  return (
+    <svg
+      {...strokeIcon(size)}
+      style={{ ...style, transform: dir === 'left' ? 'scaleX(-1)' : undefined }}
+    >
+      <path d="M14.4 6.4L20 12l-5.6 5.6" />
+      <path d="M19.2 12H4.4" />
+    </svg>
+  )
+}
+
 /** زر الرجوع بسهمٍ مرسوم بحدود CSS */
 export function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
