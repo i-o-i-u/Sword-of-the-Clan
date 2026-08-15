@@ -9,10 +9,11 @@ import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
-  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, aboutTextOf, countLabel,
+  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, aboutTextOf, countLabel,
 } from '../lib/types'
 import Footer from '../components/Footer'
-import { ChartIcon, resolveAsset } from '../components/ui'
+import SideDoors from '../components/SideDoors'
+import { ChartIcon, PinIcon, resolveAsset } from '../components/ui'
 
 /** ما ينقسم إليه نصّ الصفحة، ولكلّ وجهٍ تنسيقُه */
 interface AboutParts {
@@ -80,6 +81,14 @@ export default function About() {
           {/* النقطة تُحذف من العنوان وحده: العناوين لا تُنقَّط، والنصّ
               في موضعه على حاله */}
           <h1 className="about-title">{(parts.title ?? LIBRARY_NAME).replace(/\.$/, '')}</h1>
+          {/* موضع المكتبة كما هو في صفحة الهبوط، ويُخفى بإخفائه هناك: هو
+              خبرٌ واحد، فلا يُستر في صفحةٍ ويُكشف في أخرى. */}
+          {(isOwner || settings.show_landing_place) && (
+            <p className="about-place">
+              <PinIcon size={13} />
+              {LIBRARY_PLACE}
+            </p>
+          )}
           {settings.landing_tagline && (
             <p className="about-tagline">{settings.landing_tagline}</p>
           )}
@@ -94,10 +103,9 @@ export default function About() {
           {parts.body.length === 0 && !parts.basmala && !parts.closing ? (
             <p className="about-empty">لم يُكتب تعريف المكتبة بعد.</p>
           ) : (
-            parts.body.map((p, i) => (
-              // الفقرة الأولى بحرفٍ مُصدَّر، كما تُفتتح صفحات الكتب
-              <p key={i} className={i === 0 ? 'about-lead' : undefined}>{p}</p>
-            ))
+            // الفقرات كلُّها سواء: تصديرُ الحرف الأول صنعةٌ لاتينية، لا
+            // تستعملها العربُ في كتاباتهم
+            parts.body.map((p, i) => <p key={i}>{p}</p>)
           )}
 
           {parts.closing && <p className="about-closing">{parts.closing}</p>}
@@ -135,6 +143,12 @@ export default function About() {
             </button>
           </div>
         )}
+
+        {/* أبوابُ الصفحات الثلاث، تحت الإحصاءات كما هي إلى جانب الحاسبة
+            في صفحة التصفُّح */}
+        <div className="about-doors">
+          <SideDoors className="about-door" />
+        </div>
       </main>
 
       <Footer />

@@ -191,6 +191,19 @@ export const updateSettings = mutation({
       hidden_fields: v.optional(v.array(v.string())),
       hidden_categories: v.optional(v.array(v.string())),
       hidden_book_ids: v.optional(v.array(v.id('books'))),
+
+      show_landing_place: v.optional(v.boolean()),
+      show_calculator: v.optional(v.boolean()),
+      field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+      book_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
+      hidden_author_ids: v.optional(v.array(v.string())),
+      hidden_author_fields: v.optional(v.array(v.string())),
+      author_field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+      author_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
+      hidden_publisher_ids: v.optional(v.array(v.string())),
+      hidden_publisher_fields: v.optional(v.array(v.string())),
+      publisher_field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+      publisher_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
     }),
   },
   handler: async (ctx, { patch }) => {
@@ -292,24 +305,33 @@ export const removePublisher = mutation({
 // التصنيفات: قائمة أسماء فريدة
 // ---------------------------------------------------------------------------
 
+/** `parent` فارغًا: تصنيفٌ رئيس. وباسم رئيسه: فرعٌ تحته. */
 export const addCategory = mutation({
-  args: { name: v.string(), position: v.number() },
-  handler: async (ctx, { name, position }) => {
+  args: { name: v.string(), position: v.number(), parent: v.optional(v.string()) },
+  handler: async (ctx, { name, position, parent }) => {
     await requireOwner(ctx)
     const exists = await ctx.db
       .query('categories').withIndex('by_name', (q) => q.eq('name', name)).first()
     if (exists) return
-    await ctx.db.insert('categories', { name, position })
+    await ctx.db.insert('categories', { name, position, parent: parent?.trim() || undefined })
   },
 })
 
+/** حذفُ الرئيس يحذف فروعَه معه: الفرعُ لا يقوم بغير رئيسه */
 export const removeCategory = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
     await requireOwner(ctx)
     const row = await ctx.db
       .query('categories').withIndex('by_name', (q) => q.eq('name', name)).first()
-    if (row) await ctx.db.delete(row._id)
+    if (!row) return
+
+    if (!row.parent) {
+      const children = (await ctx.db.query('categories').collect())
+        .filter((c) => c.parent === name)
+      for (const child of children) await ctx.db.delete(child._id)
+    }
+    await ctx.db.delete(row._id)
   },
 })
 

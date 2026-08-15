@@ -11,8 +11,8 @@ import { useMemo, type ReactNode } from 'react'
 import { useLibrary } from '../lib/library'
 import { deathLabel, toHijriYear, yearLabel } from '../lib/hijri'
 import {
-  BOOKS_COUNT, VOLUMES_COUNT, countLabel, formatNumber, roleGroupLabel,
-  type Book,
+  BOOKS_COUNT, VOLUMES_COUNT, countLabel, formatNumber, missingVolumesHeadline,
+  roleGroupLabel, type Book,
 } from '../lib/types'
 import { navigate } from '../lib/router'
 import {
@@ -43,7 +43,7 @@ interface Row {
 }
 
 export default function Stats() {
-  const { books, publishers, authors, categories, settings, isOwner } = useLibrary()
+  const { books, publishers, authors, mainCategories, settings, isOwner } = useLibrary()
 
   // ما أُطفئ عن الزوار يُحذف من هنا أيضًا، فلا تبقى بطاقةٌ تقرأ صفرًا أبدًا
   const showValue = isOwner || settings.visibility.value
@@ -124,7 +124,13 @@ export default function Stats() {
     // دُور النشر والتصنيفات تُعدّ ممّا في الكتب نفسها، لا من جدوليهما: دارٌ
     // مسجَّلةٌ بلا كتاب ليست في المكتبة بعدُ.
     const publisherCount = byPublisher.length || publishers.length
-    const categoryCount = byCategory.length || categories.length
+    const categoryCount = byCategory.length || mainCategories.length
+
+    // الكتبُ التي نقص من طبعتها مجلَّدٌ فأكثر: خبرٌ يعني الفاهرسَ وحده،
+    // ويعني القارئَ أيضًا — فليس كلُّ ما في الرفّ تامًّا
+    const incomplete = books.filter((b) => (b.missing_volumes ?? []).length > 0)
+    const missingVolumeCount = incomplete
+      .reduce((sum, b) => sum + (b.missing_volumes ?? []).length, 0)
 
     const read = books.filter((b) => b.status === 'مقروء').length
     const reading = books.filter((b) => b.status === 'قيد القراءة').length
@@ -149,11 +155,13 @@ export default function Stats() {
       dearest,
       oldestPrints,
       oldestAuthors,
+      incomplete,
+      missingVolumeCount,
       bookCountOf,
       read, reading, unread,
       statusTotal: read + reading + unread,
     }
-  }, [books, authors, publishers, categories])
+  }, [books, authors, publishers, mainCategories])
 
   // ------------------------------------------------------------ البطاقات
   const tiles: Tile[] = []
@@ -183,6 +191,13 @@ export default function Stats() {
     icon: CalculatorIcon,
   })
   push({ key: 'pages', label: 'إجماليّ صفحات الكتب', value: num(s.pages), icon: PagesIcon })
+  // ما كان فارغًا لا يُعرض: مكتبةٌ لا نقص فيها لا تُعلَن بصفرٍ في بطاقة
+  push({
+    key: 'incomplete',
+    label: 'الكتب الناقصة مُجلَّداتُها',
+    value: num(s.incomplete.length),
+    icon: VolumesIcon,
+  })
   if (showValue) {
     push({
       key: 'value',
@@ -279,6 +294,18 @@ export default function Stats() {
             name: book.title,
             count: 0,
             text: yearLabel(book.year, book.year_era),
+            onClick: goBook(book.id),
+          }))}
+        />
+        {/* الناقصةُ مجلَّداتُها: قائمةٌ لا بطاقةَ عددٍ وحدها، فمعرفةُ أيِّها
+            ناقصٌ أنفعُ من معرفة كم هي */}
+        <RankCard
+          title="الكتب الناقصة مُجلَّداتُها"
+          icon={<VolumesIcon size={17} />}
+          rows={s.incomplete.slice(0, 5).map((book) => ({
+            name: book.title,
+            count: 0,
+            text: missingVolumesHeadline((book.missing_volumes ?? []).length),
             onClick: goBook(book.id),
           }))}
         />

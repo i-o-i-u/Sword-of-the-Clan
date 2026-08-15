@@ -62,6 +62,9 @@ export default function Publishers() {
   const { publishers, canEdit, run, reload } = useLibrary()
   const counts = useCounts()
 
+  // نموذجُ الإضافة لا يُعرض حتى يُطلب: صفحةُ الدُّور فهرسٌ يُقرأ، وزرُّ
+  // الزائد بعد البطاقات هو ما يفتحه.
+  const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newPlace, setNewPlace] = useState('')
   const [busy, setBusy] = useState(false)
@@ -77,6 +80,7 @@ export default function Publishers() {
     setNewName('')
     setNewPlace('')
     setBusy(false)
+    setAdding(false)
   }
 
   return (
@@ -89,47 +93,10 @@ export default function Publishers() {
         اضغط على بطاقة دارٍ لتصفُّح بياناتها وكُتُبها.
       </p>
 
-      {canEdit && (
-        <div
-          className="form-row"
-          style={{
-            ...cardStyle, borderRadius: 12, padding: 16, marginBottom: 20,
-            display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto', gap: 12, alignItems: 'end',
-          }}
-        >
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-            اسم الدار
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="مثال: دار المِنهاج"
-              style={inputStyle}
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-            بلدها
-            <input
-              value={newPlace}
-              onChange={(e) => setNewPlace(e.target.value)}
-              placeholder="مثال: جدة"
-              style={inputStyle}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void addPublisher()}
-            disabled={!newName.trim() || busy}
-            style={primaryButtonStyle(!!newName.trim() && !busy)}
-          >
-            {busy ? '…جارٍ الحفظ' : 'إضافة دار'}
-          </button>
-        </div>
-      )}
-
-      {publishers.length === 0 ? (
+      {publishers.length === 0 && !canEdit ? (
         <EmptyState
           title="لا دُور نشرٍ بعد"
-          hint="تُسجَّل الدار أوّلَ ما يُضاف كتابٌ من نشرها، أو تُضاف هنا ابتداءً."
+          hint="تُسجَّل الدار أوّلَ ما يُضاف كتابٌ من نشرها."
         />
       ) : (
         <div className="author-grid">
@@ -155,6 +122,60 @@ export default function Publishers() {
               </div>
             </div>
           ))}
+
+          {/* زرُّ الزائد بعد البطاقات: بطاقةٌ في هيئتها لا زرٌّ غريب عنها */}
+          {canEdit && (
+            <button
+              type="button"
+              className="add-card"
+              onClick={() => setAdding((v) => !v)}
+              title="إضافة دار نشر"
+              aria-expanded={adding}
+            >
+              <span className="add-card-plus" aria-hidden="true">+</span>
+              <span>{adding ? 'إغلاق النموذج' : 'إضافة دار نشر'}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {canEdit && adding && (
+        <div
+          className="form-row"
+          style={{
+            ...cardStyle, borderRadius: 12, padding: 16, marginTop: 20,
+            display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto', gap: 12, alignItems: 'end',
+          }}
+        >
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+            اسم الدار
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addPublisher() } }}
+              placeholder="مثال: دار المِنهاج"
+              style={inputStyle}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+            بلدها
+            <input
+              value={newPlace}
+              onChange={(e) => setNewPlace(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addPublisher() } }}
+              placeholder="مثال: جدة"
+              style={inputStyle}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void addPublisher()}
+            disabled={!newName.trim() || busy}
+            style={primaryButtonStyle(!!newName.trim() && !busy)}
+          >
+            {busy ? '…جارٍ الحفظ' : 'إضافة دار'}
+          </button>
         </div>
       )}
     </main>

@@ -20,6 +20,9 @@ const AuthorsIndex = lazy(() => import('./views/Authors').then((m) => ({ default
 const AuthorPage = lazy(() => import('./views/Authors').then((m) => ({ default: m.AuthorPage })))
 const PublishersView = lazy(() => import('./views/Publishers'))
 const PublisherPage = lazy(() => import('./views/Publishers').then((m) => ({ default: m.PublisherPage })))
+const People = lazy(() => import('./views/People'))
+const Series = lazy(() => import('./views/Series'))
+const Perks = lazy(() => import('./views/Perks'))
 const LoginOverlay = lazy(() => import('./components/LoginOverlay'))
 const SettingsOverlay = lazy(() => import('./components/SettingsOverlay'))
 const ViewerSettingsOverlay = lazy(() => import('./components/ViewerSettingsOverlay'))
@@ -52,7 +55,10 @@ export default function App() {
   // مسارٌ لا يملكه هذا الزائر يُردّ إلى التصفّح
   useEffect(() => {
     if ((route.name === 'add' || route.name === 'edit') && !canEdit) navigate({ name: 'browse' })
-    if ((route.name === 'authors' || route.name === 'author') && !canSeeAuthors) navigate({ name: 'browse' })
+    // صفحةُ «المحقِّقون ونحوهم» تعرض تراجمَ أشخاصٍ كصفحة المؤلِّفين، فحكمُها
+    // حكمُها: من حجب صفحاتِ التراجم حجبها معها
+    if ((route.name === 'authors' || route.name === 'author' || route.name === 'people')
+      && !canSeeAuthors) navigate({ name: 'browse' })
     if (route.name === 'stats' && !canSeeStats) navigate({ name: 'browse' })
   }, [route, canEdit, canSeeAuthors, canSeeStats])
 
@@ -110,6 +116,9 @@ export default function App() {
           {route.name === 'stats' && canSeeStats && <Stats />}
           {route.name === 'publishers' && <PublishersView />}
           {route.name === 'publisher' && <PublisherPage publisherId={route.id} />}
+          {route.name === 'people' && canSeeAuthors && <People />}
+          {route.name === 'series' && <Series />}
+          {route.name === 'perks' && <Perks />}
         </Suspense>
       )}
 

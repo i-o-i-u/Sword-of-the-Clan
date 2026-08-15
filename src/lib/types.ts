@@ -148,6 +148,27 @@ export interface Contributor {
   name: string
   /** ما عمل فيه من المجلَّدات أو الأسفار: «١-٣»، «السِّفر الأول». */
   scope?: string
+  /**
+   * صاحبُ الاسم في سجلّ الأشخاص — وهو جدول المؤلِّفين نفسه. فالمحقِّق قد
+   * يكون مؤلِّفًا، فتُجمع تحقيقاتُه ومؤلَّفاتُه في صفحةٍ واحدة.
+   */
+  person_id?: string | null
+}
+
+/** مجلَّدٌ ناقص من الطبعة: رقمُه وسببُ فقده، والسببُ يجوز أن يُترك */
+export interface MissingVolume {
+  no: number
+  reason: string
+}
+
+/** أسبابُ فقد المجلَّد، وهي اقتراحٌ لا حصر — يُكتب غيرُها */
+export const MISSING_REASONS = ['تَلَف', 'ضَياع', 'إعارةٌ لم تُردّ', 'لم يُشترَ بعدُ', 'نفِد من السوق']
+
+/** تصنيفٌ في المكتبة: رئيسٌ بلا `parent`، أو فرعٌ تحت رئيسه */
+export interface Category {
+  name: string
+  /** اسم التصنيف الرئيس، أو فراغٌ إن كان هو الرئيس */
+  parent: string
 }
 
 export interface Publisher {
@@ -173,6 +194,8 @@ export interface Book {
   series: string
   series_no: string
   category: string
+  /** التصنيف الفرعيّ داخل الرئيسيّ، إن كان له فرع */
+  sub_category: string
 
   publisher_id: string | null
   publisher: string
@@ -194,6 +217,8 @@ export interface Book {
   volume_parts: string[]
   /** أرقام مجلَّدات الفهارس، لا تدخل صفحاتُها في الإجمالي */
   index_volumes: number[]
+  /** ما نقص من مجلَّدات الطبعة، لكلٍّ رقمُه وسببُ فقده */
+  missing_volumes: MissingVolume[]
   pages: number | null
   size: string
   isbn: string
@@ -313,11 +338,70 @@ export interface Settings {
   hidden_fields: string[]
   hidden_categories: string[]
   hidden_book_ids: string[]
+
+  /** موضع المكتبة، يظهر في صفحة الهبوط وفي «عن المكتبة» جميعًا */
+  show_landing_place: boolean
+  /** حاسبة القراءة في صفحة التصفُّح — لصاحب المكتبة أبدًا، وللزائر بهذا */
+  show_calculator: boolean
+
+  /** مفتاحُه اسمُ الحقل، وقيمتُه معرّفاتُ الكتب المستثناة من إخفائه */
+  field_exceptions: FieldMap
+  /** مفتاحُه معرّفُ الكتاب، وقيمتُه حقولٌ تُخفى منه وحده */
+  book_field_overrides: FieldMap
+
+  hidden_author_ids: string[]
+  hidden_author_fields: string[]
+  author_field_exceptions: FieldMap
+  author_field_overrides: FieldMap
+
+  hidden_publisher_ids: string[]
+  hidden_publisher_fields: string[]
+  publisher_field_exceptions: FieldMap
+  publisher_field_overrides: FieldMap
 }
+
+/** خريطةٌ من مفتاحٍ إلى معرّفات: قوائمُ الاستثناء وقوائمُ حقول المستند الواحد */
+export type FieldMap = Record<string, string[]>
+
+/**
+ * الإخفاء على ثلاث درجات، وهذا حكمُها مرتَّبًا: ما أُخفي من مستندٍ بعينه
+ * مخفيٌّ وإن لم يُخفَ من نوعه، وما أُخفي من النوع كلِّه مخفيٌّ إلا أن يُستثنى
+ * هذا المستند منه. تُستعمل في الواجهة، ونظيرُها في `convex/privacy.ts` هو
+ * الحاكم — الخصوصية في الخادم لا في المتصفّح.
+ */
+export function isFieldHidden(
+  field: string, docId: string,
+  all: string[], exceptions: FieldMap, overrides: FieldMap,
+): boolean {
+  if ((overrides[docId] ?? []).includes(field)) return true
+  if (!all.includes(field)) return false
+  return !(exceptions[field] ?? []).includes(docId)
+}
+
 
 export const DEFAULT_VISIBILITY: Visibility = {
   status: true, ratings: true, notes: false, blurb: true, perks: true,
   loans: false, value: false, stats: true, authors: true, advSearch: true,
+}
+
+/**
+ * ما استُجدّ من حقول الإعدادات. هي اختياريّة في المخطّط — مستندُ الإعدادات
+ * واحدٌ قائمٌ من قبلها — فقد يعود بلا بعضها، فيُسدّ الناقص من هنا كي لا تصل
+ * الواجهةَ قائمةٌ غيرُ معرَّفة.
+ */
+export const DEFAULT_SETTINGS_EXTRAS = {
+  show_landing_place: true,
+  show_calculator: true,
+  field_exceptions: {} as FieldMap,
+  book_field_overrides: {} as FieldMap,
+  hidden_author_ids: [] as string[],
+  hidden_author_fields: [] as string[],
+  author_field_exceptions: {} as FieldMap,
+  author_field_overrides: {} as FieldMap,
+  hidden_publisher_ids: [] as string[],
+  hidden_publisher_fields: [] as string[],
+  publisher_field_exceptions: {} as FieldMap,
+  publisher_field_overrides: {} as FieldMap,
 }
 
 /** مفاتيح «ما يراه الزوار» (§٦-أ) */
@@ -363,6 +447,37 @@ export const META_DEFS: { label: string; key: string }[] = [
   { label: 'تاريخ الوُرود',     key: 'acquired' },
   { label: 'طُرَّة الكتاب',      key: 'marginNote' },
   { label: 'الموضوع',          key: 'topic' },
+]
+
+/**
+ * حقول الكتاب التي يجوز إخفاؤها: صفوفُ بطاقته، ومعها ما ليس صفًّا — التصنيف
+ * والوُسوم والصورتان. وليس فيها العنوان ولا اسم المؤلِّف: إخفاؤهما يُفسد
+ * الفائدة من الفهرس أصلًا، فلا يُعرَضان للإخفاء.
+ */
+export const BOOK_PRIVACY_FIELDS: { label: string; key: string }[] = [
+  ...META_DEFS,
+  { label: 'التصنيف',            key: 'category' },
+  { label: 'الوُسوم',             key: 'tags' },
+  { label: 'المجلَّدات الناقصة',   key: 'missingVolumes' },
+  { label: 'صورة الغلاف',        key: 'cover' },
+  { label: 'صورة الكَعْب',        key: 'spine' },
+]
+
+/** حقول صاحب الترجمة التي يجوز إخفاؤها. واسمُه ليس منها. */
+export const AUTHOR_PRIVACY_FIELDS: { label: string; key: string }[] = [
+  { label: 'الاسم الكامل ونسبه', key: 'fullName' },
+  { label: 'سنة المولد',         key: 'birth' },
+  { label: 'سنة الوفاة',         key: 'death' },
+  { label: 'النبذة',             key: 'bio' },
+]
+
+/** حقول الدار التي يجوز إخفاؤها. واسمُها ليس منها. */
+export const PUBLISHER_PRIVACY_FIELDS: { label: string; key: string }[] = [
+  { label: 'بلدها',        key: 'place' },
+  { label: 'سنة التأسيس',  key: 'founded' },
+  { label: 'موقعها',       key: 'website' },
+  { label: 'ملاحظاتٌ عنها', key: 'notes' },
+  { label: 'شعارها',       key: 'logo' },
 ]
 
 export const SORT_OPTIONS = [
@@ -550,15 +665,122 @@ export function titleInitial(title: string): string {
     .replace(/ى/, 'ي')
 }
 
-const CENTURY_NAMES = [
-  '', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع',
-  'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر',
-  'الرابع عشر', 'الخامس عشر', 'السادس عشر',
+// العدد الترتيبيّ مذكَّرًا. وله موضعان: القرنُ والمجلَّد، وكلاهما مذكَّر —
+// بخلاف الطبعة، فهي مؤنَّثة ولها صيغُها في `editionInWords`.
+const ORDINAL_ONES = [
+  '', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس',
+  'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر',
+]
+const ORDINAL_ONES_BOUND = [
+  '', 'الحادي', 'الثاني', 'الثالث', 'الرابع', 'الخامس',
+  'السادس', 'السابع', 'الثامن', 'التاسع',
+]
+const ORDINAL_TENS = [
+  '', '', 'العشرون', 'الثلاثون', 'الأربعون', 'الخمسون',
+  'الستون', 'السبعون', 'الثمانون', 'التسعون',
 ]
 
-/** «القرن الثامن» من رقمه. وما جاوز المعدود بقي رقمًا. */
+/**
+ * العدد الترتيبيّ مذكَّرًا: ٢ ← «الثاني»، ١٢ ← «الثاني عشر»، ٢٦ ← «السادس
+ * والعشرون». وما جاوز التسعةَ والتسعين بقي رقمًا كما هو.
+ */
+export function ordinalName(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n > 99) return toArabicNumerals(n)
+  if (n <= 10) return ORDINAL_ONES[n]
+  if (n < 20) return `${ORDINAL_ONES_BOUND[n - 10]} عشر`
+  const tens = Math.floor(n / 10)
+  const ones = n % 10
+  return ones === 0
+    ? ORDINAL_TENS[tens]
+    : `${ORDINAL_ONES_BOUND[ones]} و${ORDINAL_TENS[tens]}`
+}
+
+/** الرقم بالأرقام العربية الهندية، لِما لا يُصاغ ترتيبًا */
+function toArabicNumerals(n: number): string {
+  return String(n).replace(/\d/g, (d) => String.fromCharCode(0x0660 + Number(d)))
+}
+
+/** «القرن الثامن» من رقمه */
 export function centuryName(n: number): string {
-  return CENTURY_NAMES[n] ? `القرن ${CENTURY_NAMES[n]}` : `القرن ${n}`
+  return `القرن ${ordinalName(n)}`
+}
+
+// -------------------------------------------------- المجلَّدات الناقصة
+/** «المجلَّد الثاني (تَلَف)»، وبلا سببٍ: «المجلَّد الثاني (ناقص)» */
+export function missingVolumeLabel(m: MissingVolume): string {
+  const reason = m.reason.trim() || 'ناقص'
+  return `المجلَّد ${ordinalName(m.no)} (${reason})`
+}
+
+/**
+ * خبرُ النقص جملةً تامّة، والعددُ فيها مُطابِقٌ لمعدوده: «ناقصٌ منه مجلَّدٌ
+ * واحد»، «ناقصان منه»، «ناقصةٌ منه ٣ مجلَّداتٍ». فالمفردُ يُذكَّر، والاثنان
+ * يُثنَّى الوصفُ لهما، وما جاوزهما جمعُ ما لا يعقل فيُؤنَّث وصفُه.
+ */
+export function missingVolumesHeadline(count: number): string {
+  if (count <= 0) return ''
+  if (count === 1) return 'ناقصٌ منه مجلَّدٌ واحد'
+  if (count === 2) return 'ناقصان منه'
+  return `ناقصةٌ منه ${countLabel(count, VOLUMES_COUNT)}`
+}
+
+// ------------------------------------------------------ تمام الفهرسة
+/**
+ * حقول البطاقة المعتمدة، وبها يُقاس تمامُ فهرسة الكتاب. مفاتيحُها مفاتيحُ
+ * `META_DEFS` نفسها، ومعها الغلافُ والنبذةُ والتصنيف — وهي من بياناته وإن
+ * لم تكن صفوفًا في جدوله. وكلُّها بوزنٍ واحد.
+ *
+ * والعنوانُ واسمُ المؤلِّف خارجَ الحساب: لا يُحفظ كتابٌ بغيرهما أصلًا، فعدُّهما
+ * يرفع النسبة على كل كتابٍ بقدرٍ واحد فلا يُفرِّق بين تامٍّ وناقص.
+ */
+const CATALOG_FILLED: Record<string, (b: Book) => boolean> = {
+  subtitle:        (b) => !!b.subtitle.trim(),
+  contributors:    (b) => (b.contributors ?? []).some((c) => c.name.trim()),
+  series:          (b) => !!b.series.trim(),
+  seriesNo:        (b) => !!b.series_no.trim(),
+  publisher:       (b) => !!b.publisher.trim(),
+  place:           (b) => !!b.place.trim(),
+  yearLabel:       (b) => b.year != null || !!b.year_text.trim(),
+  edition:         (b) => !!b.edition.trim(),
+  parts:           (b) => b.single_part || (b.parts ?? 0) > 0,
+  volumes:         (b) => b.single_volume || (b.volumes ?? 0) > 0,
+  pages:           (b) => (b.pages ?? 0) > 0,
+  volumePagesText: (b) => (b.volume_pages ?? []).some((v) => (parseNumber(v) ?? 0) > 0),
+  size:            (b) => !!b.size.trim(),
+  isbn:            (b) => !!b.isbn.trim(),
+  language:        (b) => !!b.language.trim(),
+  cabinet:         (b) => !!b.cabinet_no.trim(),
+  shelfNo:         (b) => !!b.shelf_no.trim(),
+  binding:         (b) => !!b.binding.trim(),
+  condition:       (b) => !!b.condition.trim(),
+  conditionNotes:  (b) => !!b.condition_notes.trim(),
+  source:          (b) => !!b.source.trim(),
+  acquired:        (b) => b.acquired_year != null || !!b.acquired_text.trim(),
+  marginNote:      (b) => !!b.margin_note.trim(),
+  topic:           (b) => !!b.topic.trim(),
+  cover:           (b) => !!b.cover_url,
+  blurb:           (b) => !!b.blurb.trim(),
+  category:        (b) => !!b.category.trim(),
+}
+
+const CATALOG_KEYS = Object.keys(CATALOG_FILLED)
+
+export interface CatalogScore {
+  /** ما أُدخل من الحقول */
+  filled: number
+  total: number
+  /** نسبةُ ما أُدخل، من مئة */
+  percent: number
+  /** نسبةُ ما بقي، وهي التي تُعرض: «ناقصٌ ٤٠٪» */
+  missing: number
+}
+
+/** مقدارُ ما أُدخل من بيانات الكتاب وما بقي، نسبةً مئوية */
+export function catalogScore(book: Book): CatalogScore {
+  const filled = CATALOG_KEYS.reduce((n, key) => n + (CATALOG_FILLED[key](book) ? 1 : 0), 0)
+  const total = CATALOG_KEYS.length
+  const percent = Math.round((filled / total) * 100)
+  return { filled, total, percent, missing: 100 - percent }
 }
 
 /** نجوم التقييم كنصّ: ★★★☆☆ أو «—» حين لا تقييم */

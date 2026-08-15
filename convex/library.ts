@@ -7,7 +7,9 @@
 
 import { query } from './_generated/server'
 import {
-  bookIsPublic, isOwner, loadSettings, redactBook, redactSettings, toClient,
+  authorIsPublic, bookIsPublic, bookPublisherVisible, isOwner, loadSettings,
+  publisherIsPublic, redactAuthor, redactBook, redactPublisher, redactSettings,
+  toClient,
 } from './privacy'
 
 export const books = query({
@@ -30,14 +32,19 @@ export const authors = query({
     const s = await loadSettings(ctx)
     if (!s.visibility.authors) return []
 
-    // لا يظهر مؤلِّفٌ إلا إذا كان له كتابٌ ظاهر
-    const visible = new Set(
-      (await ctx.db.query('books').collect())
-        .filter((b) => bookIsPublic(b, s))
-        .map((b) => b.author_id)
-        .filter((id): id is NonNullable<typeof id> => id !== null),
-    )
-    return all.filter((a) => visible.has(a._id)).map(toClient)
+    // سجلُّ الأشخاص واحد: فيه المؤلِّف والمحقِّق ومن على صفته. فلا يظهر أحدٌ
+    // منهم إلا إذا بقي له في المكتبة كتابٌ ظاهر — ألَّفه أو عمل فيه. ومن
+    // أُخفيت كتبُه كلُّها سقط اسمُه معها، إذ لا معنى لعرض من لا كتاب له.
+    const visible = new Set<string>()
+    for (const b of await ctx.db.query('books').collect()) {
+      if (!bookIsPublic(b, s)) continue
+      if (b.author_id) visible.add(b.author_id)
+      for (const c of b.co_authors ?? []) if (c.author_id) visible.add(c.author_id)
+      for (const c of b.contributors ?? []) if (c.person_id) visible.add(c.person_id)
+    }
+    return all
+      .filter((a) => visible.has(a._id) && authorIsPublic(a, s))
+      .map((a) => redactAuthor(a, s))
   },
 })
 
@@ -101,6 +108,8 @@ export const loans = query({
 /**
  * دُوْر النَّشْر. تظهر للزائر كما هي: ليست سرًّا، وهي بيانُ الطبعة نفسه.
  * غير أنّ الدار التي كل كتبها مخفيّة لا تُعرَض — وإلا دلّت على كتابٍ محجوب.
+ * ومثلُها الدارُ التي أُخفي اسمُها من كتبها كلِّها: لم يبقَ لها عندنا كتابٌ
+ * منسوبٌ إليها، فلا معنى لعرضها.
  */
 export const publishers = query({
   args: {},
@@ -112,23 +121,34 @@ export const publishers = query({
     const s = await loadSettings(ctx)
     const visible = new Set(
       (await ctx.db.query('books').collect())
-        .filter((b) => bookIsPublic(b, s))
+        .filter((b) => bookIsPublic(b, s) && bookPublisherVisible(b, s))
         .map((b) => b.publisher_id)
         .filter((id): id is NonNullable<typeof id> => id !== null),
     )
-    return all.filter((p) => visible.has(p._id)).map(toClient)
+    return all
+      .filter((p) => visible.has(p._id) && publisherIsPublic(p, s))
+      .map((p) => redactPublisher(p, s))
   },
 })
 
+/**
+ * التصنيفات، رئيسُها وفرعُها. تُعاد صفوفًا لا أسماءً: الفرعُ يحتاج أن يُعرف
+ * رئيسُه ليُعرض تحته.
+ */
 export const categories = query({
   args: {},
   handler: async (ctx) => {
     const all = (await ctx.db.query('categories').collect())
       .sort((a, b) => a.position - b.position)
-    if (await isOwner(ctx)) return all.map((r) => r.name)
+    const rows = all.map((r) => ({ name: r.name, parent: r.parent ?? '' }))
+    if (await isOwner(ctx)) return rows
 
     const s = await loadSettings(ctx)
-    return all.filter((c) => !s.hidden_categories.includes(c.name)).map((r) => r.name)
+    // إخفاءُ الرئيس يُخفي فروعَه معه: الفرعُ لا يقوم بغير رئيسه
+    return rows.filter(
+      (c) => !s.hidden_categories.includes(c.name)
+        && !(c.parent && s.hidden_categories.includes(c.parent)),
+    )
   },
 })
 

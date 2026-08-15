@@ -17,8 +17,8 @@ import { navigate, shortBookLink } from '../lib/router'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import {
   LANGUAGES, PERKS_COUNT, PERK_KINDS, QUOTES_COUNT, STATUSES, STATUS_UNKNOWN,
-  WORK_PHRASES, contributorLabel, countLabel, formatNumber, parseNumber,
-  sumVolumePages,
+  WORK_PHRASES, contributorLabel, countLabel, formatNumber,
+  missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
   type Author, type Book, type PerkKind, type ReadingStatus,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
@@ -83,6 +83,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   const indexVolumes = book.index_volumes ?? []
   const volumeParts = book.volume_parts ?? []
   const manyVolumes = volumePages.filter(Boolean).length > 1
+  const missing = [...(book.missing_volumes ?? [])].sort((a, b) => a.no - b.no)
 
   // ------------------------------------------------------- ١. بيانات الكتاب
   const bookRows: Row[] = [
@@ -115,6 +116,24 @@ export default function BookDetail({ bookId }: { bookId: string }) {
       key: 'pages',
       label: manyVolumes ? 'عدد الصفحات إجمالًا' : 'عدد الصفحات',
       value: formatNumber(book.pages),
+    },
+    {
+      // ما نقص من المجلَّدات: خبرٌ عن النسخة التي عندنا لا عن الطبعة، غير
+      // أنّ موضعَه مع المجلَّدات أهدى من إفراده في قسمٍ آخر
+      key: 'missingVolumes',
+      label: 'المُجلَّدات الناقصة',
+      wide: true,
+      value: missing.length > 0
+        ? (
+          <span>
+            <span style={{ color: 'var(--danger)' }}>
+              {missingVolumesHeadline(missing.length)}
+            </span>
+            {' — '}
+            {missing.map((m) => missingVolumeLabel(m)).join('، و')}
+          </span>
+        )
+        : '',
     },
     { key: 'size', label: 'حجْم الكتاب', value: book.size },
     { key: 'isbn', label: 'ردمك (ISBN)', value: book.isbn && <span dir="ltr">{book.isbn}</span> },
@@ -258,7 +277,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             {book.category && !hidden('category') && (
               <span style={{ fontSize: 12, background: 'var(--header)', padding: '4px 10px', borderRadius: 999 }}>
-                {book.category}
+                {book.sub_category ? `${book.category} ← ${book.sub_category}` : book.category}
               </span>
             )}
             {book.cabinet_no && !hidden('cabinet') && (
@@ -954,6 +973,13 @@ function WorksAbout({ rows }: { rows: { type: string; target: Book | undefined }
 }
 
 // ------------------------------------------------------- الفوائد والمقتطفات
+/**
+ * الفوائد والمقتطفات. والصندوقُ لا يُعرض إلا إذا كان فيه شيء: بطاقةٌ تُخبر
+ * أن لا فائدة فيها ليست خبرًا، وإنما هي فراغٌ يشغل موضعًا.
+ *
+ * وصاحبُ المكتبة يبقى له سبيلٌ إلى الإضافة حين لا فائدة بعدُ: زرٌّ مفردٌ لا
+ * صندوقٌ كامل، فإذا فُتح فُتح النموذجُ وحده.
+ */
 function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeof useLibrary>['perks'] }) {
   const { canEdit, run, reload } = useLibrary()
   const [open, setOpen] = useState(false)
@@ -970,6 +996,20 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeo
     padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)',
     background: 'var(--bg)', fontSize: 14, color: 'var(--text)', width: '100%',
   } as const
+
+  // لا فائدةَ ولا مقتطف، ولا حقَّ للناظر في الإضافة: لا صندوق أصلًا
+  if (perks.length === 0 && !canEdit) return null
+
+  // ولصاحب المكتبة زرٌّ مفرد، فإذا ضغطه ظهر النموذج وحدَه
+  if (perks.length === 0 && !open) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <button type="button" onClick={() => setOpen(true)} style={ghostButtonStyle}>
+          + إضافة فائدة أو مقتطف من هذا الكتاب
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20, borderRadius: 12, padding: '16px 18px' }}>
@@ -1040,9 +1080,7 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeo
         </div>
       )}
 
-      {perks.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--muted)' }}>لم تُسجَّل فوائد ولا مقتطفات من هذا الكتاب بعد.</div>
-      ) : (
+      {perks.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {perks.map((p) => (
             <div key={p.id} style={{

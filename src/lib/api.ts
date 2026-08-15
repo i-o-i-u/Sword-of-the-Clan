@@ -9,9 +9,9 @@ import { convex } from './convexClient'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import {
-  DEFAULT_VISIBILITY,
-  type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
-  type Loan, type Perk, type Publisher, type Settings,
+  DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
+  type Author, type Book, type BookWork, type Category, type LandingImage,
+  type LandingQuote, type Loan, type Perk, type Publisher, type Settings,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ export async function fetchPublishers(_owner: boolean): Promise<Publisher[]> {
   return (await convex.query(api.library.publishers, {})) as unknown as Publisher[]
 }
 
-export async function fetchCategories(_owner: boolean): Promise<string[]> {
+export async function fetchCategories(_owner: boolean): Promise<Category[]> {
   return await convex.query(api.library.categories, {})
 }
 
@@ -75,7 +75,9 @@ export async function fetchLandingQuotes(_owner: boolean): Promise<LandingQuote[
 
 export async function fetchSettings(_owner: boolean): Promise<Settings> {
   const row = (await convex.query(api.library.settings, {})) as Record<string, unknown>
+  // الحقول المستجدّة اختياريّة في المخطّط، فقد يعود المستند القديم بلا بعضها
   return {
+    ...DEFAULT_SETTINGS_EXTRAS,
     ...(row as unknown as Settings),
     visibility: { ...DEFAULT_VISIBILITY, ...((row.visibility as object) ?? {}) },
   }
@@ -191,8 +193,10 @@ export async function removePublisher(id: string): Promise<void> {
   await convex.mutation(api.catalog.removePublisher, { id: id as Id<'publishers'> })
 }
 
-export async function addCategory(name: string, position: number): Promise<void> {
-  await convex.mutation(api.catalog.addCategory, { name, position })
+export async function addCategory(
+  name: string, position: number, parent = '',
+): Promise<void> {
+  await convex.mutation(api.catalog.addCategory, { name, position, parent })
 }
 
 export async function removeCategory(name: string): Promise<void> {

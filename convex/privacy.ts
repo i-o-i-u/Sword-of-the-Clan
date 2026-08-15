@@ -15,6 +15,9 @@ export const DEFAULT_VISIBILITY = {
   loans: false, value: false, stats: true, authors: true, advSearch: true,
 }
 
+/** خريطةٌ من مفتاحٍ إلى معرّفات: قوائم الاستثناء وقوائم حقول المستند الواحد */
+export type FieldMap = Record<string, string[]>
+
 /**
  * الإعدادات كما في المخطّط، بلا حقول النظام — فتبقى مشتقّةً منه لا مكرَّرة.
  * `Required` يرفع الاختياريّة عن الحقول المستجدّة: المخطّط يقبل غيابها عن
@@ -54,6 +57,19 @@ export const DEFAULT_SETTINGS: Settings = {
   hidden_fields: [],
   hidden_categories: [],
   hidden_book_ids: [],
+
+  show_landing_place: true,
+  show_calculator: true,
+  field_exceptions: {},
+  book_field_overrides: {},
+  hidden_author_ids: [],
+  hidden_author_fields: [],
+  author_field_exceptions: {},
+  author_field_overrides: {},
+  hidden_publisher_ids: [],
+  hidden_publisher_fields: [],
+  publisher_field_exceptions: {},
+  publisher_field_overrides: {},
 }
 
 /** إعدادات المكتبة، أو الافتراضيّات قبل أوّل حفظ */
@@ -99,13 +115,48 @@ export function toClient<T extends { _id: unknown; _creationTime: number }>(doc:
 }
 
 /**
- * الكتب الظاهرة للزائر: ناقصةَ المخفيّة بعينها، وناقصةَ ما كان في تصنيفٍ مخفيّ.
- * (شرط WHERE في public_books)
+ * هل هذا الحقل مخفيٌّ عن هذا المستند بعينه؟ ثلاث درجاتٍ مرتَّبة:
+ *   ١. حقلٌ أُخفي من هذا المستند وحده — يُقدَّم على ما سواه.
+ *   ٢. حقلٌ أُخفي من مستندات النوع كلِّها.
+ *   ٣. واستثناءٌ يردّ المستند من الدرجة الثانية إلى الظهور.
+ */
+function fieldHidden(
+  field: string, docId: string,
+  all: string[], exceptions: FieldMap, overrides: FieldMap,
+): boolean {
+  if ((overrides[docId] ?? []).includes(field)) return true
+  if (!all.includes(field)) return false
+  return !(exceptions[field] ?? []).includes(docId)
+}
+
+/** حاجبُ حقول كتابٍ بعينه، مهيَّأً مرةً واحدة ليُنادى لكل حقل */
+function bookFieldHider(book: Doc<'books'>, s: Settings) {
+  return (field: string) => fieldHidden(
+    field, book._id, s.hidden_fields, s.field_exceptions, s.book_field_overrides,
+  )
+}
+
+/**
+ * الكتب الظاهرة للزائر: ناقصةَ المخفيّة بعينها، وناقصةَ ما كان في تصنيفٍ
+ * مخفيّ — رئيسِه أو فرعِه — وناقصةَ كتبِ مؤلِّفٍ مخفيّ.
+ *
+ * وإخفاءُ المؤلِّف يُخفي كتبَه لزامًا: لا يُعرض عنوانُ كتابٍ بلا مؤلِّفه.
+ * والعكسُ ليس بلازم: يُخفى كتابٌ من كتبه ويبقى سائرُها.
  */
 export function bookIsPublic(book: Doc<'books'>, s: Settings): boolean {
   if (s.hidden_book_ids.includes(book._id)) return false
   if (s.hidden_categories.includes(book.category ?? '')) return false
+  if (book.sub_category && s.hidden_categories.includes(book.sub_category)) return false
+  if (book.author_id && s.hidden_author_ids.includes(book.author_id)) return false
   return true
+}
+
+/**
+ * الدارُ التي أُخفي اسمُها من كتابٍ لا يبقى الكتابُ منسوبًا إليها عند الزائر:
+ * يسقط اسمُها وسِلَتُها جميعًا، فلا تُعدّ الدارُ ذات كتابٍ من جهته.
+ */
+export function bookPublisherVisible(book: Doc<'books'>, s: Settings): boolean {
+  return !bookFieldHider(book, s)('publisher')
 }
 
 /**
@@ -115,17 +166,31 @@ export function bookIsPublic(book: Doc<'books'>, s: Settings): boolean {
  * `shelfNo`, `acquired`) فلا تُغيَّر صياغتها.
  */
 export function redactBook(book: Doc<'books'>, s: Settings) {
-  const hidden = (key: string) => s.hidden_fields.includes(key)
+  const hidden = bookFieldHider(book, s)
   const vis = s.visibility
 
   return {
     ...toClient(book),
 
     subtitle:     hidden('subtitle')     ? '' : book.subtitle,
+    // التصنيف خبرٌ يُعرض على البطاقة، فيُخفى كما يُخفى سواه. وأمّا التصنيف
+    // المخفيّ بعينه فيُخفي الكتابَ كلَّه، ويتكفّل به `bookIsPublic`.
+    category:     hidden('category')     ? '' : book.category,
+    sub_category: hidden('category')     ? '' : (book.sub_category ?? ''),
+    // الغلاف والكعب صورتان، وهما من البيانات كغيرها: تُخفى صورةُ غلافٍ بعينه
+    // أو أغلفةُ الكتب كلِّها.
+    cover_url:    hidden('cover')        ? null : book.cover_url,
+    spine_images: hidden('spine')        ? {} : book.spine_images,
+    use_spine:    hidden('spine')        ? false : book.use_spine,
+    missing_volumes: hidden('missingVolumes') ? [] : (book.missing_volumes ?? []),
+    tags:         hidden('tags')         ? [] : book.tags,
     contributors: hidden('contributors') ? [] : book.contributors,
     series:       hidden('series')       ? '' : book.series,
     series_no:    hidden('seriesNo')     ? '' : book.series_no,
+    // إخفاءُ اسم الدار يفكّ الكتابَ عن سجلّها أيضًا، وإلا دلّت الصلةُ على ما
+    // حُجب اسمُه: يبقى الكتابُ عند الزائر غيرَ منسوبٍ إلى دارٍ أصلًا.
     publisher:    hidden('publisher')    ? '' : book.publisher,
+    publisher_id: hidden('publisher')    ? null : book.publisher_id,
     place:        hidden('place')        ? '' : book.place,
     year:         hidden('yearLabel')    ? null : book.year,
     year_month:   hidden('yearLabel')    ? null : book.year_month,
@@ -167,11 +232,69 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
   }
 }
 
+// ------------------------------------------------------- الأشخاص ودُور النشر
+/**
+ * صاحبُ ترجمةٍ ظاهر؟ المخفيُّ بعينه لا يُعرض، وتُخفى معه كتبُه
+ * (`bookIsPublic`). أمّا من لم يبقَ له كتابٌ ظاهر ولا عملٌ في كتابٍ ظاهر
+ * فيسقط من تلقائه، ويتكفّل به مُرشِّحُ `library.authors`.
+ */
+export function authorIsPublic(author: Doc<'authors'>, s: Settings): boolean {
+  return !s.hidden_author_ids.includes(author._id)
+}
+
+/** اسمُ صاحب الترجمة لا يُخفى: بطاقتُه بلا اسمٍ ليست بطاقة */
+export function redactAuthor(author: Doc<'authors'>, s: Settings) {
+  const hidden = (field: string) => fieldHidden(
+    field, author._id, s.hidden_author_fields,
+    s.author_field_exceptions, s.author_field_overrides,
+  )
+
+  return {
+    ...toClient(author),
+    full_name: hidden('fullName') ? '' : author.full_name,
+    birth:     hidden('birth')    ? null : author.birth,
+    death:     hidden('death')    ? null : author.death,
+    // الوفاةُ تُخفى بوجوهها كلِّها، وإلا دلّ التقريبُ على ما حُجب رقمُه
+    alive:       hidden('death') ? false : author.alive,
+    death_approx: hidden('death') ? false : author.death_approx,
+    death_text:  hidden('death')  ? '' : author.death_text,
+    bio:       hidden('bio')      ? '' : author.bio,
+  }
+}
+
+export function publisherIsPublic(publisher: Doc<'publishers'>, s: Settings): boolean {
+  return !s.hidden_publisher_ids.includes(publisher._id)
+}
+
+/** اسمُ الدار لا يُخفى من بطاقتها، وإنما يُخفى من بيانات الكتب */
+export function redactPublisher(publisher: Doc<'publishers'>, s: Settings) {
+  const hidden = (field: string) => fieldHidden(
+    field, publisher._id, s.hidden_publisher_fields,
+    s.publisher_field_exceptions, s.publisher_field_overrides,
+  )
+
+  return {
+    ...toClient(publisher),
+    place:    hidden('place')   ? '' : publisher.place,
+    founded:  hidden('founded') ? '' : publisher.founded,
+    website:  hidden('website') ? '' : publisher.website,
+    notes:    hidden('notes')   ? '' : publisher.notes,
+    logo_url: hidden('logo')    ? null : (publisher.logo_url ?? null),
+  }
+}
+
 /**
  * الإعدادات كما يراها الزائر: قوائم المخفيّ لا تُنشر، فلا يعرف الزائر حتى أنّ
  * هناك ما هو مخفيّ. (العرض public_settings)
  */
 export function redactSettings(s: Settings) {
-  const { hidden_fields, hidden_categories, hidden_book_ids, ...rest } = s
-  return { ...rest, hidden_fields: [], hidden_categories: [], hidden_book_ids: [] }
+  return {
+    ...s,
+    hidden_fields: [], hidden_categories: [], hidden_book_ids: [],
+    field_exceptions: {}, book_field_overrides: {},
+    hidden_author_ids: [], hidden_author_fields: [],
+    author_field_exceptions: {}, author_field_overrides: {},
+    hidden_publisher_ids: [], hidden_publisher_fields: [],
+    publisher_field_exceptions: {}, publisher_field_overrides: {},
+  }
 }

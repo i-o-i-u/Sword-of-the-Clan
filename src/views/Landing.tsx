@@ -114,10 +114,13 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                 alt="شعار مكتبة سيف العشيرة"
               />
               <h1 className="hero-title">{LIBRARY_NAME}</h1>
-              <p className="hero-place">
-                <PinIcon size={14} />
-                {LIBRARY_PLACE}
-              </p>
+              {/* موضع المكتبة يُخفى عن الزوار إن شاء صاحبُها، ويراه هو أبدًا */}
+              {(isOwner || settings.show_landing_place) && (
+                <p className="hero-place">
+                  <PinIcon size={14} />
+                  {LIBRARY_PLACE}
+                </p>
+              )}
             </div>
           </div>
 

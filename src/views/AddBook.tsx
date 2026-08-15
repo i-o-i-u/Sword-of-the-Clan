@@ -19,8 +19,9 @@ import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
   BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, LANGUAGES,
-  ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS, WORK_TYPES,
-  editionInWords, formatNumber, parseNumber, sumVolumePages, type Contributor,
+  MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS, WORK_TYPES,
+  editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
+  sumVolumePages, type Category, type Contributor, type MissingVolume,
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
@@ -107,11 +108,20 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [series, setSeries] = useState(() => editing?.series ?? '')
   const [seriesNo, setSeriesNo] = useState(() => editing?.series_no ?? '')
   const [category, setCategory] = useState(() => editing?.category ?? '')
+  const [subCategory, setSubCategory] = useState(() => editing?.sub_category ?? '')
   // تصنيفٌ كتبه الفاهرس هنا ولمّا يُحفظ بعدُ: يظهر في المربَّعات مختارًا،
-  // ولا يدخل تصنيفات المكتبة إلا مع حفظ الكتاب
-  const [pendingCategories, setPendingCategories] = useState<string[]>(
-    () => (editing?.category && !categories.includes(editing.category) ? [editing.category] : []),
-  )
+  // ولا يدخل تصنيفات المكتبة إلا مع حفظ الكتاب. رئيسًا كان أو فرعًا.
+  const [pendingCategories, setPendingCategories] = useState<Category[]>(() => {
+    const known = (name: string) => categories.some((c) => c.name === name)
+    const out: Category[] = []
+    if (editing?.category && !known(editing.category)) {
+      out.push({ name: editing.category, parent: '' })
+    }
+    if (editing?.sub_category && !known(editing.sub_category)) {
+      out.push({ name: editing.sub_category, parent: editing.category ?? '' })
+    }
+    return out
+  })
 
   // --------------------------------------------------------- ٢. بيانات الطبعة
   const [publisherName, setPublisherName] = useState(() => editing?.publisher ?? '')
@@ -140,6 +150,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   // مجلَّدات الفهارس: تُعلَّم فلا تُحسب صفحاتُها في الإجمالي — فهرسٌ لا متن
   const [indexVolumes, setIndexVolumes] = useState<number[]>(
     () => [...(editing?.index_volumes ?? [])],
+  )
+  // ما نقص من مجلَّدات الطبعة: يُعلَّم رقمُه، ويُكتب سببُ فقده — والسببُ
+  // يجوز أن يُترك، فيُكتفى بأنه ناقص
+  const [missingVolumes, setMissingVolumes] = useState<MissingVolume[]>(
+    () => (editing?.missing_volumes ?? []).map((m) => ({ ...m })),
   )
   const [pages, setPages] = useState(() => str(editing?.pages))
   const [isbn, setIsbn] = useState(() => editing?.isbn ?? '')
@@ -209,19 +224,37 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     () => [...new Set(books.map((b) => b.series.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ar')),
     [books],
   )
-  /** أسماء من عُرفوا بصفةٍ في كتبٍ سابقة: المحقِّقون والمراجعون ومن معهم */
+  /**
+   * من يُقترَح في حقل الصفة: سجلُّ الأشخاص كلُّه — مؤلِّفوه ومحقِّقوه سواء —
+   * ومعه من عُرف بصفةٍ في كتابٍ سابق ولمّا يُنشأ له سجلّ بعدُ. فالرجلُ
+   * الواحد يُصاب اسمُه من حقل المؤلِّف ومن حقل الصفة جميعًا.
+   */
   const contributorNames = useMemo(() => {
-    const found = new Set<string>()
+    const found = new Set<string>(authors.map((a) => a.name))
     books.forEach((b) => (b.contributors ?? []).forEach((c) => {
       if (c.name.trim()) found.add(c.name.trim())
     }))
-    return [...found].sort((a, b) => a.localeCompare(b, 'ar'))
-  }, [books])
+    return [...found].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ar'))
+  }, [authors, books])
 
   const volumeCount = singleVolume ? 1 : Math.min(40, Math.max(1, parseNumber(volumes) ?? 1))
   const manyVolumes = !singleVolume && volumeCount > 1
   // مجلَّدات الفهارس خارج الحساب، وما جاوز العددَ المُدخَل لا يُعتدّ به
   const volumeSum = sumVolumePages(volumePages.slice(0, volumeCount), indexVolumes)
+
+  /** ما نقص من المجلَّدات، مقصورًا على ما دخل في العدد المُدخَل */
+  const liveMissing = missingVolumes.filter((m) => m.no >= 1 && m.no <= volumeCount)
+  const missingOf = (no: number) => missingVolumes.find((m) => m.no === no)
+
+  function toggleMissing(no: number) {
+    setMissingVolumes((prev) => (prev.some((m) => m.no === no)
+      ? prev.filter((m) => m.no !== no)
+      : [...prev, { no, reason: '' }]))
+  }
+
+  function setMissingReason(no: number, reason: string) {
+    setMissingVolumes((prev) => prev.map((m) => (m.no === no ? { ...m, reason } : m)))
+  }
 
   /**
    * ما يُقال تحت اسم المؤلِّف. وهو خبرٌ عمّا سيقع، فلا يُقال في التعديل:
@@ -280,6 +313,22 @@ export default function AddBook({ bookId }: { bookId?: string }) {
       }
       const [mainAuthor, ...coAuthors] = saved
 
+      // المشاركون: لكلٍّ سجلُّه في سجلّ الأشخاص — وهو جدول المؤلِّفين نفسه —
+      // فتُجمع في صفحةٍ واحدة تحقيقاتُه ومؤلَّفاتُه، ويُصاب اسمُه بالبحث في
+      // حقل المؤلِّف كما يُصاب في حقل الصفة.
+      const filledContribs = contribRows.filter((c) => c.name.trim())
+      const contributors: Contributor[] = []
+      for (const row of filledContribs) {
+        const person = await api.findOrCreateAuthor(row.name)
+        contributors.push({
+          role: row.role,
+          name: person.name,
+          // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
+          scope: (row.scope ?? '').trim(),
+          person_id: person.id,
+        })
+      }
+
       // الدار: تُنشأ بمكانها أوّل مرة، ثم يأتي مكانُها منها في كل كتابٍ بعده
       let publisherId: string | null = null
       let publisherPlace = place.trim()
@@ -290,8 +339,14 @@ export default function AddBook({ bookId }: { bookId?: string }) {
       }
 
       const trimmedCategory = category.trim()
-      if (trimmedCategory && !categories.includes(trimmedCategory)) {
+      // الفرعُ لا يُحفظ بغير رئيسه: من رفع الرئيسَ رُفع فرعُه معه
+      const trimmedSub = trimmedCategory ? subCategory.trim() : ''
+      const known = (name: string) => categories.some((c) => c.name === name)
+      if (trimmedCategory && !known(trimmedCategory)) {
         await api.addCategory(trimmedCategory, categories.length)
+      }
+      if (trimmedSub && !known(trimmedSub)) {
+        await api.addCategory(trimmedSub, categories.length + 1, trimmedCategory)
       }
 
       // صفحات المجلَّدات تُحفظ بطول عدد المجلَّدات تمامًا، فموضعُ كل رقمٍ هو
@@ -305,6 +360,13 @@ export default function AddBook({ bookId }: { bookId?: string }) {
       const indexVols = manyVolumes
         ? indexVolumes.filter((n) => n >= 1 && n <= volumeCount).sort((a, b) => a - b)
         : []
+      // المجلَّد الواحد لا ينقص منه مجلَّد، فلا تُحفظ له قائمة
+      const missingVols = manyVolumes
+        ? liveMissing
+          .slice()
+          .sort((a, b) => a.no - b.no)
+          .map((m) => ({ no: m.no, reason: m.reason.trim() }))
+        : []
 
       const fields: api.BookInput = {
         title: title.trim(),
@@ -312,13 +374,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         author_id: mainAuthor?.author_id ?? null,
         author_name: mainAuthor?.name ?? '',
         co_authors: coAuthors,
-        contributors: contribRows
-          .filter((c) => c.name.trim())
-          // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
-          .map((c) => ({ role: c.role, name: c.name.trim(), scope: (c.scope ?? '').trim() })),
+        contributors,
         series: series.trim(),
         series_no: seriesNo.trim(),
         category: trimmedCategory,
+        sub_category: trimmedSub,
 
         publisher_id: publisherId,
         publisher: publisherName.trim(),
@@ -339,6 +399,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         volume_pages: volPages,
         volume_parts: volParts,
         index_volumes: indexVols,
+        missing_volumes: missingVols,
         // مجموع صفحات المجلَّدات يُحسب، ولا يُكتب باليد إلا في المجلَّد الواحد
         pages: manyVolumes ? (volumeSum > 0 ? volumeSum : null) : parseNumber(pages),
         isbn: isbn.trim(),
@@ -669,12 +730,16 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           {/* التصنيفات مربَّعاتٌ تُرى كلُّها بنظرةٍ واحدة، لا قائمةٌ تُفتح:
               تصنيفات المكتبة معدودة، والاختيار من المرئيّ أسرع من التذكّر. */}
           <CategoryPicker
-            value={category}
-            onChange={setCategory}
+            category={category}
+            subCategory={subCategory}
+            onCategory={(name) => { setCategory(name); setSubCategory('') }}
+            onSubCategory={setSubCategory}
             known={categories}
             extra={pendingCategories}
-            onAdd={(name) => setPendingCategories((prev) => (
-              prev.includes(name) || categories.includes(name) ? prev : [...prev, name]
+            onAdd={(name, parent) => setPendingCategories((prev) => (
+              prev.some((c) => c.name === name) || categories.some((c) => c.name === name)
+                ? prev
+                : [...prev, { name, parent }]
             ))}
           />
 
@@ -831,55 +896,92 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 {Array.from({ length: volumeCount }, (_, i) => {
                   const volume = i + 1
                   const isIndex = indexVolumes.includes(volume)
+                  const gone = missingOf(volume)
                   return (
-                    <div
-                      key={i}
-                      className="form-row"
-                      style={{
-                        display: 'grid', gridTemplateColumns: '74px 110px minmax(0,1fr) auto',
-                        gap: 10, alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>المُجلَّد {volume}</span>
-                      <input
-                        value={volumePages[i] ?? ''}
-                        onChange={(e) => setVolumePages((prev) => {
-                          const next = prev.slice()
-                          next[i] = e.target.value
-                          return next
-                        })}
-                        placeholder="صفحات"
-                        inputMode="numeric"
-                        aria-label={`صفحات المجلَّد ${volume}`}
-                        style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
-                      />
-                      <input
-                        value={volumeParts[i] ?? ''}
-                        onChange={(e) => setVolumeParts((prev) => {
-                          const next = prev.slice()
-                          next[i] = e.target.value
-                          return next
-                        })}
-                        placeholder="ما فيه من الأسفار (اختياري)"
-                        aria-label={`أسفار المجلَّد ${volume}`}
-                        style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
-                      />
-                      <label style={{ ...checkStyle, fontSize: 11.5, color: 'var(--muted)' }}>
+                    <div key={i}>
+                      <div
+                        className="form-row"
+                        style={{
+                          display: 'grid', gridTemplateColumns: '74px 110px minmax(0,1fr) auto auto',
+                          gap: 10, alignItems: 'center',
+                        }}
+                      >
+                        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>المُجلَّد {volume}</span>
                         <input
-                          type="checkbox"
-                          checked={isIndex}
-                          onChange={(e) => setIndexVolumes((prev) => (
-                            e.target.checked
-                              ? [...prev, volume]
-                              : prev.filter((n) => n !== volume)
-                          ))}
+                          value={volumePages[i] ?? ''}
+                          onChange={(e) => setVolumePages((prev) => {
+                            const next = prev.slice()
+                            next[i] = e.target.value
+                            return next
+                          })}
+                          placeholder="صفحات"
+                          inputMode="numeric"
+                          aria-label={`صفحات المجلَّد ${volume}`}
+                          style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
                         />
-                        فهارس
-                      </label>
+                        <input
+                          value={volumeParts[i] ?? ''}
+                          onChange={(e) => setVolumeParts((prev) => {
+                            const next = prev.slice()
+                            next[i] = e.target.value
+                            return next
+                          })}
+                          placeholder="ما فيه من الأسفار (اختياري)"
+                          aria-label={`أسفار المجلَّد ${volume}`}
+                          style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
+                        />
+                        <label style={{ ...checkStyle, fontSize: 11.5, color: 'var(--muted)' }}>
+                          <input
+                            type="checkbox"
+                            checked={isIndex}
+                            onChange={(e) => setIndexVolumes((prev) => (
+                              e.target.checked
+                                ? [...prev, volume]
+                                : prev.filter((n) => n !== volume)
+                            ))}
+                          />
+                          فهارس
+                        </label>
+                        {/* النقص يُعلَّم في سطر المجلَّد نفسه: هو خبرٌ عنه لا
+                            قائمةٌ على حِدَة تُعاد فيها أرقامُه */}
+                        <label style={{ ...checkStyle, fontSize: 11.5, color: gone ? 'var(--danger)' : 'var(--muted)' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!gone}
+                            onChange={() => toggleMissing(volume)}
+                          />
+                          ناقص
+                        </label>
+                      </div>
+
+                      {gone && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                          margin: '6px 84px 2px 0',
+                        }}>
+                          <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>سببُ فقده:</span>
+                          <input
+                            list="missing-reasons"
+                            value={gone.reason}
+                            onChange={(e) => setMissingReason(volume, e.target.value)}
+                            placeholder="اتركه فارغًا فيُكتفى بأنه ناقص"
+                            aria-label={`سبب فقد المجلَّد ${volume}`}
+                            style={{
+                              ...inputStyle, flex: '1 1 200px', width: 'auto',
+                              padding: '6px 10px', borderRadius: 7, fontSize: 12.5,
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
+
+              {/* أسبابٌ مقترَحة لا محصورة: يُكتب غيرُها في الحقل نفسه */}
+              <datalist id="missing-reasons">
+                {MISSING_REASONS.map((r) => <option key={r} value={r} />)}
+              </datalist>
 
               <div style={{
                 fontSize: 12.5, color: 'var(--muted)', marginTop: 12,
@@ -888,6 +990,17 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 الإجمالي: <strong style={{ color: 'var(--text)' }}>{formatNumber(volumeSum)}</strong>
                 {indexVolumes.length > 0 && ` — بلا ${indexVolumes.length} مجلَّد فهارس`}
               </div>
+
+              {liveMissing.length > 0 && (
+                <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>
+                  {missingVolumesHeadline(liveMissing.length)}:{' '}
+                  {liveMissing
+                    .slice()
+                    .sort((a, b) => a.no - b.no)
+                    .map((m) => `المجلَّد ${ordinalName(m.no)}`)
+                    .join('، و')}
+                </div>
+              )}
             </div>
           )}
 
@@ -1172,29 +1285,118 @@ const plusStyle = {
  * التصنيف: مربَّعاتٌ تُعرض فيها تصنيفات المكتبة كلُّها، يُختار منها واحد —
  * فالكتاب لا ينتمي إلا إلى تصنيفٍ واحد — ومعها زرٌّ لتصنيفٍ جديد. الجديد
  * يظهر مختارًا في الحال، ولا يدخل تصنيفات المكتبة إلا مع حفظ الكتاب.
+ *
+ * ولكل رئيسٍ فروعُه: تُعرض بعد اختياره وحده، فيُختار منها فرعٌ إن كان له
+ * فرع. والاثنان يُحفظان في الكتاب، فيُصفَّى بالرئيس وحده أو بالفرع معه.
  */
 function CategoryPicker(
-  { value, onChange, known, extra, onAdd }: {
-    value: string
-    onChange: (v: string) => void
-    known: string[]
-    extra: string[]
-    onAdd: (name: string) => void
+  { category, subCategory, onCategory, onSubCategory, known, extra, onAdd }: {
+    category: string
+    subCategory: string
+    onCategory: (v: string) => void
+    onSubCategory: (v: string) => void
+    known: Category[]
+    extra: Category[]
+    onAdd: (name: string, parent: string) => void
   },
 ) {
-  const [adding, setAdding] = useState(false)
+  // ما يُضاف الآن: `null` لا شيء، و`''` رئيسٌ جديد، وغيرُهما فرعٌ تحت اسمه
+  const [adding, setAdding] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
-  const all = [...known, ...extra.filter((c) => !known.includes(c))]
+  const all = [...known, ...extra.filter((e) => !known.some((k) => k.name === e.name))]
+  const mains = all.filter((c) => !c.parent).map((c) => c.name)
+  const subs = category ? all.filter((c) => c.parent === category).map((c) => c.name) : []
 
-  function commit() {
+  function commit(parent: string) {
     const name = draft.trim()
-    if (!name) { setAdding(false); return }
-    onAdd(name)
-    onChange(name)
     setDraft('')
-    setAdding(false)
+    setAdding(null)
+    if (!name) return
+    onAdd(name, parent)
+    if (parent) onSubCategory(name)
+    else onCategory(name)
   }
+
+  const chip = (name: string, on: boolean, onClick: () => void) => (
+    <button
+      key={name}
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 7,
+        border: on ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+        background: on ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : 'var(--bg)',
+        color: on ? 'var(--text)' : 'var(--muted)',
+        fontWeight: on ? 700 : 400, fontSize: 13,
+        borderRadius: 9, padding: '7px 12px',
+      }}
+    >
+      {/* مربَّع الاختيار مرسومٌ لا أصليّ، ليتّسق مع لون المكتبة */}
+      <span style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 15, height: 15, borderRadius: 4, flex: 'none', fontSize: 11,
+        border: on ? 'none' : '1.5px solid var(--border)',
+        background: on ? 'var(--accent)' : 'transparent',
+        color: 'var(--on-accent)',
+      }}>
+        {on ? '✓' : ''}
+      </span>
+      {name}
+    </button>
+  )
+
+  const addButtonFor = (parent: string, label: string) => (
+    <button
+      type="button"
+      onClick={() => { setDraft(''); setAdding(parent) }}
+      style={{
+        border: '1px dashed var(--accent)', background: 'none', color: 'var(--accent)',
+        borderRadius: 9, padding: '7px 12px', fontSize: 13, fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
+  )
+
+  const addField = (parent: string) => (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(parent) }
+          if (e.key === 'Escape') { setDraft(''); setAdding(null) }
+        }}
+        placeholder={parent ? `اسم الفرع الجديد تحت «${parent}»` : 'اسم التصنيف الرئيس الجديد'}
+        style={{ ...inputStyle, flex: '1 1 200px', width: 'auto' }}
+      />
+      <button
+        type="button"
+        onClick={() => commit(parent)}
+        disabled={!draft.trim()}
+        style={{
+          border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
+          borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600,
+          opacity: draft.trim() ? 1 : 0.45,
+        }}
+      >
+        إضافة
+      </button>
+      <button
+        type="button"
+        onClick={() => { setDraft(''); setAdding(null) }}
+        style={{
+          border: '1px solid var(--border)', background: 'none', color: 'var(--muted)',
+          borderRadius: 8, padding: '9px 14px', fontSize: 13,
+        }}
+      >
+        إلغاء
+      </button>
+    </div>
+  )
 
   return (
     <div style={{ ...labelStyle, gap: 8 }}>
@@ -1204,87 +1406,35 @@ function CategoryPicker(
       </span>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {all.map((name) => {
-          const on = value.trim() === name
-          return (
-            <button
-              key={name}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onChange(on ? '' : name)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                border: on ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                background: on ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : 'var(--bg)',
-                color: on ? 'var(--text)' : 'var(--muted)',
-                fontWeight: on ? 700 : 400, fontSize: 13,
-                borderRadius: 9, padding: '7px 12px',
-              }}
-            >
-              {/* مربَّع الاختيار مرسومٌ لا أصليّ، ليتّسق مع لون المكتبة */}
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 15, height: 15, borderRadius: 4, flex: 'none', fontSize: 11,
-                border: on ? 'none' : '1.5px solid var(--border)',
-                background: on ? 'var(--accent)' : 'transparent',
-                color: 'var(--on-accent)',
-              }}>
-                {on ? '✓' : ''}
-              </span>
-              {name}
-            </button>
-          )
-        })}
-
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            style={{
-              border: '1px dashed var(--accent)', background: 'none', color: 'var(--accent)',
-              borderRadius: 9, padding: '7px 12px', fontSize: 13, fontWeight: 600,
-            }}
-          >
-            + إضافة تصنيف جديد
-          </button>
-        )}
+        {mains.map((name) => chip(
+          name,
+          category.trim() === name,
+          () => onCategory(category.trim() === name ? '' : name),
+        ))}
+        {adding !== '' && addButtonFor('', '+ إضافة تصنيف رئيس')}
       </div>
 
-      {adding && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commit() }
-              if (e.key === 'Escape') { setDraft(''); setAdding(false) }
-            }}
-            placeholder="اسم التصنيف الجديد"
-            style={{ ...inputStyle, flex: '1 1 200px', width: 'auto' }}
-          />
-          <button
-            type="button"
-            onClick={commit}
-            disabled={!draft.trim()}
-            style={{
-              border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
-              borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              opacity: draft.trim() ? 1 : 0.45,
-            }}
-          >
-            إضافة
-          </button>
-          <button
-            type="button"
-            onClick={() => { setDraft(''); setAdding(false) }}
-            style={{
-              border: '1px solid var(--border)', background: 'none', color: 'var(--muted)',
-              borderRadius: 8, padding: '9px 14px', fontSize: 13,
-            }}
-          >
-            إلغاء
-          </button>
+      {adding === '' && addField('')}
+
+      {/* الفروع لا تُعرض إلا بعد اختيار رئيسها: لو عُرضت كلُّها معًا لازدحمت */}
+      {category.trim() && (
+        <div style={{
+          marginTop: 2, paddingInlineStart: 12,
+          borderInlineStart: '2px solid var(--border)',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+            التصنيف الفرعيّ تحت «{category.trim()}» (اختياري)
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {subs.map((name) => chip(
+              name,
+              subCategory.trim() === name,
+              () => onSubCategory(subCategory.trim() === name ? '' : name),
+            ))}
+            {adding !== category.trim() && addButtonFor(category.trim(), '+ إضافة فرع')}
+          </div>
+          {adding === category.trim() && addField(category.trim())}
         </div>
       )}
     </div>

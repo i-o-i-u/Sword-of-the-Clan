@@ -9,7 +9,7 @@
 
 import { v } from 'convex/values'
 import { mutation } from './_generated/server'
-import { coAuthor, contributor, era, readingStatus } from './schema'
+import { coAuthor, contributor, era, missingVolume, readingStatus } from './schema'
 import { requireOwner, toClient } from './privacy'
 import type { Doc } from './_generated/dataModel'
 
@@ -24,6 +24,7 @@ const bookInput = {
   series: v.optional(v.string()),
   series_no: v.optional(v.string()),
   category: v.optional(v.string()),
+  sub_category: v.optional(v.string()),
   publisher_id: v.optional(v.union(v.id('publishers'), v.null())),
   publisher: v.optional(v.string()),
   place: v.optional(v.string()),
@@ -42,6 +43,7 @@ const bookInput = {
   volume_pages: v.optional(v.array(v.union(v.number(), v.string()))),
   volume_parts: v.optional(v.array(v.string())),
   index_volumes: v.optional(v.array(v.number())),
+  missing_volumes: v.optional(v.array(missingVolume)),
   pages: v.optional(v.union(v.number(), v.null())),
   size: v.optional(v.string()),
   isbn: v.optional(v.string()),
@@ -87,6 +89,7 @@ function withDefaults(input: BookInput) {
     series: input.series ?? '',
     series_no: input.series_no ?? '',
     category: input.category ?? '',
+    sub_category: input.sub_category ?? '',
     publisher_id: input.publisher_id ?? null,
     publisher: input.publisher ?? '',
     place: input.place ?? '',
@@ -105,6 +108,7 @@ function withDefaults(input: BookInput) {
     volume_pages: input.volume_pages ?? [],
     volume_parts: input.volume_parts ?? [],
     index_volumes: input.index_volumes ?? [],
+    missing_volumes: input.missing_volumes ?? [],
     pages: input.pages ?? null,
     size: input.size ?? '',
     isbn: input.isbn ?? '',
@@ -173,11 +177,19 @@ export const remove = mutation({
 
     for (const doc of [...works, ...perks, ...loans]) await ctx.db.delete(doc._id)
 
-    // وأزِله من قائمة المخفيّ في الإعدادات حتى لا تتراكم فيها معرّفاتٌ ميّتة
+    // وأزِله من قوائم المخفيّ في الإعدادات حتى لا تتراكم فيها معرّفاتٌ ميّتة:
+    // المخفيُّ بعينه، وما أُخفي منه من حقول، واستثناؤه من إخفاءٍ عامّ.
     const settings = await ctx.db.query('library_settings').first()
-    if (settings && settings.hidden_book_ids.includes(id)) {
+    if (settings) {
+      const { [id as string]: _dropped, ...overrides } = settings.book_field_overrides ?? {}
+      const exceptions = Object.fromEntries(
+        Object.entries(settings.field_exceptions ?? {})
+          .map(([field, ids]) => [field, ids.filter((b) => b !== id)]),
+      )
       await ctx.db.patch(settings._id, {
         hidden_book_ids: settings.hidden_book_ids.filter((b) => b !== id),
+        book_field_overrides: overrides,
+        field_exceptions: exceptions,
       })
     }
 

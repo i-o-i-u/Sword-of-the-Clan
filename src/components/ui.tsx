@@ -433,6 +433,28 @@ export function TelegramIcon({ size = 16 }: IconProps) {
   )
 }
 
+/** حلقاتٌ مسلسلة — صفحة السلاسل */
+export function SeriesIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="2.8" y="7.4" width="5.4" height="9.2" rx="1.2" />
+      <rect x="9.3" y="5.6" width="5.4" height="12.8" rx="1.2" />
+      <rect x="15.8" y="7.4" width="5.4" height="9.2" rx="1.2" />
+      <path d="M8.2 12h1.1M14.7 12h1.1" />
+    </svg>
+  )
+}
+
+/** شريطُ علامةٍ في كتاب — صفحة الفوائد والمقتطفات */
+export function PerkIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M6.4 3.6h11.2a1.4 1.4 0 0 1 1.4 1.4v15.4l-7-4-7 4V5a1.4 1.4 0 0 1 1.4-1.4z" />
+      <path d="M9 8.6h6M9 12h4" />
+    </svg>
+  )
+}
+
 /** ساعةٌ صغيرة — بجانب توقيت مكة */
 export function ClockIcon({ size = 14 }: IconProps) {
   return (

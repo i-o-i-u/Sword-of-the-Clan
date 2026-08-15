@@ -15,6 +15,12 @@ export type Route =
   | { name: 'publisher'; id: string }
   | { name: 'stats' }
   | { name: 'about' }
+  // ثلاثُ صفحاتٍ لا تُعرض في الرأس، ومداخلُها من «تصفُّح المكتبة»
+  // و«عن المكتبة». وصفحةُ الشخص الواحد هي صفحةُ المؤلِّف نفسها: سجلُّ
+  // الأشخاص واحد، فلا مسارَ ثانٍ له.
+  | { name: 'people' }
+  | { name: 'series' }
+  | { name: 'perks' }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '').split('?')[0]
@@ -33,6 +39,9 @@ export function parseHash(hash: string): Route {
     case 'publisher': return id ? { name: 'publisher', id } : { name: 'publishers' }
     case 'stats': return { name: 'stats' }
     case 'about': return { name: 'about' }
+    case 'people': return { name: 'people' }
+    case 'series': return { name: 'series' }
+    case 'perks': return { name: 'perks' }
     default: return { name: 'landing' }
   }
 }
@@ -49,6 +58,9 @@ export function hashFor(route: Route): string {
     case 'publisher': return `#/publisher/${route.id}`
     case 'stats': return '#/stats'
     case 'about': return '#/about'
+    case 'people': return '#/people'
+    case 'series': return '#/series'
+    case 'perks': return '#/perks'
     default: return '#/'
   }
 }

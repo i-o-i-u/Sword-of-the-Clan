@@ -22,6 +22,7 @@ export const SEARCH_FIELDS: { key: string; label: string; def: boolean }[] = [
   { key: 'contributors', label: 'المحقِّق ونحوه', def: true },
   { key: 'publisher',  label: 'دار النشر',      def: true },
   { key: 'series',     label: 'السلسلة',        def: false },
+  { key: 'category',   label: 'التصنيف',        def: false },
   { key: 'topic',      label: 'الموضوع',        def: true },
   { key: 'tags',       label: 'الوسوم',         def: true },
   { key: 'keywords',   label: 'كلمات مفتاحية',  def: true },
@@ -58,6 +59,8 @@ function fieldText(b: Book, key: string): string {
     // اسم المؤلِّف الأول ومن شاركه
     case 'author': return [b.author_name, ...(b.co_authors ?? []).map((c) => c.name)].join(' ')
     case 'contributors': return (b.contributors ?? []).map((c) => c.name).join(' ')
+    // التصنيف رئيسُه وفرعُه جميعًا: من بحث عن «النحو» أصابه من فرعه
+    case 'category': return [b.category, b.sub_category].filter(Boolean).join(' ')
     case 'marginNote': return b.margin_note ?? ''
     case 'cabinet': return b.cabinet_no ?? ''
     case 'shelfNo': return b.shelf_no ?? ''

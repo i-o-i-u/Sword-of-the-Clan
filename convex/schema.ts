@@ -63,6 +63,21 @@ export const contributor = v.object({
   role: v.string(),
   name: v.string(),
   scope: v.optional(v.string()),
+  /**
+   * صاحبُ الاسم في سجلّ الأشخاص، وهو جدول `authors` نفسه: المحقِّق قد يكون
+   * مؤلِّفًا — محمود شاكر حقّق وألّف — فلا يُفرَد له سجلٌّ ثانٍ تُكرَّر فيه
+   * وفاتُه وترجمتُه. اختياريّ لأن المفهرَس قبله لا يحمله.
+   */
+  person_id: v.optional(v.union(v.id('authors'), v.null())),
+})
+
+/**
+ * مجلَّدٌ ناقص من الطبعة: رقمُه وسببُ فقده. والسبب يجوز أن يُترك، فيُكتفى
+ * بأنه ناقص — لا يُلزَم الفاهرس بما لا يعرف.
+ */
+export const missingVolume = v.object({
+  no: v.number(),
+  reason: v.string(),
 })
 
 /** حقول الكتاب. مُصدَّرة ليعيد استعمالها مُحوِّل الإضافة والتعديل. */
@@ -77,6 +92,9 @@ export const bookFields = {
   series: v.string(),
   series_no: v.string(),
   category: v.string(),
+  // التصنيف الفرعيّ داخل الرئيسيّ: «النحو والصرف» تحت «العربية». يُحفظ مع
+  // رئيسه لا بدلًا منه، فيُصفَّى بالاثنين جميعًا.
+  sub_category: v.optional(v.string()),
 
   // ٢. بيانات الطبعة
   publisher_id: v.union(v.id('publishers'), v.null()),
@@ -101,6 +119,9 @@ export const bookFields = {
   volume_parts: v.optional(v.array(v.string())),
   // أرقام مجلَّدات الفهارس. لا تُحسب صفحاتُها في الإجمالي: فهرسٌ لا متن.
   index_volumes: v.optional(v.array(v.number())),
+  // ما نقص من مجلَّدات الطبعة، لكلٍّ رقمُه وسببُ فقده على حِدَة: قد يتلف
+  // الثاني وتضيع إعارةُ السابع.
+  missing_volumes: v.optional(v.array(missingVolume)),
   pages: v.union(v.number(), v.null()),
   isbn: v.string(),
   language: v.string(),
@@ -228,9 +249,15 @@ export default defineSchema({
     position: v.number(),
   }).index('by_name', ['name']),
 
+  /**
+   * التصنيفات، رئيسُها وفرعُها في جدولٍ واحد: الفرعُ صفٌّ فيه `parent` اسمُ
+   * رئيسه، والرئيسُ صفٌّ بلا `parent`. والاسم فريدٌ في الجدول كلِّه، فلا
+   * يلتبس فرعٌ بفرع.
+   */
   categories: defineTable({
     name: v.string(),
     position: v.number(),
+    parent: v.optional(v.string()),
   }).index('by_name', ['name']),
 
   // إعدادات المكتبة: مستند واحد لا غير
@@ -265,6 +292,33 @@ export default defineSchema({
     hidden_fields: v.array(v.string()),
     hidden_categories: v.array(v.string()),
     hidden_book_ids: v.array(v.id('books')),
+
+    // ------------------------------------------------ الخصوصية على التفصيل
+    // ما يُخفى عن الزائر على ثلاث درجات: مستندٌ بعينه، وحقلٌ من مستندات
+    // نوعه كلِّها، وحقلٌ من مستندٍ بعينه. والدرجة الثانية معها استثناء:
+    // «أخفِ بلد كلِّ دار إلا هذه». وكلُّها اختياريّة، فمستند الإعدادات قائمٌ
+    // من قبلها.
+    //
+    // والمعرّفات هنا نصوصٌ لا `v.id`: قائمةُ استثناءٍ تشير إلى كتابٍ محذوف
+    // تُفشل تحقّقَ المخطّط على المستند كلِّه، وهي لا تضرّ إذ لا يُقرأ منها
+    // إلا ما طابق موجودًا.
+    show_landing_place: v.optional(v.boolean()),   // موضع المكتبة في الهبوط و«عنها»
+    show_calculator: v.optional(v.boolean()),      // حاسبة القراءة للزوار
+
+    /** مفتاحُه اسمُ الحقل، وقيمتُه معرّفاتُ الكتب المستثناة من إخفائه */
+    field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+    /** مفتاحُه معرّفُ الكتاب، وقيمتُه حقولٌ تُخفى منه وحده */
+    book_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
+
+    hidden_author_ids: v.optional(v.array(v.string())),
+    hidden_author_fields: v.optional(v.array(v.string())),
+    author_field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+    author_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
+
+    hidden_publisher_ids: v.optional(v.array(v.string())),
+    hidden_publisher_fields: v.optional(v.array(v.string())),
+    publisher_field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
+    publisher_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
   }),
 
   // صور الخلفية خلف شعار صفحة الهبوط، تتبدّل بتلاشٍ كل `rotate_seconds`

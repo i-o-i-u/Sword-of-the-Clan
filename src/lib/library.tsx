@@ -11,9 +11,9 @@ import { useAuthActions } from '@convex-dev/auth/react'
 import * as api from './api'
 import { applyTheme } from './theme'
 import {
-  DEFAULT_VISIBILITY,
-  type Author, type Book, type BookWork, type LandingImage, type LandingQuote,
-  type Loan, type Perk, type Publisher, type Settings,
+  DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
+  type Author, type Book, type BookWork, type Category, type LandingImage,
+  type LandingQuote, type Loan, type Perk, type Publisher, type Settings,
 } from './types'
 
 const EMPTY_SETTINGS: Settings = {
@@ -28,6 +28,7 @@ const EMPTY_SETTINGS: Settings = {
   about_text: '', x_url: '', telegram_url: '',
   visibility: DEFAULT_VISIBILITY,
   hidden_fields: [], hidden_categories: [], hidden_book_ids: [],
+  ...DEFAULT_SETTINGS_EXTRAS,
 }
 
 interface LibraryValue {
@@ -54,7 +55,10 @@ interface LibraryValue {
   perks: Perk[]
   loans: Loan[]
   publishers: Publisher[]
-  categories: string[]
+  /** التصنيفات كلُّها، رئيسُها وفرعُها. الرئيسُ ما كان `parent` فيه فارغًا. */
+  categories: Category[]
+  /** أسماء التصانيف الرئيسة وحدها، وهي التي يُصنَّف بها الكتاب أوّلًا */
+  mainCategories: string[]
   landingImages: LandingImage[]
   landingQuotes: LandingQuote[]
   settings: Settings
@@ -135,7 +139,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [perks, setPerks] = useState<Perk[]>([])
   const [loans, setLoans] = useState<Loan[]>([])
   const [publishers, setPublishers] = useState<Publisher[]>([])
-  const [categories, setCategories] = useState<string[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [landingImages, setLandingImages] = useState<LandingImage[]>([])
   const [landingQuotes, setLandingQuotes] = useState<LandingQuote[]>([])
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS)
@@ -310,13 +314,18 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     return map
   }, [books])
 
+  const mainCategories = useMemo(
+    () => categories.filter((c) => !c.parent).map((c) => c.name),
+    [categories],
+  )
+
   const value: LibraryValue = {
     loading, error, setError,
     isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly: () => setBrowseOnly((v) => !v),
     signOut, refreshRole,
-    books, authors, works, perks, loans, publishers, categories,
+    books, authors, works, perks, loans, publishers, categories, mainCategories,
     landingImages, landingQuotes, settings,
     authorById: (id) => (id ? authorMap.get(id) ?? null : null),
     bookById: (id) => bookMap.get(id),

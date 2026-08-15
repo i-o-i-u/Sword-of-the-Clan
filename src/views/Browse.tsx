@@ -16,10 +16,12 @@ import {
 import {
   ARABIC_LETTERS, CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT, VIEW_OPTIONS,
   STATUS_UNKNOWN, VOLUMES_COUNT,
-  booksLabel, centuryName, contributorLabel, countLabel, formatNumber, parseNumber,
+  booksLabel, catalogScore, centuryName, contributorLabel, countLabel, formatNumber,
+  parseNumber,
   titleInitial, type Book, type SortKey, type ViewMode, volumesOf,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
+import SideDoors from '../components/SideDoors'
 import {
   CabinetIcon, CalculatorIcon, ChartIcon, EmptyState, FilterIcon, GridIcon,
   HashIcon, HourglassIcon, OpenBookIcon, OwnerIcon, PagesIcon, PressIcon,
@@ -50,10 +52,11 @@ const VIEW_ICONS: Record<ViewMode, (p: { size?: number }) => JSX.Element> = {
 }
 
 export default function Browse() {
-  const { books, authorById, categories, settings, isOwner } = useLibrary()
+  const { books, authorById, categories, mainCategories, settings, isOwner } = useLibrary()
 
   const [filterCabinet, setFilterCabinet] = useState(ALL)
   const [filterCategory, setFilterCategory] = useState(ALL)
+  const [filterSub, setFilterSub] = useState(ALL)
   const [filterStatus, setFilterStatus] = useState(ALL)
   const [filterPlace, setFilterPlace] = useState(ALL)
   const [filterRating, setFilterRating] = useState(0)
@@ -75,6 +78,7 @@ export default function Browse() {
   const canUseAdvanced = isOwner || settings.visibility.advSearch
   const advancedOn = advanced && canUseAdvanced
   const canSeeStats = isOwner || settings.visibility.stats
+  const canUseCalculator = isOwner || settings.show_calculator
 
   const searchOpts = advancedOn ? opts : QUICK_OPTS
   const searchKeys = advancedOn ? fields : ALL_SEARCH_KEYS
@@ -88,7 +92,9 @@ export default function Browse() {
   }, [authorById])
 
   const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no === filterCabinet
-  const passCategory = (b: Book) => filterCategory === ALL || b.category === filterCategory
+  // التصنيف يُصفّى برئيسه، ثم بفرعه إن اختير — والاثنان محفوظان في الكتاب
+  const passCategory = (b: Book) => (filterCategory === ALL || b.category === filterCategory)
+    && (filterSub === ALL || b.sub_category === filterSub)
   const passStatus = (b: Book) => filterStatus === ALL
     || (filterStatus === UNKNOWN_STATUS ? !b.status : b.status === filterStatus)
   const passPlace = (b: Book) => filterPlace === ALL || b.place.trim() === filterPlace
@@ -127,8 +133,16 @@ export default function Browse() {
   const filtered = useMemo(
     () => books.filter((b) => passes(b)).sort(sorter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, filterCabinet, filterCategory, filterStatus, filterPlace, filterRating,
+    [books, filterCabinet, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
       filterCentury, filterLetter, query, searchOpts, searchKeys, sorter],
+  )
+
+  /** فروعُ التصنيف المختار، ولا تُعرض إلا إذا اختير رئيسُها */
+  const subCategories = useMemo(
+    () => (filterCategory === ALL
+      ? []
+      : categories.filter((c) => c.parent === filterCategory).map((c) => c.name)),
+    [categories, filterCategory],
   )
 
   // دواليب المكتبة تُشتقّ من الكتب نفسها: ما من قائمةٍ تُدار على حِدَة، فرقمُ
@@ -169,18 +183,18 @@ export default function Browse() {
       count: books.filter((b) => (name === ALL || b.cabinet_no === name) && passes(b, 'cabinet')).length,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, cabinets, filterCategory, filterStatus, filterPlace, filterRating,
+    [books, cabinets, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
       filterCentury, filterLetter, query, searchOpts, searchKeys],
   )
 
   const categoryFacets = useMemo(
-    () => [ALL, ...categories].map((name) => ({
+    () => [ALL, ...mainCategories].map((name) => ({
       name,
       label: name === ALL ? 'كل التصنيفات' : name,
       count: books.filter((b) => (name === ALL || b.category === name) && passes(b, 'category')).length,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [books, categories, filterCabinet, filterStatus, filterPlace, filterRating,
+    [books, mainCategories, filterCabinet, filterStatus, filterPlace, filterRating,
       filterCentury, filterLetter, query, searchOpts, searchKeys],
   )
 
@@ -192,15 +206,24 @@ export default function Browse() {
   }
 
   const activeFilters = (filterPlace !== ALL ? 1 : 0) + (filterRating ? 1 : 0)
-    + (filterCentury ? 1 : 0) + (filterCategory !== ALL ? 1 : 0)
+    + (filterCentury ? 1 : 0) + (filterCategory !== ALL ? 1 : 0) + (filterSub !== ALL ? 1 : 0)
 
   function clearFilters() {
-    setFilterCategory(ALL); setFilterPlace(ALL); setFilterRating(0); setFilterCentury(0)
+    setFilterCategory(ALL); setFilterSub(ALL)
+    setFilterPlace(ALL); setFilterRating(0); setFilterCentury(0)
+  }
+
+  /** اختيارُ رئيسٍ جديد يُسقط فرعَ سابقه: الفرعُ لا يقوم بغير رئيسه */
+  function chooseCategory(name: string) {
+    setFilterCategory(name)
+    setFilterSub(ALL)
   }
 
   const activeLabel = filterCabinet !== ALL
     ? `دولاب ${filterCabinet}`
-    : (filterCategory !== ALL ? filterCategory : null)
+    : (filterSub !== ALL
+      ? `${filterCategory} ← ${filterSub}`
+      : (filterCategory !== ALL ? filterCategory : null))
   const readingCount = books.filter((b) => b.status === 'قيد القراءة').length
   const trimmed = query.trim()
 
@@ -233,10 +256,37 @@ export default function Browse() {
         <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>التصنيفات</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 16 }}>
           {categoryFacets.map((f) => (
-            <button key={f.name} type="button" onClick={() => setFilterCategory(f.name)} style={facetStyle(filterCategory === f.name)}>
-              <span>{f.label}</span>
-              <span style={countPillStyle(filterCategory === f.name)}>{f.count}</span>
-            </button>
+            <div key={f.name}>
+              <button type="button" onClick={() => chooseCategory(f.name)} style={facetStyle(filterCategory === f.name)}>
+                <span>{f.label}</span>
+                <span style={countPillStyle(filterCategory === f.name)}>{f.count}</span>
+              </button>
+
+              {/* فروعُ التصنيف تنسدل تحته حين يُختار، ولا تُعرض قبله: قائمةُ
+                  الجانب تضيق عن أن تُعرَض فيها الفروعُ كلُّها معًا */}
+              {filterCategory === f.name && subCategories.length > 0 && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                  margin: '3px 12px 6px 0', paddingInlineStart: 8,
+                  borderInlineEnd: '1px solid var(--border)',
+                }}>
+                  {[ALL, ...subCategories].map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => setFilterSub(sub)}
+                      style={{ ...facetStyle(filterSub === sub), fontSize: 12.5 }}
+                    >
+                      <span>{sub === ALL ? 'كل الفروع' : sub}</span>
+                      <span style={countPillStyle(filterSub === sub)}>
+                        {books.filter((b) => b.category === f.name
+                          && (sub === ALL || b.sub_category === sub)).length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
@@ -286,15 +336,20 @@ export default function Browse() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowCalculator(true)}
-              className="side-tool"
-              title="حاسبة القراءة"
-            >
-              <CalculatorIcon size={19} />
-              <span>حاسبة القراءة</span>
-            </button>
+            {canUseCalculator && (
+              <button
+                type="button"
+                onClick={() => setShowCalculator(true)}
+                className="side-tool"
+                title="حاسبة القراءة"
+              >
+                <CalculatorIcon size={19} />
+                <span>حاسبة القراءة</span>
+              </button>
+            )}
+
+            {/* أبوابُ الصفحات الثلاث إلى جانب الحاسبة، لا في الرأس */}
+            <SideDoors className="side-tool" />
 
             {/* القرعة خدمةٌ كالحاسبة، فموضعُها معها لا في شريط أدوات العرض */}
             <button
@@ -388,10 +443,10 @@ export default function Browse() {
 
           {showFilters && (
             <FiltersPanel
-              categories={categories}
+              categories={mainCategories}
               places={places}
               centuries={centuries}
-              category={filterCategory} onCategory={setFilterCategory}
+              category={filterCategory} onCategory={chooseCategory}
               place={filterPlace} onPlace={setFilterPlace}
               rating={filterRating} onRating={setFilterRating}
               century={filterCentury} onCentury={setFilterCentury}
@@ -508,7 +563,9 @@ export default function Browse() {
       </div>
 
       <Suspense fallback={null}>
-        {showCalculator && <ReadingCalculator onClose={() => setShowCalculator(false)} />}
+        {showCalculator && canUseCalculator && (
+          <ReadingCalculator onClose={() => setShowCalculator(false)} />
+        )}
       </Suspense>
     </main>
   )
@@ -665,7 +722,7 @@ const letterStyle = (on: boolean, live: boolean) => ({
 
 // ------------------------------------------------------------------ شبكة
 function GridView({ books }: { books: Book[] }) {
-  const { settings, authorById } = useLibrary()
+  const { settings, authorById, isOwner } = useLibrary()
   return (
     <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: 20 }}>
       {books.map((book) => {
@@ -690,6 +747,9 @@ function GridView({ books }: { books: Book[] }) {
                   boxShadow: '0 0 0 2px oklch(0.98 0.01 75 / 0.8)',
                 }} />
               )}
+              {/* شارةُ نقص الفهرسة: لصاحب المكتبة وحده، ولا يراها زائر —
+                  إنما هي تذكيرٌ له بما بقي عليه، لا خبرٌ عن الكتاب */}
+              {isOwner && <CatalogBadge book={book} />}
             </div>
             <div style={{ padding: '11px 13px 13px' }}>
               <div style={{
@@ -746,6 +806,36 @@ function GridView({ books }: { books: Book[] }) {
 const clipped = {
   minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 } as const
+
+/**
+ * شارةُ تمام الفهرسة على بطاقة الشبكة: حَلْقةٌ يمتلئ منها بقدر ما أُدخل من
+ * بيانات الكتاب، وفي وسطها نسبةُ ما بقي. ولا تُعرض في الجدول ولا في الأرفف:
+ * هي تذكيرٌ للفاهرس وهو يتصفّح صورَ كتبه، لا عمودٌ في جدول.
+ *
+ * وهي لصاحب المكتبة وحده. والكتابُ التامُّ لا شارة له: التمامُ هو الأصل،
+ * والخبرُ إنما هو في النقص.
+ */
+function CatalogBadge({ book }: { book: Book }) {
+  const score = catalogScore(book)
+  if (score.missing <= 0) return null
+
+  // اللون يتدرّج بقدر النقص: أخضرُ لِما قارب التمام، فأصفر، فأحمرُ للمُقِلّ
+  const tone = score.percent >= 80
+    ? 'oklch(0.55 0.11 150)'
+    : score.percent >= 50 ? 'oklch(0.62 0.14 75)' : 'oklch(0.55 0.15 30)'
+
+  return (
+    <span
+      className="catalog-badge"
+      title={`فُهرِس ${score.filled} من ${score.total} حقلًا — ناقصٌ ${score.missing}٪`}
+      style={{
+        background: `conic-gradient(${tone} ${score.percent * 3.6}deg, oklch(0.85 0.01 60) 0)`,
+      }}
+    >
+      <span className="catalog-badge-core">{score.missing}٪</span>
+    </span>
+  )
+}
 
 /** سطرٌ في بطاقة الشبكة: أيقونةٌ ثم نصٌّ يُقصّ عند الضيق */
 function CardLine({ icon, text, strong }: { icon: React.ReactNode; text: string; strong?: boolean }) {

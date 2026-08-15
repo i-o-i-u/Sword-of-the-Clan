@@ -796,8 +796,16 @@ input[dir='ltr'] { text-align: left; }
   padding: 0 32px 16px;
 }
 
+/* البطاقة بحجمٍ ثابت لا يتبع طول الاقتباس: لو صَغُرت عند القصير وكَبُرت عند
+   الطويل لقفزت الصفحةُ كلَّما تبدّل الاقتباس. والارتفاعُ مقدَّرٌ بما يسع
+   الحدَّ الأقصى للحروف (QUOTE_MAX_CHARS في نافذة الإعدادات)، والمحتوى
+   موسَّطٌ فيه رأسيًّا فلا يتعلّق القصيرُ بأعلاه. */
 .quote-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: clamp(176px, 25vh, 236px);
   margin: 0;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -843,7 +851,9 @@ input[dir='ltr'] { text-align: left; }
   font-size: clamp(14px, 1.85vh, 19px);
   line-height: 2;
   color: var(--text);
-  text-align: justify;
+  /* الاقتباس يُوسَّط ولا يُضبط طرفاه: هو سطرٌ أو سطران لا صفحةُ نثر، وضبطُ
+     طرفَي القليل يُفرِّق كلماتِه */
+  text-align: center;
   text-wrap: pretty;
   white-space: pre-line;
 }
@@ -1615,7 +1625,19 @@ input[dir='ltr'] { text-align: left; }
 /* ------------------------------------------------------- عن المكتبة */
 .about-main { max-width: 820px; margin: 0 auto; padding: 54px 32px 40px; }
 .about-head { text-align: center; margin-bottom: 34px; }
-.about-logo { width: 92px; height: 92px; object-fit: contain; margin-bottom: 14px; }
+.about-logo { width: 132px; height: 132px; object-fit: contain; margin-bottom: 16px; }
+
+/* موضع المكتبة تحت اسمها، كما هو في صفحة الهبوط */
+.about-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.about-place svg { flex: none; color: var(--accent-soft); }
 
 .about-title {
   font-family: var(--heading-font);
@@ -1666,16 +1688,8 @@ input[dir='ltr'] { text-align: left; }
   background: linear-gradient(to left, transparent, var(--border), transparent);
 }
 
-/* الفقرة الأولى: حرفٌ مُصدَّر كما تُفتتح صفحات الكتب المطبوعة */
-.about-lead::first-letter {
-  float: right;
-  margin: 6px 0 0 9px;
-  font-family: var(--heading-font);
-  font-size: 3.1em;
-  font-weight: 700;
-  line-height: 0.82;
-  color: var(--accent-soft);
-}
+/* لا حرفَ مُصدَّرًا في أوّل الفقرة: تلك صنعةُ الطباعة اللاتينية، ولا
+   تستعملها العربُ في كتاباتهم. فالفقراتُ كلُّها سواء. */
 
 /* خاتمة الصلاة: توسَّط ولا تُجرى مع المتن */
 .about-closing {
@@ -1757,6 +1771,145 @@ input[dir='ltr'] { text-align: left; }
   box-shadow: 0 8px 20px oklch(0.24 0.02 50 / 0.12);
 }
 .about-stats-link svg { color: var(--accent-soft); }
+
+/* أبوابُ الصفحات الثلاث تحت الإحصاءات: صفٌّ ينساب على الجوّال */
+.about-doors {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.about-door {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.about-door:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 20px oklch(0.24 0.02 50 / 0.12);
+}
+.about-door svg { flex: none; color: var(--accent-soft); }
+
+/* --------------------------------------- بطاقةُ الزائد وقوائم السلاسل */
+
+/* زرُّ الإضافة في هيئة البطاقات التي هو بينها، لا زرٌّ غريبٌ عنها */
+.add-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 78px;
+  padding: 15px 17px;
+  border: 1.5px dashed color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 13px;
+  background: none;
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: border-color 0.16s, background 0.16s;
+}
+.add-card:hover {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 7%, transparent);
+}
+
+.add-card-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  font-size: 19px;
+  line-height: 1;
+}
+
+/* السلاسل: رقمُ الكتاب في عمودٍ ثابت، ثم عنوانه، ثم مؤلِّفه */
+.series-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.series-list li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.series-list li:hover { background: var(--header); }
+
+.series-no {
+  font-family: var(--heading-font);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-soft);
+  text-align: center;
+}
+
+.series-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-author {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* شارةُ نقص الفهرسة على بطاقة الشبكة — لصاحب المكتبة وحده.
+   حلقةٌ يمتلئ منها بقدر ما أُدخل، وفي وسطها نسبةُ ما بقي. */
+.catalog-badge {
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px oklch(0.2 0.02 50 / 0.3);
+}
+
+.catalog-badge-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
 
 /* ------------------------------------------------------------ الشاشات الضيّقة */
 

@@ -9,24 +9,30 @@ import { useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { lifeLabel, toHijriYear } from '../lib/hijri'
-import { BOOKS_COUNT, ERAS, countLabel, parseNumber, type Era } from '../lib/types'
+import { authoredBooks, contributedBooks } from '../lib/people'
+import { BOOKS_COUNT, ERAS, countLabel, parseNumber, type Book, type Era } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, HourglassIcon,
-  OpenBookIcon, PencilIcon, QuillIcon, cardStyle,
+  OpenBookIcon, PencilIcon, QuillIcon, VerifyIcon, cardStyle,
 } from '../components/ui'
 
 export function AuthorsIndex() {
   const { authors, books } = useLibrary()
 
+  // سجلُّ الأشخاص يجمع المؤلِّفَ والمحقِّق، فلا يُعرض في هذه الصفحة إلا من
+  // له تأليفٌ مسجَّل. ومن لم يكن له إلا تحقيقٌ فموضعُه «المحقِّقون ونحوهم».
   const cards = useMemo(() => {
     const counts = new Map<string, number>()
     books.forEach((b) => {
       if (b.author_id) counts.set(b.author_id, (counts.get(b.author_id) ?? 0) + 1)
+      ;(b.co_authors ?? []).forEach((c) => {
+        if (c.author_id) counts.set(c.author_id, (counts.get(c.author_id) ?? 0) + 1)
+      })
     })
     const sortValue = (death: number | null, era: Era) => toHijriYear(death, era) ?? 1e9
     return authors
-      .slice()
+      .filter((a) => (counts.get(a.id) ?? 0) > 0)
       .sort((a, b) =>
         (sortValue(a.death, a.era) - sortValue(b.death, b.era)) || a.name.localeCompare(b.name, 'ar'))
       .map((a) => ({ author: a, count: counts.get(a.id) ?? 0 }))
@@ -78,6 +84,14 @@ export function AuthorsIndex() {
   )
 }
 
+/**
+ * صفحةُ الشخص الواحد. تخدم المؤلِّفَ والمحقِّق جميعًا، فالسجلُّ واحد: يُعرض
+ * فيها أوّلًا ما ألَّفه إن كان له تأليف، ثم ما عمل فيه بصفاته على ترتيبها
+ * المعتمَد — تحقيقًا فمراجعةً فاعتناءً… وما لا وجود له لا يُعرض.
+ *
+ * ومسارُها `#/author/:id` وإن جاء إليها من «المحقِّقون ونحوهم»: للرجل
+ * صفحةٌ واحدة، فلا يُشقّ له مسارٌ ثانٍ.
+ */
 export function AuthorPage({ authorId }: { authorId: string }) {
   const { authors, books, canEdit, patchAuthor } = useLibrary()
   const author = authors.find((a) => a.id === authorId)
@@ -85,8 +99,15 @@ export function AuthorPage({ authorId }: { authorId: string }) {
   // الصفحة عرضٌ حتى يُطلب التعديل، فالقلمُ هو ما يفتح الحقول
   const [editing, setEditing] = useState(false)
 
+  const byTitle = (a: Book, b: Book) => a.title.localeCompare(b.title, 'ar')
+
   const authorBooks = useMemo(
-    () => books.filter((b) => b.author_id === authorId).sort((a, b) => a.title.localeCompare(b.title, 'ar')),
+    () => authoredBooks(books, authorId).sort(byTitle),
+    [books, authorId],
+  )
+  const contributions = useMemo(
+    () => contributedBooks(books, authorId)
+      .map((g) => ({ ...g, books: g.books.slice().sort(byTitle) })),
     [books, authorId],
   )
 
@@ -113,7 +134,13 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 12, flexWrap: 'wrap',
       }}>
-        <BackButton label="العودة إلى المؤلِّفين" onClick={() => navigate({ name: 'authors' })} />
+        {/* من لا تأليف له لا يُعرض في صفحة المؤلِّفين، فلا يُردّ إليها:
+            يُردّ إلى الصفحة التي جاء منها — «المحقِّقون ونحوهم» */}
+        {authorBooks.length > 0 ? (
+          <BackButton label="العودة إلى المؤلِّفين" onClick={() => navigate({ name: 'authors' })} />
+        ) : (
+          <BackButton label="العودة إلى المُحقِّقين ونحوهم" onClick={() => navigate({ name: 'people' })} />
+        )}
         {canEdit && (
           <button
             type="button"
@@ -231,38 +258,92 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         )}
       </div>
 
+      {/* المؤلَّفاتُ أوّلًا إن وُجدت، ثم ما عمل فيه بصفاته. وما لا وجود له
+          لا يُعرض: صفحةُ المحقِّق الذي لا تأليف له لا تُصدَّر بقائمةٍ فارغة. */}
+      {authorBooks.length > 0 && (
+        <PersonShelf
+          icon={<QuillIcon size={18} />}
+          title={`مؤلَّفاته في المكتبة (${countLabel(authorBooks.length, BOOKS_COUNT)})`}
+          books={authorBooks}
+          caption={(b) => b.category}
+        />
+      )}
+
+      {contributions.map(({ role, books: list }) => (
+        <PersonShelf
+          key={role}
+          icon={<VerifyIcon size={18} />}
+          title={`${roleWorkLabel(role)} (${countLabel(list.length, BOOKS_COUNT)})`}
+          books={list}
+          caption={(b) => b.author_name}
+        />
+      ))}
+
+      {authorBooks.length === 0 && contributions.length === 0 && (
+        <EmptyState title="لا كتب لهذا الاسم في الفهرس بعد" />
+      )}
+    </main>
+  )
+}
+
+/**
+ * عنوانُ ما عمله الرجل بصفةٍ ما، مصدرًا لا وصفًا: «تحقيقاته» لا
+ * «المُحقِّق». وما لا مصدر له في القائمة يُعدَل عنه إلى صلةٍ تصحّ.
+ */
+const ROLE_WORK: Record<string, string> = {
+  'المُحقِّق': 'تحقيقاته في المكتبة',
+  'المُراجِع': 'ما راجَعه',
+  'المُعتَني': 'ما اعتنى به',
+  'المُصحِّح': 'ما صحَّحه',
+  'المُخَرِّج': 'ما خرَّج أحاديثه',
+  'المُتَرجِم': 'ما ترجَمه',
+  'تَقْرِيظ': 'ما قرَّظه',
+  'تقديم': 'ما قدَّم له',
+}
+
+export function roleWorkLabel(role: string): string {
+  return ROLE_WORK[role] ?? `ما عمل فيه بصفة «${role}»`
+}
+
+/** رفٌّ من كتب الشخص: عنوانٌ بأيقونته، ثم بطاقاتُ الكتب */
+function PersonShelf(
+  { icon, title, books, caption }: {
+    icon: React.ReactNode
+    title: string
+    books: Book[]
+    caption: (b: Book) => string
+  },
+) {
+  return (
+    <section style={{ marginBottom: 26 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 9,
         fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12,
       }}>
-        <QuillIcon size={18} />
-        مؤلَّفاته في المكتبة ({countLabel(authorBooks.length, BOOKS_COUNT)})
+        {icon}
+        {title}
       </div>
 
-      {authorBooks.length === 0 ? (
-        <EmptyState title="لا كتب لهذا المؤلِّف في الفهرس بعد" />
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px,1fr))', gap: 18 }}>
-          {authorBooks.map((book) => (
-            <div
-              key={book.id}
-              className="book-card"
-              onClick={() => navigate({ name: 'book', id: book.id })}
-              style={{ ...cardStyle, cursor: 'pointer', borderRadius: 12, overflow: 'hidden' }}
-            >
-              <div style={{ width: '100%', aspectRatio: '3/4', background: 'var(--cover-bg)' }}>
-                <ImageSlot url={book.cover_url} folder="covers" canEdit={false} onUploaded={() => {}} placeholder="غلاف الكتاب" />
-              </div>
-              <div style={{ padding: '10px 12px 12px' }}>
-                <div style={{ fontFamily: 'var(--heading-font)', fontWeight: 700, fontSize: 14.5, lineHeight: 1.35 }}>
-                  {book.title}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{book.category}</div>
-              </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px,1fr))', gap: 18 }}>
+        {books.map((book) => (
+          <div
+            key={book.id}
+            className="book-card"
+            onClick={() => navigate({ name: 'book', id: book.id })}
+            style={{ ...cardStyle, cursor: 'pointer', borderRadius: 12, overflow: 'hidden' }}
+          >
+            <div style={{ width: '100%', aspectRatio: '3/4', background: 'var(--cover-bg)' }}>
+              <ImageSlot url={book.cover_url} folder="covers" canEdit={false} onUploaded={() => {}} placeholder="غلاف الكتاب" />
             </div>
-          ))}
-        </div>
-      )}
-    </main>
+            <div style={{ padding: '10px 12px 12px' }}>
+              <div style={{ fontFamily: 'var(--heading-font)', fontWeight: 700, fontSize: 14.5, lineHeight: 1.35 }}>
+                {book.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{caption(book)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
