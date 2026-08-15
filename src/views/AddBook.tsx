@@ -19,7 +19,8 @@ import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
   BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, LANGUAGES,
-  MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS, WORK_TYPES,
+  MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS,
+  WORK_PHRASES, WORK_TYPES,
   editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
   sumVolumePages, type Category, type Contributor, type MissingVolume,
 } from '../lib/types'
@@ -1199,7 +1200,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             <label style={labelStyle}>
               نوع العمل
               <select value={workType} onChange={(e) => setWorkType(e.target.value)} style={inputStyle}>
-                {WORK_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+                {/* القيمةُ نوعُ العمل مجرَّدًا كما يُحفظ، والمعروضُ صياغتُه
+                    بحرفه — فيرى الفاهرسُ الجملةَ التي ستُكتب قبل أن يربط */}
+                {WORK_TYPES.map((o) => (
+                  <option key={o} value={o}>{WORK_PHRASES[o] ?? o}</option>
+                ))}
               </select>
             </label>
             <button
@@ -1227,7 +1232,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                   display: 'flex', alignItems: 'center', gap: 8, background: 'var(--header)',
                   borderRadius: 999, padding: '5px 8px 5px 13px', fontSize: 12.5,
                 }}>
-                  {w.type} على: {books.find((b) => b.id === w.target_book_id)?.title ?? '—'}
+                  {/* حرفُ الجرّ يتبع نوع العمل ولا يُقاس: «شرحٌ لـ»،
+                      «حاشيةٌ على»، «انتقاءٌ من». ومصدرُه `WORK_PHRASES`
+                      نفسُها التي تقرؤها بطاقةُ الكتاب، فلا يفترق اللفظُ
+                      بين موضع الإدخال وموضع العرض. */}
+                  {WORK_PHRASES[w.type] ?? w.type}: {books.find((b) => b.id === w.target_book_id)?.title ?? '—'}
                   <button
                     type="button"
                     aria-label="فكّ هذه الصلة"
@@ -1252,7 +1261,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                   display: 'flex', alignItems: 'center', gap: 8, background: 'var(--header)',
                   borderRadius: 999, padding: '5px 8px 5px 13px', fontSize: 12.5,
                 }}>
-                  {w.type} على: {books.find((b) => b.id === w.target_book_id)?.title ?? '—'}
+                  {/* حرفُ الجرّ يتبع نوع العمل ولا يُقاس: «شرحٌ لـ»،
+                      «حاشيةٌ على»، «انتقاءٌ من». ومصدرُه `WORK_PHRASES`
+                      نفسُها التي تقرؤها بطاقةُ الكتاب، فلا يفترق اللفظُ
+                      بين موضع الإدخال وموضع العرض. */}
+                  {WORK_PHRASES[w.type] ?? w.type}: {books.find((b) => b.id === w.target_book_id)?.title ?? '—'}
                   <button
                     type="button"
                     aria-label="إزالة"

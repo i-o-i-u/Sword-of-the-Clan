@@ -9,8 +9,11 @@ import { useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { lifeLabel, toHijriYear } from '../lib/hijri'
-import { authoredBooks, contributedBooks } from '../lib/people'
-import { BOOKS_COUNT, ERAS, countLabel, parseNumber, type Book, type Era } from '../lib/types'
+import { authoredBooks, contributedBooks, topRole } from '../lib/people'
+import {
+  AUTHOR_ROLE, BOOKS_COUNT, ERAS, countLabel, parseNumber, rolePersonLabel,
+  roleWorksLabel, type Book, type Era,
+} from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, HourglassIcon,
@@ -111,6 +114,12 @@ export function AuthorPage({ authorId }: { authorId: string }) {
     [books, authorId],
   )
 
+  // يُنعَت الرجلُ بأعلى صفةٍ سُجِّلت له: من له تأليفٌ فمؤلِّف، ومن حقّق
+  // واعتنى فمحقِّق. ومن لا عمل له في المكتبة بعدُ يبقى على «المؤلِّف» — هو
+  // الأصلُ الذي تُفتح به صفحةُ اسمٍ لم يُنسب إليه شيء.
+  const rank = useMemo(() => topRole(books, authorId), [books, authorId])
+  const editLabel = `تعديل بيانات ${rolePersonLabel(rank ?? AUTHOR_ROLE)}`
+
   if (!author) {
     return (
       <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
@@ -146,10 +155,10 @@ export function AuthorPage({ authorId }: { authorId: string }) {
             type="button"
             className="edit-pen"
             onClick={() => setEditing((v) => !v)}
-            title={open ? 'إنهاء التعديل' : 'تعديل بيانات المؤلِّف'}
+            title={open ? 'إنهاء التعديل' : editLabel}
           >
             <PencilIcon size={16} />
-            {open ? 'إنهاء التعديل' : 'تعديل بيانات المؤلِّف'}
+            {open ? 'إنهاء التعديل' : editLabel}
           </button>
         )}
       </div>
@@ -263,7 +272,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
       {authorBooks.length > 0 && (
         <PersonShelf
           icon={<QuillIcon size={18} />}
-          title={`مؤلَّفاته في المكتبة (${countLabel(authorBooks.length, BOOKS_COUNT)})`}
+          title={`${roleWorksLabel(AUTHOR_ROLE)} في المكتبة (${countLabel(authorBooks.length, BOOKS_COUNT)})`}
           books={authorBooks}
           caption={(b) => b.category}
         />
@@ -273,7 +282,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         <PersonShelf
           key={role}
           icon={<VerifyIcon size={18} />}
-          title={`${roleWorkLabel(role)} (${countLabel(list.length, BOOKS_COUNT)})`}
+          title={`${roleWorksLabel(role)} في المكتبة (${countLabel(list.length, BOOKS_COUNT)})`}
           books={list}
           caption={(b) => b.author_name}
         />
@@ -284,25 +293,6 @@ export function AuthorPage({ authorId }: { authorId: string }) {
       )}
     </main>
   )
-}
-
-/**
- * عنوانُ ما عمله الرجل بصفةٍ ما، مصدرًا لا وصفًا: «تحقيقاته» لا
- * «المُحقِّق». وما لا مصدر له في القائمة يُعدَل عنه إلى صلةٍ تصحّ.
- */
-const ROLE_WORK: Record<string, string> = {
-  'المُحقِّق': 'تحقيقاته في المكتبة',
-  'المُراجِع': 'ما راجَعه',
-  'المُعتَني': 'ما اعتنى به',
-  'المُصحِّح': 'ما صحَّحه',
-  'المُخَرِّج': 'ما خرَّج أحاديثه',
-  'المُتَرجِم': 'ما ترجَمه',
-  'تَقْرِيظ': 'ما قرَّظه',
-  'تقديم': 'ما قدَّم له',
-}
-
-export function roleWorkLabel(role: string): string {
-  return ROLE_WORK[role] ?? `ما عمل فيه بصفة «${role}»`
 }
 
 /** رفٌّ من كتب الشخص: عنوانٌ بأيقونته، ثم بطاقاتُ الكتب */

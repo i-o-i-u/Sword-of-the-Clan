@@ -5,7 +5,7 @@
 //
 // وهذه الدوالُّ تقرأ الصفاتِ من الكتب نفسها: أين ذُكر الرجلُ وبأيّ صفة.
 
-import { CONTRIBUTOR_ROLES, type Book } from './types'
+import { AUTHOR_ROLE, CONTRIBUTOR_ROLES, ROLE_RANK, type Book } from './types'
 
 /** كتبُ الرجل مقسومةً بصفته فيها، على ترتيب الصفات المعتمَد */
 export interface RoleWorks {
@@ -46,6 +46,27 @@ export function contributedBooks(books: Book[], personId: string): RoleWorks[] {
   return [...map.entries()]
     .map(([role, list]) => ({ role, books: list }))
     .sort((a, b) => roleOrder(a.role) - roleOrder(b.role))
+}
+
+/**
+ * أعلى صفةٍ سُجِّلت للرجل في المكتبة، على ترتيب `ROLE_RANK`.
+ *
+ * فمن له تأليفٌ واحد فهو مؤلِّفٌ أبدًا وإن كثُرت تحقيقاتُه، ومن حقّق واعتنى
+ * فهو محقِّق. وبها يُنعَت نعتًا مفردًا حيث لا يسع المقامُ تعدادَ صفاته.
+ * ولا تُسقط هذه الرتبةُ ما دونها: أعمالُه تُقسَم بصفاته كلِّها، ويُعرض في
+ * صفِّ كلٍّ منها.
+ *
+ * وترجع فارغةً لمن لا عمل له في المكتبة أصلًا.
+ */
+export function topRole(books: Book[], personId: string): string | null {
+  if (authoredBooks(books, personId).length > 0) return AUTHOR_ROLE
+
+  const has = new Set(
+    books.flatMap((b) => (b.contributors ?? [])
+      .filter((c) => c.person_id === personId)
+      .map((c) => c.role)),
+  )
+  return ROLE_RANK.find((r) => has.has(r)) ?? null
 }
 
 /** هل لهذا الرجل في المكتبة عملٌ بصفةٍ غير التأليف؟ */

@@ -13,7 +13,7 @@ import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { deathLabel } from '../lib/hijri'
 import { peopleByRole } from '../lib/people'
-import { formatNumber, roleGroupLabel } from '../lib/types'
+import { BOOKS_COUNT, countLabel, formatNumber, roleGroupLabel } from '../lib/types'
 import {
   BackButton, EmptyState, HourglassIcon, OpenBookIcon, VerifyIcon, cardStyle,
 } from '../components/ui'
@@ -97,9 +97,11 @@ export default function People() {
                           {deathLabel(author)}
                         </div>
                       )}
+                      {/* لا يُوصَل عددٌ باسمٍ إلا من `countLabel`: «كتابٌ
+                          واحد» ثم «كتابان» ثم «٣ كتبٍ» ثم «١١ كتابًا» */}
                       <div className="author-books">
                         <OpenBookIcon size={12} />
-                        {formatNumber(count)} في المكتبة
+                        {countLabel(count, BOOKS_COUNT)} في المكتبة
                       </div>
                     </div>
                   </div>
