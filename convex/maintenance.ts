@@ -2,9 +2,8 @@
 //
 // موضعُها هنا لا في `catalog.ts`: تلك كتابةٌ يوميّة، وهذه إصلاحُ ما مضى.
 
-import { mutation } from './_generated/server'
+import { internalMutation } from './_generated/server'
 import type { Id } from './_generated/dataModel'
-import { isOwner } from './privacy'
 
 /**
  * يربط مشارِكي الكتب بسجلّ الأشخاص.
@@ -19,12 +18,15 @@ import { isOwner } from './privacy'
  * بعد تشذيب أطرافه، فهو المتاح: لا شيء سواه يدلّ على الرجل في المستند القديم.
  *
  * ويُعاد تشغيلُه بلا ضرر: ما رُبط لا يُمَسّ.
+ *
+ * وهو `internalMutation` لا `mutation`: الداخليّةُ ليست في واجهة API فلا
+ * يبلغها متصفِّحٌ بحال، فهي أحرزُ من حارس `isOwner`. ولوحةُ Convex تُشغِّلها،
+ * وهي تنادي الدوالَّ بلا هويّةِ جلسة — فحارسُ الملكية كان سيردُّ صاحبَ
+ * المكتبة نفسه.
  */
-export const linkContributors = mutation({
+export const linkContributors = internalMutation({
   args: {},
   handler: async (ctx) => {
-    if (!(await isOwner(ctx))) throw new Error('لصاحب المكتبة وحده.')
-
     // سجلُّ الأشخاص كلُّه مرّةً واحدة، فلا يُقرأ الجدولُ لكل اسم
     const byName = new Map<string, Id<'authors'>>()
     for (const a of await ctx.db.query('authors').collect()) {
