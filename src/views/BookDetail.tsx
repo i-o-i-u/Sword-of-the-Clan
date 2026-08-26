@@ -18,7 +18,7 @@ import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import { formatIsbn, isbnInfo } from '../lib/isbn'
 import {
-  LANGUAGES, PERK_KINDS, STATUSES, STATUS_UNKNOWN,
+  LANGUAGES, STATUSES, STATUS_UNKNOWN,
   WORK_PHRASES, contributorLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
   type Author, type Book, type Perk, type ReadingStatus,
@@ -982,7 +982,9 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
   const { canEdit } = useLibrary()
   const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
 
-  const counts = PERK_KINDS
+  // الأنواعُ تُقرأ من القيود نفسها لا من قائمةٍ ثابتة: صاحبُ المكتبة
+  // يُحرِّرها، ولا يسقط عدٌّ لأن نوعًا رُفع من القائمة
+  const counts = [...new Set(perks.map((p) => p.kind))]
     .map((kind) => ({ kind, n: perks.filter((p) => p.kind === kind).length }))
     .filter(({ n }) => n > 0)
 

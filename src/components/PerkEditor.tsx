@@ -9,12 +9,13 @@
 // نصًّا. وهذا الشطرُ الثاني هو الذي يُبقي في الكنّاش ما قُرئ في مكتبةٍ عامّة
 // أو في نسخةٍ إلكترونيّة أو في كتابٍ مستعار.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { perkNotebooks, perkTags } from '../lib/perks'
+import PoetryComposer from './PoetryComposer'
 import {
-  PERK_KINDS, PERK_KIND_HINTS, PERK_RATINGS, type Perk, type PerkKind,
+  PERK_KIND_HINTS, PERK_RATINGS, perkKindsOf, type Perk, type PerkKind,
 } from '../lib/types'
 import {
   ClearIcon, CloseButton, Combobox, Overlay, chipStyle, ghostButtonStyle,
@@ -52,8 +53,11 @@ interface Draft {
 
 export default function PerkEditor({ perk, bookId, onClose }: Props) {
   const {
-    books, bookById, categories, perks, canEdit, run, reload,
+    books, bookById, categories, perks, settings, canEdit, run, reload,
   } = useLibrary()
+
+  /** الأنواع كما حرّرها صاحب المكتبة من إعدادات الكنّاش */
+  const kinds = useMemo(() => perkKindsOf(settings, perks), [settings, perks])
 
   const startBook = perk?.book_id ? bookById(perk.book_id) : (bookId ? bookById(bookId) : undefined)
 
@@ -78,6 +82,10 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     tags: perk?.tags ?? [],
   }))
   const [saving, setSaving] = useState(false)
+
+  // مرجعا الحقلين: بهما يُعرف موضعُ مؤشِّر الكتابة فيُدرَج الشعرُ فيه
+  const textRef = useRef<HTMLTextAreaElement>(null)
+  const commentRef = useRef<HTMLTextAreaElement>(null)
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setD((prev) => ({ ...prev, [key]: value }))
@@ -166,7 +174,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
           <div className="perk-field perk-field-wide">
             <span className="perk-field-label">نوعه</span>
             <div className="perk-kinds">
-              {PERK_KINDS.map((k) => (
+              {kinds.map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -177,7 +185,10 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 </button>
               ))}
             </div>
-            <p className="perk-hint">{PERK_KIND_HINTS[d.kind]}</p>
+            {/* وما استجدّ من أنواعِ صاحب المكتبة لا شرحَ له، ولا يُختلق */}
+            {PERK_KIND_HINTS[d.kind] && (
+              <p className="perk-hint">{PERK_KIND_HINTS[d.kind]}</p>
+            )}
           </div>
 
           <label className="perk-field perk-field-wide">
@@ -190,27 +201,42 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             />
           </label>
 
-          <label className="perk-field perk-field-wide">
-            <span className="perk-field-label">نصّه</span>
+          <div className="perk-field perk-field-wide">
+            <label className="perk-field-label" htmlFor="perk-text">نصّه</label>
             <textarea
+              id="perk-text"
+              ref={textRef}
               value={d.text}
               onChange={(e) => set('text', e.target.value)}
               placeholder="النصّ كما هو في الكتاب"
               className="perk-area"
               style={inputStyle}
             />
-          </label>
+            <PoetryComposer
+              areaRef={textRef}
+              value={d.text}
+              onChange={(v) => set('text', v)}
+            />
+          </div>
 
-          <label className="perk-field perk-field-wide">
-            <span className="perk-field-label">تعليقي عليه</span>
+          <div className="perk-field perk-field-wide">
+            <label className="perk-field-label" htmlFor="perk-comment">تعليقي عليه</label>
             <textarea
+              id="perk-comment"
+              ref={commentRef}
               value={d.comment}
               onChange={(e) => set('comment', e.target.value)}
               placeholder="ما تُعقِّب به عليه — يُعرض مفصولًا عنه فلا يلتبس بكلام صاحبه"
               className="perk-area perk-area-small"
               style={inputStyle}
             />
-          </label>
+            {/* والتعقُّبُ قد يكون بيتًا كما يكون كلامًا، فله ما للنصّ */}
+            <PoetryComposer
+              areaRef={commentRef}
+              value={d.comment}
+              onChange={(v) => set('comment', v)}
+            />
+          </div>
 
           {/* ------------------------------------------------ ٢. مصدره */}
           <span className="perk-part">مصدره</span>

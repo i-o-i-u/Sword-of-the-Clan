@@ -156,6 +156,25 @@ export const updatePerk = mutation({
   },
 })
 
+/**
+ * تعديلُ اسم نوعٍ من أنواع القيد، ومزامنتُه على قيوده.
+ *
+ * وهذا ما كانت Postgres تفعله بمفتاحٍ أجنبيّ ونحن نكتبه صراحةً: إغفالُه
+ * يترك قيودًا موسومةً بنوعٍ لا وجود له في القائمة، فلا تُصفَّى به ولا يُعرف
+ * بابُها. والاسمُ يُقصّ من طرفيه كما يُقصّ اسمُ المؤلِّف.
+ */
+export const renamePerkKind = mutation({
+  args: { from: v.string(), to: v.string() },
+  handler: async (ctx, { from, to }) => {
+    await requireOwner(ctx)
+    const next = to.trim()
+    if (!next || next === from) return
+    for (const p of await ctx.db.query('perks').collect()) {
+      if (p.kind === from) await ctx.db.patch(p._id, { kind: next })
+    }
+  },
+})
+
 export const deletePerk = mutation({
   args: { id: v.id('perks') },
   handler: async (ctx, { id }) => {
@@ -211,6 +230,8 @@ export const updateSettings = mutation({
       landing_intro: v.optional(v.string()),
       show_landing_stats: v.optional(v.boolean()),
       show_landing_quote: v.optional(v.boolean()),
+      /** أنواعُ القيد كما يحرّرها صاحب المكتبة من إعدادات قسم الفوائد */
+      perk_kinds: v.optional(v.array(v.string())),
       auto_rotate: v.optional(v.boolean()),
       rotate_seconds: v.optional(v.number()),
       quote_seconds: v.optional(v.number()),

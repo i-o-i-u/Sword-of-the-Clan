@@ -175,6 +175,11 @@ export async function updatePerk(id: string, perk: PerkInput): Promise<void> {
   })
 }
 
+/** تعديلُ اسم نوعٍ من أنواع القيد، ويُزامَن على قيوده في الخادم */
+export async function renamePerkKind(from: string, to: string): Promise<void> {
+  await convex.mutation(api.catalog.renamePerkKind, { from, to })
+}
+
 export async function deletePerk(id: string): Promise<void> {
   await convex.mutation(api.catalog.deletePerk, { id: id as Id<'perks'> })
 }

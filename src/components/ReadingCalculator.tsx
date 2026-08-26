@@ -70,11 +70,18 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
   )
 
   return (
-    <Overlay onClose={onClose} align="flex-start" paddingTop={54}>
+    /*
+     * حاشيةُ الطبقة تكفيها، فلا `paddingTop` تُلصقها بترويسة الموقع — كانت
+     * ٥٤ والترويسةُ ٧٠، فتقع النافذةُ تحت حرفها بثلاث نقاط.
+     *
+     * وحدُّ ارتفاعها من `.overlay-sheet` لا من `vh`: تلك لا تتبع التكبير،
+     * فتخرج النافذةُ عن الشاشة كلّما كبّر القارئ الخطّ.
+     */
+    <Overlay onClose={onClose} align="flex-start">
       <div
+        className="overlay-sheet"
         style={{
           ...cardStyle, borderRadius: 18, padding: 0, width: 'min(640px, 100%)',
-          maxHeight: 'calc(100vh / var(--ui-scale) - 88px)', display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
@@ -262,7 +269,13 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
               // بـ`break-word` احتياطًا: يكسر ولا يُصغِّر، وكِلا الكسرين
               // يمنع النصّ أن يخرج.
               overflowWrap: 'anywhere', wordBreak: 'break-word',
-              textAlign: 'justify', textWrap: 'pretty',
+              /*
+               * ولا تُضبط طرفاها: النتيجةُ جملٌ قصار فيها أرقامٌ وتواريخُ
+               * لا تنكسر، فيمطّ الضبطُ ما بين كلماتها مطًّا قبيحًا. وقاعدةُ
+               * ضبط الطرفين لِما زاد على سطرين من النثر المسترسل، وليست
+               * النتيجةُ منه.
+               */
+              textAlign: 'start', textWrap: 'pretty',
               color: result.wrong ? 'oklch(0.36 0.08 55)' : 'var(--text)',
             }}
           >

@@ -329,17 +329,36 @@ body::after {
  * هناك تكاد تملأ الشاشة.
  */
 .overlay-wrap {
-  padding: 20px;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  padding: clamp(14px, 4vh, 44px) 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /*
+   * الظلُّ الذي تحت النافذة: أعتمُ ممّا كان، وبضبابٍ محسوس. وهو ممدودٌ إلى
+   * أطراف الشاشة قطعًا — موضعُ الطبقة من `body` لا من `#root` المكبَّر.
+   */
+  background: oklch(0.14 0.012 50 / 0.62);
+  backdrop-filter: blur(4px) saturate(0.9);
+  -webkit-backdrop-filter: blur(4px) saturate(0.9);
 }
 
-/* لوحُ النافذة: لا يطول عن الطبقة، وما زاد من جوفه مُرِّر فيه */
+/*
+ * لوحُ النافذة: لا يطول عن الطبقة، وما زاد من جوفه مُرِّر فيه.
+ *
+ * والتكبيرُ ههنا لا على الطبقة: الطبقةُ مثبَّتةٌ على الشاشة فلو كُبِّرت
+ * لجاوزتها، واللوحُ يُكبَّر ثم يُقاس حدُّه بما يقابله من الطبقة غيرَ مكبَّر
+ * (`calc(100% / --ui-scale)`) — فيبقى في حدّه مهما كبّر القارئ الخطّ.
+ */
 .overlay-sheet {
   display: flex;
   flex-direction: column;
-  max-height: 100%;
   min-height: 0;
+  zoom: var(--ui-scale);
+  max-height: calc(100% / var(--ui-scale));
+  max-width: calc(100% / var(--ui-scale));
 }
 
 /* شريط تمرير رفيع داخل نافذة الإعدادات */
@@ -783,6 +802,55 @@ body::after {
 }
 .owner-nook-btn:hover { background: var(--surface); }
 
+/*
+ * لوحُ صاحب المكتبة في زاوية الشاشة السفلى: مطويٌّ إلى قرصٍ صغير حتى
+ * يُطلب، فلا يشغل من الصفحة إلا موضعَ إبهام. وهو بديلُ ما كان في الترويسة
+ * يزاحم تبويباتِ المكتبة.
+ */
+.owner-dock {
+  position: fixed;
+  z-index: 40;
+  inset-inline-start: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-2);
+}
+
+.owner-dock-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.16s, color 0.16s;
+}
+.owner-dock-tab svg { flex: none; }
+.owner-dock-tab:hover { background: var(--accent); color: var(--on-accent); }
+.owner-dock-tab-on { background: var(--accent); color: var(--on-accent); }
+
+.owner-dock .owner-nook-btn { width: 100%; }
+
+/* وفي الشاشة الضيّقة يُطوى اسمُه فيبقى القرصُ أيقونةً، فلا يحجب النصّ */
+@media (max-width: 620px) {
+  .owner-dock { inset-inline-start: 12px; bottom: 12px; }
+  .owner-dock-tab span { display: none; }
+}
+
 /* ------------------------------------------ الأزرار، خارج الإطار */
 .hero-actions {
   display: flex;
@@ -863,35 +931,61 @@ body::after {
   background: var(--accent-dark);
 }
 
-/* أعدادُ المكتبة سطرًا واحدًا تحت الأزرار: خبرٌ يُقرأ في لمحة قبل الدخول.
-   وما كان صفرًا لا يُعرض أصلًا، فلا يُقال «لا كتاب في المكتبة». */
-.hero-tally {
+/*
+ * أعدادُ المكتبة شريطًا في ذيل اللوحة، **داخل الإطار لا تحته**: اللوحةُ
+ * صندوقٌ ارتفاعُه مضبوط، فما وُضع فيه لا يكلّف صدرَ الصفحة ارتفاعًا — وتبقى
+ * صفحةُ الهبوط شاشةً واحدةً بلا تمرير. وكانت صفًّا تحت الأزرار فأطالت
+ * الصدرَ حتى وقع على بطاقة الاقتباس في الشاشات القصيرة.
+ *
+ * وتحتها حجابٌ متدرّج يعزلها عن تفاصيل الصورة، فتُقرأ عليها كما تُقرأ على
+ * أرضٍ خالية.
+ */
+.frame-tally {
+  position: absolute;
+  z-index: 4;
+  inset-inline: 0;
+  bottom: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 8px 18px;
-  animation: rise-in 0.62s var(--ease) 0.36s both;
+  gap: 6px 16px;
+  padding: 22px 18px 11px;
+  background: linear-gradient(
+    to top,
+    color-mix(in oklch, var(--surface) 92%, transparent) 0%,
+    color-mix(in oklch, var(--surface) 70%, transparent) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: fade-in 0.6s ease-out 0.45s both;
 }
 
-.hero-tally-item {
+.frame-tally-item {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--text);
+  white-space: nowrap;
 }
-.hero-tally-item svg { flex: none; color: var(--accent-soft); opacity: 0.85; }
+.frame-tally-item svg { flex: none; color: var(--accent-soft); }
 
 /* فاصلٌ بين العدد والعدد: نقطةٌ لا خطّ */
-.hero-tally-item + .hero-tally-item::before {
+.frame-tally-item + .frame-tally-item::before {
   content: '';
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   margin-inline-end: 10px;
   border-radius: 50%;
-  background: var(--border);
+  background: var(--accent-soft);
+  opacity: 0.5;
+}
+
+/* واللوحةُ القصيرة لا تسعها مع الشعار والاسم والموضع، فتتنحّى */
+@media (max-height: 560px) {
+  .frame-tally { display: none; }
 }
 
 /* ------------------------------ ورقة التقويم، خارج الإطار كذلك */
@@ -2205,11 +2299,6 @@ body::after {
   }
 }
 
-/* وسطرُ الأعداد يتنحّى عن الشاشة القصيرة: هو خبرٌ زائد، والشاشةُ الواحدة
-   بلا تمرير أولى منه. فإذا اتّسع الارتفاعُ عاد. */
-@media (max-height: 820px) {
-  .hero-tally { display: none; }
-}
 
 /* ورقة التقويم تنزل تحت الأزرار قبل أن تزاحمها */
 @media (max-width: 1080px) {
@@ -2237,12 +2326,11 @@ body::after {
 }
 
 /*
- * الرأسُ يلتفّ عند صاحب المكتبة قبل أن يلتفّ عند الزائر: عنده فوق ما عنده
- * اسمُه ووضعُ التصفُّح والخروجُ وإضافةُ كتاب، فيضيق به العرضُ وهو لا يزال
- * واسعًا على الزائر. وكان لا يلتفّ إلا دون التسعمئة، فيتزاحم ما بين ذلك
- * ويخرج بعضُه عن الحدّ.
+ * الرأسُ يلتفّ عند صاحب المكتبة قبل أن يلتفّ عند الزائر: عنده زرُّ «إضافة
+ * كتاب» فوق ما عنده، فيضيق به العرضُ وهو لا يزال واسعًا على الزائر. (وكان
+ * عنده معه اسمُه ووضعُ التصفُّح والخروجُ، فنُقلت إلى لوح الزاوية.)
  */
-@media (max-width: 1240px) {
+@media (max-width: 1120px) {
   .app-header[data-owner] { flex-wrap: wrap; row-gap: 10px; }
   .app-header[data-owner] .quick-search { flex: 1 1 100%; order: 3; }
   .app-header[data-owner] .head-nav { order: 4; flex: 1 1 100%; }
@@ -2514,6 +2602,83 @@ body::after {
  * ويعدّ ما فيه، ثم تبويبٌ لأبوابه، ثم السيلُ بمُصفِّياته.
  */
 .perks-page { max-width: 1060px; margin: 0 auto; padding: 32px; }
+
+/* ----------------------------------------------------- ترويسةُ القسم */
+/*
+ * الكنّاشُ قسمٌ قائمٌ بنفسه لا صفحةٌ في المكتبة، فترويستُه تحمل ما تحمله
+ * ترويسةُ قسم: التعريفَ به وأعدادَه وأبوابَه وأدواتِ صاحبه — مجموعةً في
+ * لوحٍ واحدٍ يفصله عمّا تحته، لا مبثوثةً في الصفحة.
+ */
+.kunnash-head {
+  position: relative;
+  margin-bottom: 22px;
+  padding: 20px 24px 0;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklch, var(--accent) 10%, var(--surface)),
+    var(--surface) 66%
+  );
+  box-shadow: var(--shadow-1);
+}
+
+.kunnash-brand { display: flex; align-items: flex-start; gap: 15px; flex-wrap: wrap; }
+
+.kunnash-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 8px 18px color-mix(in oklch, var(--accent) 35%, transparent);
+}
+
+.kunnash-name { flex: 1 1 260px; min-width: 0; }
+.kunnash-name h1 {
+  margin: 0 0 5px;
+  font-family: var(--heading-font);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.kunnash-name p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--muted);
+}
+
+.kunnash-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.kunnash-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--muted);
+  transition: background 0.16s, color 0.16s, transform 0.4s var(--ease-spring);
+}
+.kunnash-gear:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+.kunnash-gear:hover svg { transform: rotate(60deg); }
+.kunnash-gear svg { transition: transform 0.5s var(--ease-spring); }
+
+/* التبويبُ في ذيل الترويسة: خطُّه هو حدُّ اللوح الأسفل */
+.kunnash-head .perks-tabs { margin: 4px -24px 0; padding-inline: 24px; border-bottom: none; }
+.kunnash-head .perks-tally { margin-top: 16px; }
 
 /* -------------------------------------------------------------- الصدر */
 .perks-hero {
@@ -3767,3 +3932,326 @@ a { transition: color 0.15s; }
   .search-guide-key { display: none; }
   .search-panel { border-radius: 14px; }
 }
+
+/* ------------------------------------------- أنواع القيد في الإعدادات */
+.kinds-list { display: flex; flex-direction: column; gap: 8px; }
+
+.kinds-row { display: flex; align-items: center; gap: 8px; }
+.kinds-row input { flex: 1; min-width: 0; }
+
+.kinds-count {
+  flex: none;
+  min-width: 82px;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.kinds-drop {
+  display: flex;
+  flex: none;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.kinds-drop:hover:not(:disabled) { background: var(--danger); color: var(--on-accent); border-color: transparent; }
+/* النوعُ الذي عليه قيودٌ لا يُحذف: حذفُه لا يمحوها، فيبقى الاسمُ ويظهر
+   أنّ الحذف لم يقع */
+.kinds-drop:disabled { opacity: 0.32; }
+
+.kinds-add { margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--border); }
+
+/* ══════════════════════════════════════════════ سجلَّات الأسماء */
+/*
+ * صفحاتُ المؤلِّفين ودُور النَّشْر و«المحقِّقون ونحوهم»: ثلاثُ سجلَّاتٍ من
+ * جنسٍ واحد، فلها هيئةٌ واحدة وتُعرض بطريقتين — شبكةً للتصفُّح على مهل،
+ * وجدولًا للمسح السريع بالعين حين يكثر العدد.
+ */
+.roster-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.roster-head h1 {
+  margin: 0 0 6px;
+  font-family: var(--heading-font);
+  font-size: 28px;
+  font-weight: 700;
+}
+.roster-head p {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.roster-toggle {
+  display: flex;
+  gap: 5px;
+  flex: none;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+/* الجدولُ يُمرَّر في حاويته على الشاشة الضيّقة، ولا يمدّ الصفحة */
+.roster-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.roster-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--header);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: start;
+  white-space: nowrap;
+}
+.roster-table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.roster-table tbody tr:last-child td { border-bottom: none; }
+.roster-table tbody tr { cursor: pointer; transition: background 0.15s; }
+
+/* عمودُ الاسم وحده يتمدّد، وما بعده بقدر ما فيه */
+.roster-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--heading-font);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: normal;
+}
+.roster-table td:first-child { width: 99%; }
+
+/* والعلامةُ في الجدول أصغر: صفٌّ لا بطاقة */
+.roster-mark-sm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+  font-family: var(--heading-font);
+  font-size: 15px;
+  font-weight: 700;
+}
+/* شعارُ الدار يملأ القرصَ ولا يُصغَّر مرَّتين */
+.roster-mark-sm > div { width: 100% !important; height: 100% !important; border: none !important; border-radius: 0 !important; }
+
+.roster-add { margin-top: 18px; max-width: 280px; }
+
+/* ------------------------------------------- مفتاحُ سجلَّي الأشخاص */
+/* السجلُّ واحد ووجهاه اثنان، فالانتقالُ بينهما في صدر الصفحتين لا في مدخلٍ
+   بعيد. وهيئتُه هيئةُ اللسانين لا هيئةُ الأزرار: أحدُهما قائمٌ أبدًا. */
+.people-switch {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.people-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.16s, color 0.16s;
+}
+.people-switch-btn svg { flex: none; }
+.people-switch-btn:hover { color: var(--text); background: var(--header); }
+.people-switch-on { background: var(--accent); color: var(--on-accent); }
+.people-switch-on:hover { background: var(--accent); color: var(--on-accent); }
+
+@media (max-width: 620px) {
+  .roster-head h1 { font-size: 23px; }
+  .people-switch { width: 100%; }
+  .people-switch-btn { flex: 1; justify-content: center; padding: 8px 10px; font-size: 12.5px; }
+}
+
+/* ═══════════════════════════════════════════════════════════ الشعر */
+/*
+ * صفُّ الشعر: بيتٌ في كل صفّ، وشطرٌ في كل خليّة، وأشطارٌ ممدودةٌ بالتطويل
+ * حتى تستوي أطرافُها — كما يُصفّ في الدواوين المطبوعة.
+ *
+ * و`table-layout: fixed` شرطٌ لا زينة: به يُعرف عرضُ الخليّة قبل أن تُملأ،
+ * فيُقاس عليه المدُّ في `lib/tatweel.ts`. ولو كان العرضُ تابعًا للنصّ لدار
+ * القياسُ على نفسه: يمتدّ الشطرُ فيتّسع العمود فيمتدّ الشطر…
+ *
+ * و`white-space: nowrap` معه: الشطرُ سطرٌ واحد لا ينكسر، وإنما يُمدّ.
+ */
+.text-blocks { display: flex; flex-direction: column; gap: 4px; }
+
+.poem-wrap {
+  margin: 16px auto;
+  padding: 12px clamp(10px, 2.5vw, 22px);
+  border: 1px solid color-mix(in oklch, var(--accent) 26%, var(--border));
+  border-radius: 13px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--accent) 6%, var(--surface)),
+    var(--surface) 70%
+  );
+  overflow: hidden;
+}
+/* والرجزُ عمودٌ واحد، فلا يُمدّ لوحُه على عرض الصفحة */
+.poem-wrap-rajaz { max-width: 420px; }
+
+.poetry-table,
+.rajaz-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  direction: rtl;
+  font-family: var(--heading-font);
+  font-size: clamp(15px, 1.05em, 19px);
+}
+
+.shatr,
+.rajaz-shatr {
+  padding: 5px 8px;
+  line-height: 2.1;
+  vertical-align: baseline;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.shatr { width: 50%; }
+/* خيطٌ بين الصدر والعَجُز، كما يُفصل بينهما في المطبوع */
+.shatr-first { border-left: 1.5px solid color-mix(in oklch, var(--accent) 32%, transparent); }
+
+.rajaz-shatr { width: 100%; }
+
+/*
+ * على الجوّال لا يسع السطرُ شطرين، فيُصفّان طوليًّا: الصدرُ سطرًا والعَجُزُ
+ * تحته، ويُزاح العجزُ قليلًا ليُعرف أنه تابعٌ لما فوقه لا بيتٌ آخر. والخيطُ
+ * ينتقل من جانب الصدر إلى أسفل البيت، فيفصل بيتًا عن بيت.
+ */
+@media (max-width: 620px) {
+  .poetry-table,
+  .poetry-table tbody,
+  .poetry-table tr { display: block; }
+  .shatr { display: block; width: auto; }
+  .shatr-first { border-left: none; }
+  .shatr-last { padding-inline-start: 22px; }
+  .poetry-table tr:not(:last-child) {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed color-mix(in oklch, var(--accent) 22%, transparent);
+  }
+  .poem-wrap { margin-inline: 0; }
+}
+
+/* ------------------------------------------- إدراج الشعر في النموذج */
+.poet-tools { display: flex; flex-direction: column; gap: 8px; margin-top: 7px; }
+.poet-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.poet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px dashed color-mix(in oklch, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-style 0.15s;
+}
+.poet-btn svg { flex: none; }
+.poet-btn:hover { background: color-mix(in oklch, var(--accent) 10%, transparent); border-style: solid; }
+.poet-btn-on { background: var(--accent); color: var(--on-accent); border-style: solid; border-color: transparent; }
+
+.poet-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.poet-row { display: flex; align-items: center; gap: 7px; }
+.poet-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--heading-font);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* زرُّ الزائد إلى جانب الحقل: يزيد بيتًا آخر */
+.poet-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 19px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.poet-plus:hover { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.poet-drop { color: var(--muted); }
+.poet-drop:hover { background: var(--danger); color: var(--on-accent); }
+
+.poet-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.poet-foot .perk-hint { flex: 1 1 200px; }
+
+.poet-insert {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.poet-insert:disabled { background: var(--border); color: var(--muted); }
+.poet-insert:not(:disabled):hover { background: var(--accent-dark); }

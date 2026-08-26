@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { useLibrary } from './lib/library'
 import { navigate, useRoute } from './lib/router'
 import Header from './components/Header'
+import OwnerTools from './components/OwnerTools'
 import SearchOverlay from './components/SearchOverlay'
 import Landing from './views/Landing'
 import Browse from './views/Browse'
@@ -178,6 +179,10 @@ export default function App() {
           {route.name === 'perk' && <PerkPage perkId={route.id} />}
         </Suspense>
       )}
+
+      {/* أدواتُ صاحب المكتبة في زاوية الشاشة، مطويّةً حتى تُطلب. وفي صفحة
+          الهبوط لها موضعُها في فراغها، فلا تُعاد ههنا مرّتين. */}
+      {route.name !== 'landing' && <OwnerTools place="dock" />}
 
       {search.open && (
         <SearchOverlay

@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
+import Prose from './Prose'
 import { perkCitation, perkLocation } from '../lib/citation'
 import { perkDate, perkLink, sourceAuthor, sourceTitle } from '../lib/perks'
 import { PERK_PREVIEW_CHARS, type Perk } from '../lib/types'
@@ -102,8 +103,8 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       {/* --------------------------------------------------- المتن */}
       {perk.title && <h3 className="perk-title">{perk.title}</h3>}
 
-      <div className={folded ? 'prose perk-text perk-text-folded' : 'prose perk-text'}>
-        {perk.text}
+      <div className={folded ? 'perk-text perk-text-folded' : 'perk-text'}>
+        <Prose text={perk.text} />
       </div>
 
       {long && !full && (
@@ -120,7 +121,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
             <OwnerIcon size={11} />
             تعليقي
           </span>
-          <div className="prose">{perk.comment}</div>
+          <Prose text={perk.comment} />
         </div>
       )}
 

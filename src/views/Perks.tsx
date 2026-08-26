@@ -26,13 +26,14 @@ import {
   type PerkFilter, type PerkSort, type Tally,
 } from '../lib/perks'
 import {
-  PERKS_COUNT, PERK_KINDS, countLabel, formatNumber,
-  type Perk, type PerkKind,
+  PERKS_COUNT, countLabel, formatNumber, perkKindsOf, type Perk,
 } from '../lib/types'
 import PerkCard from '../components/PerkCard'
+import Prose from '../components/Prose'
 import PerkEditor from '../components/PerkEditor'
+import PerkSettings from '../components/PerkSettings'
 import {
-  BackButton, ClearIcon, EmptyState, GridIcon, HashIcon, OpenBookIcon,
+  BackButton, ClearIcon, EmptyState, GearIcon, GridIcon, HashIcon, OpenBookIcon,
   OwnerIcon, PerkIcon, ScrollIcon, SearchIcon, TableIcon, VerifyIcon,
   facetStyle, viewToggleStyle,
 } from '../components/ui'
@@ -63,6 +64,10 @@ export default function Perks({ tab = '' }: { tab?: string }) {
   const [sort, setSort] = useState<PerkSort>('newest')
   const [view, setView] = useState<ViewKey>('cards')
   const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  /** الأنواع كما حرّرها صاحب المكتبة، ومعها ما بقي في القيود من نوعٍ رُفع */
+  const kinds = useMemo(() => perkKindsOf(settings, perks), [settings, perks])
 
   /**
    * ينتقل إلى السيل ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان: عَلَمًا في
@@ -99,32 +104,65 @@ export default function Perks({ tab = '' }: { tab?: string }) {
     <main className="app-main perks-page">
       <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
 
-      {/* ------------------------------------------------------- الصدر */}
-      <header className="perks-hero">
-        <div className="perks-hero-head">
-          <span className="perks-hero-mark" aria-hidden="true"><PerkIcon size={24} /></span>
-          <div>
+      {/*
+        ترويسةُ القسم: قسمٌ قائمٌ بنفسه له اسمُه وأبوابُه وأدواتُه، لا صفحةٌ
+        في المكتبة. فترويستُه تحمل ما تحمله ترويسةُ قسم: التعريفَ به،
+        وأعدادَه، وأبوابَه الخمسة، وأدواتِ صاحبه — القيدَ الجديد وإعداداتِ
+        الأنواع.
+      */}
+      <header className="kunnash-head">
+        <div className="kunnash-brand">
+          <span className="kunnash-mark" aria-hidden="true"><PerkIcon size={26} /></span>
+          <div className="kunnash-name">
             <h1>الفوائد والمقتطفات</h1>
             <p>
               كنّاشُ المكتبة: ما قُيِّد من كتبها ومن غيرها — فائدةً استُنبطت،
               أو نصًّا نُقل، أو تعقُّبًا على قول.
             </p>
           </div>
+
           {canEdit && (
-            <button type="button" className="perks-new" onClick={() => setEditing(null)}>
-              + قيدٌ جديد
-            </button>
+            <div className="kunnash-tools">
+              <button type="button" className="perks-new" onClick={() => setEditing(null)}>
+                + قيدٌ جديد
+              </button>
+              <button
+                type="button"
+                className="kunnash-gear"
+                onClick={() => setSettingsOpen(true)}
+                title="إعدادات الكنّاش — أنواع القيد"
+                aria-label="إعدادات الكنّاش"
+              >
+                <GearIcon size={18} />
+              </button>
+            </div>
           )}
         </div>
 
         {canSee && perks.length > 0 && (
-          <div className="perks-tally">
-            <Tile value={perks.length} label="قيدًا" />
-            <Tile value={sources.length} label="كتابًا أفاد" />
-            <Tile value={topics.length} label="بابًا" />
-            <Tile value={people.length} label="عَلَمًا" />
-            <Tile value={gems.length} label="من النفائس" />
-          </div>
+          <>
+            <div className="perks-tally">
+              <Tile value={perks.length} label="قيدًا" />
+              <Tile value={sources.length} label="كتابًا أفاد" />
+              <Tile value={topics.length} label="بابًا" />
+              <Tile value={people.length} label="عَلَمًا" />
+              <Tile value={gems.length} label="من النفائس" />
+            </div>
+
+            <nav className="perks-tabs" aria-label="أبواب الكنّاش">
+              {TABS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key || 'feed'}
+                  type="button"
+                  className={key === tab ? 'perks-tab perks-tab-on' : 'perks-tab'}
+                  onClick={() => openTab(key)}
+                >
+                  <Icon size={16} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </>
         )}
       </header>
 
@@ -139,20 +177,6 @@ export default function Perks({ tab = '' }: { tab?: string }) {
         />
       ) : (
         <>
-          <nav className="perks-tabs" aria-label="أبواب الكنّاش">
-            {TABS.map(({ key, label, icon: Icon }) => (
-              <button
-                key={key || 'feed'}
-                type="button"
-                className={key === tab ? 'perks-tab perks-tab-on' : 'perks-tab'}
-                onClick={() => openTab(key)}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </nav>
-
           {(tab === '' || tab === 'gems') && (
             <Feed
               perks={shown}
@@ -165,6 +189,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
               setView={setView}
               topics={topics}
               tags={tags}
+              kinds={kinds}
               onEdit={canEdit ? setEditing : undefined}
               onPick={pick}
               emptyTitle={tab === 'gems' ? 'لم يُوسَم قيدٌ بالنجوم الثلاث بعد' : 'لا مطابق'}
@@ -204,6 +229,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
       {editing !== undefined && (
         <PerkEditor perk={editing} onClose={() => setEditing(undefined)} />
       )}
+      {settingsOpen && <PerkSettings onClose={() => setSettingsOpen(false)} />}
     </main>
   )
 }
@@ -211,7 +237,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
 // ---------------------------------------------------------------- السَّيْل
 function Feed(
   { perks, total, filter, setFilter, sort, setSort, view, setView, topics, tags,
-    onEdit, onPick, emptyTitle }: {
+    kinds, onEdit, onPick, emptyTitle }: {
     perks: Perk[]
     total: number
     filter: PerkFilter
@@ -222,6 +248,7 @@ function Feed(
     setView: (v: ViewKey) => void
     topics: Tally[]
     tags: Tally[]
+    kinds: string[]
     onEdit?: (perk: Perk) => void
     onPick: (field: keyof PerkFilter, value: string | number) => void
     emptyTitle: string
@@ -270,11 +297,11 @@ function Feed(
 
       <div className="perks-facets">
         {/* النوع: كلُّ نوعٍ رُقعة، والمضغوطةُ تُرفع بضغطةٍ ثانية */}
-        {PERK_KINDS.map((k) => (
+        {kinds.map((k) => (
           <button
             key={k}
             type="button"
-            onClick={() => setFilter({ ...filter, kind: filter.kind === k ? '' : k as PerkKind })}
+            onClick={() => setFilter({ ...filter, kind: filter.kind === k ? '' : k })}
             style={facetStyle(filter.kind === k)}
           >
             {k}
@@ -377,7 +404,7 @@ function Feed(
           {perks.map((p) => (
             <section key={p.id}>
               {p.title && <h3>{p.title}</h3>}
-              <div className="prose">{p.text}</div>
+              <Prose text={p.text} />
               <footer>
                 <button type="button" onClick={() => navigate({ name: 'perk', id: p.id })}>
                   {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'القيد'}

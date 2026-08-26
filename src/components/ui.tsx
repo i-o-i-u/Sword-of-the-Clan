@@ -3,6 +3,7 @@
 import {
   useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { QUICK_OPTS, normalizeText } from '../lib/search'
 import { formatNumber, starsText } from '../lib/types'
 
@@ -797,24 +798,31 @@ export function BackButton({ label, onClick }: { label: string; onClick: () => v
   )
 }
 
-/** غلافٌ لطبقةٍ معتمة: النقر خارج البطاقة يُغلق، وداخلها لا يُغلق */
+/**
+ * غلافٌ لطبقةٍ معتمة: النقر خارج البطاقة يُغلق، وداخلها لا يُغلق.
+ *
+ * وموضعُها من `document.body` لا من شجرة الصفحة (`createPortal`)، كورقة
+ * الطباعة سواءً بسواء. و`#root` مكبَّرٌ بـ`zoom`، والتكبيرُ يُنشئ سياقًا
+ * جديدًا يتعلّق به الثابتُ (`position: fixed`) في بعض المتصفّحات، فلا يبلغ
+ * أطرافَ الشاشة وتبقى من الظلّ حواشٍ مكشوفة عن يمينه وعن شماله. وموضعُها
+ * من `body` يقطع ذلك كلَّه: لا تكبيرَ فوقها ولا قصَّ ولا سياق.
+ *
+ * ويبقى تكبيرُ القارئ ساريًا على جوف النافذة وحده (`.overlay-sheet`)، فلا
+ * يفوته ما اختاره لنفسه من حجم الخطّ.
+ */
 export function Overlay(
   { onClose, children, align = 'center', zIndex = 90, paddingTop }:
   { onClose: () => void; children: ReactNode; align?: 'center' | 'flex-start'; zIndex?: number; paddingTop?: number },
 ) {
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       className="overlay-wrap"
-      style={{
-        position: 'fixed', inset: 0, zIndex,
-        background: 'oklch(0.15 0.01 50 / 0.55)', backdropFilter: 'blur(2px)',
-        display: 'flex', alignItems: align, justifyContent: 'center',
-        paddingTop,
-      }}
+      style={{ zIndex, alignItems: align, paddingTop }}
     >
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'contents' }}>{children}</div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

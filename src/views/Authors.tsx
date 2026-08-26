@@ -11,10 +11,12 @@ import { navigate } from '../lib/router'
 import { lifeLabel, toHijriYear } from '../lib/hijri'
 import { authoredBooks, contributedBooks, topRole } from '../lib/people'
 import {
-  AUTHOR_ROLE, BOOKS_COUNT, ERAS, countLabel, parseNumber, rolePersonLabel,
-  rolePersonRef, roleWorksLabel, type Book, type Era,
+  AUTHOR_ROLE, BOOKS_COUNT, ERAS, countLabel, formatNumber, parseNumber,
+  rolePersonLabel, rolePersonRef, roleWorksLabel, type Book, type Era,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
+import PeopleSwitch from '../components/PeopleSwitch'
+import Roster, { RosterToggle, useRosterView, type RosterRow } from '../components/Roster'
 import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, HourglassIcon,
   OpenBookIcon, PencilIcon, QuillIcon, VerifyIcon, cardStyle,
@@ -22,6 +24,7 @@ import {
 
 export function AuthorsIndex() {
   const { authors, books } = useLibrary()
+  const [view, setView] = useRosterView('authors')
 
   // سجلُّ الأشخاص يجمع المؤلِّفَ والمحقِّق، فلا يُعرض في هذه الصفحة إلا من
   // له تأليفٌ مسجَّل. ومن لم يكن له إلا تحقيقٌ فموضعُه «المحقِّقون ونحوهم».
@@ -41,50 +44,44 @@ export function AuthorsIndex() {
       .map((a) => ({ author: a, count: counts.get(a.id) ?? 0 }))
   }, [authors, books])
 
+  const rows: RosterRow[] = cards.map(({ author, count }) => ({
+    id: author.id,
+    name: author.name,
+    // حرفُ الاسم الأول في قرصٍ: علامةٌ تُميّز البطاقة حيث لا صورة للمؤلِّف
+    mark: author.name.replace(/^ال/, '').trim().charAt(0) || '؟',
+    lines: [
+      { icon: <HourglassIcon size={12} />, text: lifeLabel(author) },
+      {
+        icon: <OpenBookIcon size={12} />,
+        text: `${countLabel(count, BOOKS_COUNT)} في المكتبة`,
+        tone: 'accent' as const,
+      },
+    ],
+    cells: [lifeLabel(author) || '—', formatNumber(count)],
+    onOpen: () => navigate({ name: 'author', id: author.id }),
+  }))
+
   return (
     <main className="app-main" style={{ maxWidth: 1120, margin: '0 auto', padding: 32 }}>
-      <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 6px' }}>
-        مؤلِّفو المكتبة
-      </h1>
-      {/* الدعوةُ واحدةٌ للزائر وصاحب المكتبة: البطاقة تُدخِل إلى الصفحة،
-          والتعديلُ فيها لا يُدعى إليه من هنا */}
-      <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
-        مرتَّبون بحسب أقدمية الوفاة، الأقدمُ أوّلًا.
-        اضغط على بطاقة مؤلِّفٍ لتصفُّح بياناته وترجمته وكُتُبه.
-      </p>
+      <PeopleSwitch here="authors" />
+
+      <div className="roster-head">
+        <div>
+          <h1>مؤلِّفو المكتبة</h1>
+          {/* الدعوةُ واحدةٌ للزائر وصاحب المكتبة: البطاقة تُدخِل إلى الصفحة،
+              والتعديلُ فيها لا يُدعى إليه من هنا */}
+          <p>
+            مرتَّبون بحسب أقدمية الوفاة، الأقدمُ أوّلًا.
+            اضغط على اسمِ مؤلِّفٍ لتصفُّح بياناته وترجمته وكُتُبه.
+          </p>
+        </div>
+        {cards.length > 0 && <RosterToggle view={view} onChange={setView} />}
+      </div>
 
       {cards.length === 0 ? (
         <EmptyState title="لا مؤلِّفين بعد" hint="يُنشأ للمؤلِّف صفحةٌ أوّلَ ما يُضاف له كتاب." />
       ) : (
-        <div className="author-grid">
-          {cards.map(({ author, count }) => (
-            <div
-              key={author.id}
-              className="author-card"
-              onClick={() => navigate({ name: 'author', id: author.id })}
-            >
-              {/* حرفُ الاسم الأول في قرصٍ: علامةٌ تُميّز البطاقة بلا صورة */}
-              <span className="author-mark" aria-hidden="true">
-                {author.name.replace(/^ال/, '').trim().charAt(0) || '؟'}
-              </span>
-
-              <div style={{ minWidth: 0 }}>
-                <div className="author-name">{author.name}</div>
-                {/* لا يُعرض سطرُ التاريخ فارغًا ولا بأيقونته: الفراغُ ليس خبرًا */}
-                {lifeLabel(author) && (
-                  <div className="author-life">
-                    <HourglassIcon size={12} />
-                    {lifeLabel(author)}
-                  </div>
-                )}
-                <div className="author-books">
-                  <OpenBookIcon size={12} />
-                  {countLabel(count, BOOKS_COUNT)} في المكتبة
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <Roster rows={rows} view={view} headers={['الوفاة', 'كتبه في المكتبة']} />
       )}
     </main>
   )

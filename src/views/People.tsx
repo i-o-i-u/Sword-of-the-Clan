@@ -15,11 +15,14 @@ import { deathLabel } from '../lib/hijri'
 import { peopleByRole } from '../lib/people'
 import { BOOKS_COUNT, countLabel, formatNumber, roleGroupLabel } from '../lib/types'
 import {
-  BackButton, EmptyState, HourglassIcon, OpenBookIcon, VerifyIcon, cardStyle,
+  EmptyState, HourglassIcon, OpenBookIcon, VerifyIcon, cardStyle,
 } from '../components/ui'
+import PeopleSwitch from '../components/PeopleSwitch'
+import Roster, { RosterToggle, useRosterView } from '../components/Roster'
 
 export default function People() {
   const { books, authors } = useLibrary()
+  const [view, setView] = useRosterView('people')
 
   const groups = useMemo(() => {
     const byId = new Map(authors.map((a) => [a.id, a]))
@@ -42,15 +45,18 @@ export default function People() {
 
   return (
     <main className="app-main" style={{ maxWidth: 1120, margin: '0 auto', padding: 32 }}>
-      <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
+      <PeopleSwitch here="people" />
 
-      <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 6px' }}>
-        المُحقِّقون ونحوهم
-      </h1>
-      <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
-        من عمل في كتب المكتبة بغير التأليف، مقسومين بصفاتهم. واضغط على اسمٍ
-        لتصفُّح صفحته وما عمل فيه.
-      </p>
+      <div className="roster-head">
+        <div>
+          <h1>المُحقِّقون ونحوهم</h1>
+          <p>
+            من عمل في كتب المكتبة بغير التأليف، مقسومين بصفاتهم. واضغط على
+            اسمٍ لتصفُّح صفحته وما عمل فيه.
+          </p>
+        </div>
+        {groups.length > 0 && <RosterToggle view={view} onChange={setView} />}
+      </div>
 
       {groups.length === 0 ? (
         <EmptyState
@@ -79,34 +85,27 @@ export default function People() {
                 </span>
               </div>
 
-              <div className="author-grid">
-                {people.map(({ author, count }) => (
-                  <div
-                    key={author.id}
-                    className="author-card"
-                    onClick={() => navigate({ name: 'author', id: author.id })}
-                  >
-                    <span className="author-mark" aria-hidden="true">
-                      {author.name.replace(/^ال/, '').trim().charAt(0) || '؟'}
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="author-name">{author.name}</div>
-                      {deathLabel(author) && (
-                        <div className="author-life">
-                          <HourglassIcon size={12} />
-                          {deathLabel(author)}
-                        </div>
-                      )}
-                      {/* لا يُوصَل عددٌ باسمٍ إلا من `countLabel`: «كتابٌ
-                          واحد» ثم «كتابان» ثم «٣ كتبٍ» ثم «١١ كتابًا» */}
-                      <div className="author-books">
-                        <OpenBookIcon size={12} />
-                        {countLabel(count, BOOKS_COUNT)} في المكتبة
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <Roster
+                view={view}
+                headers={['الوفاة', 'ما عمل فيه']}
+                rows={people.map(({ author, count }) => ({
+                  id: author.id,
+                  name: author.name,
+                  mark: author.name.replace(/^ال/, '').trim().charAt(0) || '؟',
+                  lines: [
+                    { icon: <HourglassIcon size={12} />, text: deathLabel(author) },
+                    // لا يُوصَل عددٌ باسمٍ إلا من `countLabel`: «كتابٌ واحد»
+                    // ثم «كتابان» ثم «٣ كتبٍ» ثم «١١ كتابًا»
+                    {
+                      icon: <OpenBookIcon size={12} />,
+                      text: `${countLabel(count, BOOKS_COUNT)} في المكتبة`,
+                      tone: 'accent' as const,
+                    },
+                  ],
+                  cells: [deathLabel(author) || '—', formatNumber(count)],
+                  onOpen: () => navigate({ name: 'author', id: author.id }),
+                }))}
+              />
             </section>
           ))}
         </div>

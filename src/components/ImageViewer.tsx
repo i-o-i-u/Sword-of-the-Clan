@@ -6,6 +6,7 @@
 // فينفتح الملفّ في لسانٍ جديد بدل أن يُحفظ. فإن تعذّر الجلب فُتح في لسانٍ
 // جديد صراحةً، وهو أهونُ من زرٍّ لا يفعل شيئًا.
 
+import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useScrollLock } from '../lib/useScrollLock'
 import { DownloadIcon, ZoomIcon, resolveAsset } from './ui'
@@ -73,7 +74,9 @@ export default function ImageViewer({ url, name, onClose }: Props) {
 
   if (!resolved) return null
 
-  return (
+  // موضعُها من `body` كسائر الطبقات: `#root` مكبَّرٌ بـ`zoom` وهو سياقٌ
+  // يتعلّق به الثابتُ، فلا تبلغ الطبقةُ أطرافَ الشاشة في بعض المتصفّحات
+  return createPortal(
     <div className="viewer" onClick={onClose} role="dialog" aria-label={`عرض صورة ${name}`}>
       <div className="viewer-bar" onClick={(e) => e.stopPropagation()}>
         <span className="viewer-name">{name}</span>
@@ -144,6 +147,7 @@ export default function ImageViewer({ url, name, onClose }: Props) {
       <div className="viewer-hint" onClick={(e) => e.stopPropagation()}>
         {zoom > MIN_ZOOM ? 'اسحب الصورة لتُحرِّكها' : 'دَوِّر عجلة الفأرة للتكبير'}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

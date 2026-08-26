@@ -9,8 +9,11 @@ export const LIBRARY_PLACE = 'أبها - حيُّ المُوظَّفين - شا�
 
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
 export type ReadingStatus = 'لم يُقرأ' | 'قيد القراءة' | 'مقروء'
-export type PerkKind =
-  | 'فائدة' | 'مقتطف' | 'نقل' | 'تعقُّب' | 'مسألة' | 'تحرير' | 'نادرة'
+/**
+ * نوعُ القيد نصٌّ حرّ: أبوابُ الكنّاش لصاحبه يزيد فيها ويُعدِّل أسماءها من
+ * إعدادات القسم، ولا تُملى عليه قائمةٌ مغلقة.
+ */
+export type PerkKind = string
 export type ViewMode = 'grid' | 'table' | 'shelf'
 export type ThemeName = 'warm' | 'sepia' | 'dark'
 export type FontName = 'kitab' | 'classic' | 'modern'
@@ -29,8 +32,23 @@ export const PERK_KINDS: PerkKind[] = [
   'فائدة', 'نقل', 'مقتطف', 'تعقُّب', 'مسألة', 'تحرير', 'نادرة',
 ]
 
-/** شرحُ كل نوعٍ، يُعرض تحت اختياره في نموذج القيد فلا يُخلَط نوعٌ بنوع */
-export const PERK_KIND_HINTS: Record<PerkKind, string> = {
+/**
+ * أنواعُ القيد كما هي اليوم: ما حرّره صاحب المكتبة إن حرّر، وإلّا فالمبدأ.
+ * وما بقي في القيود من نوعٍ رُفع من القائمة يُضاف إليها، فلا يسقط قيدٌ من
+ * السيل لأن نوعَه حُذف.
+ */
+export function perkKindsOf(settings: Settings, perks: { kind: string }[]): string[] {
+  const listed = (settings.perk_kinds ?? []).map((k) => k.trim()).filter(Boolean)
+  const base = listed.length > 0 ? listed : PERK_KINDS
+  const used = [...new Set(perks.map((p) => p.kind).filter(Boolean))]
+  return [...base, ...used.filter((k) => !base.includes(k))]
+}
+
+/**
+ * شرحُ الأنواع المعروفة، يُعرض تحت اختيارها في نموذج القيد فلا يُخلَط نوعٌ
+ * بنوع. وما استجدّ من أنواعِ صاحب المكتبة لا شرحَ له، ولا يُختلق له شرح.
+ */
+export const PERK_KIND_HINTS: Record<string, string> = {
   'فائدة': 'ما استُنبط أو استُفيد، بلفظ المُقيِّد أو بلفظ صاحبه',
   'نقل': 'نصٌّ يُنقل بحروفه عن قائله ليُعتمَد عليه',
   'مقتطف': 'ما استُملح من كلامٍ أو شعرٍ لجماله لا للاحتجاج به',
@@ -466,6 +484,8 @@ export interface Settings {
   show_landing_place: boolean
   /** حاسبة القراءة في صفحة التصفُّح — لصاحب المكتبة أبدًا، وللزائر بهذا */
   show_calculator: boolean
+  /** أنواعُ القيد، يحرّرها صاحب المكتبة من إعدادات قسم الفوائد */
+  perk_kinds: string[]
 
   /** مفتاحُه اسمُ الحقل، وقيمتُه معرّفاتُ الكتب المستثناة من إخفائه */
   field_exceptions: FieldMap
@@ -515,6 +535,7 @@ export const DEFAULT_VISIBILITY: Visibility = {
 export const DEFAULT_SETTINGS_EXTRAS = {
   show_landing_place: true,
   show_calculator: true,
+  perk_kinds: [] as string[],
   field_exceptions: {} as FieldMap,
   book_field_overrides: {} as FieldMap,
   hidden_author_ids: [] as string[],

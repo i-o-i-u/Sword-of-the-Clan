@@ -25,6 +25,14 @@ export type FieldMap = Record<string, string[]>
  */
 export type Settings = Required<Omit<Doc<'library_settings'>, '_id' | '_creationTime'>>
 
+/**
+ * أنواعُ القيد أوّلَ ما تقوم المكتبة. وهي مبدأٌ لا حدّ: يزيد عليها صاحبُ
+ * المكتبة ويُعدِّل أسماءها من إعدادات قسم الفوائد.
+ */
+const DEFAULT_PERK_KINDS = [
+  'فائدة', 'نقل', 'مقتطف', 'تعقُّب', 'مسألة', 'تحرير', 'نادرة',
+]
+
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'warm',
   font: 'kitab',
@@ -43,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_rotate: true,
   rotate_seconds: 6,
   quote_seconds: 12,
+  perk_kinds: DEFAULT_PERK_KINDS,
   // نصٌّ تجريبيّ يكتب صاحب المكتبة مكانَه ما يشاء من نافذة الإعدادات
   about_text:
     'مكتبة سيف العشيرة مكتبةٌ منزليّة، نشأت كتابًا كتابًا على مهلٍ لا على عجل، '

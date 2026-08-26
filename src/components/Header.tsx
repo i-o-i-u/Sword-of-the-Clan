@@ -10,8 +10,8 @@ import { navigate, type Route } from '../lib/router'
 import { THEME_LABELS } from '../lib/theme'
 import { LIBRARY_NAME } from '../lib/types'
 import {
-  BookPlusIcon, BooksIcon, GearIcon, HomeIcon, LibraryIcon, MoonIcon, PressIcon,
-  QuillIcon, SearchIcon, SunIcon, resolveAsset,
+  BookPlusIcon, BooksIcon, GearIcon, HomeIcon, LibraryIcon, MoonIcon, PerkIcon,
+  PressIcon, QuillIcon, SearchIcon, SunIcon, resolveAsset,
 } from './ui'
 
 interface Props {
@@ -21,13 +21,12 @@ interface Props {
 }
 
 export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
-  const {
-    isOwner, canEdit, ownerName, browseOnly, toggleBrowseOnly, signOut, settings, cycleTheme,
-  } = useLibrary()
+  const { isOwner, canEdit, settings, cycleTheme } = useLibrary()
   const [quick, setQuick] = useState('')
 
   const vis = settings.visibility
   const showAuthorsTab = isOwner || vis.authors
+  const showPerksTab = isOwner || vis.perks
 
   const onBrowse = route.name === 'browse' || route.name === 'book'
   const onAuthors = route.name === 'authors' || route.name === 'author'
@@ -98,6 +97,20 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
           دُوْر النَّشْر
         </button>
 
+        {/* «الفوائد» بابٌ من أبواب الموقع لا صفحةً جانبيّة: قسمٌ قائمٌ
+            بنفسه له ترويستُه وأبوابُه، فمدخلُه من هنا كسائر الأقسام.
+            واسمُه في الرأس «الفوائد» اختصارًا — والاسمُ التامّ في صدره. */}
+        {showPerksTab && (
+          <button
+            type="button"
+            onClick={() => navigate({ name: 'perks' })}
+            className={navClass(route.name === 'perks' || route.name === 'perk')}
+          >
+            <PerkIcon size={17} />
+            الفوائد
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => navigate({ name: 'about' })}
@@ -116,30 +129,11 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
         )}
       </nav>
 
+      {/* أدوات صاحب المكتبة ليست ههنا: موضعُها `OwnerTools` — عمودٌ في
+          فراغ الهبوط، ولوحٌ مطويٌّ في زاوية سائر الصفحات. الترويسةُ طريقُ
+          الزائر، ولا يُضيَّق على المكتبة كلِّها من أجل ثلاثة أزرارٍ لا
+          يراها إلا واحد. */}
       <div className="head-tools">
-        {isOwner && !onLanding && (
-          <>
-            <span className="owner-pill">{ownerName}</span>
-            <button
-              type="button"
-              onClick={() => {
-                toggleBrowseOnly()
-                if (!browseOnly && route.name === 'add') navigate({ name: 'browse' })
-              }}
-              className="owner-button"
-              style={{
-                borderColor: browseOnly ? 'var(--accent)' : 'var(--border)',
-                background: browseOnly ? 'oklch(0.42 0.09 45 / 0.1)' : 'none',
-              }}
-            >
-              {browseOnly ? 'إظهار أدوات التعديل' : 'وضع التصفُّح فقط'}
-            </button>
-            <button type="button" onClick={() => void signOut()} className="owner-button" title="خروج">
-              خروج
-            </button>
-          </>
-        )}
-
         <button
           type="button"
           onClick={cycleTheme}

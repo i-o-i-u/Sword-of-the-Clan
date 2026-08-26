@@ -26,8 +26,9 @@ import {
   countLabel,
 } from '../lib/types'
 import Footer from '../components/Footer'
+import OwnerTools from '../components/OwnerTools'
 import {
-  BookPlusIcon, BooksIcon, ClockIcon, ExitIcon, EyeIcon, OwnerIcon, PinIcon,
+  BookPlusIcon, BooksIcon, ClockIcon, PinIcon,
   PressIcon, QuillIcon, SearchIcon, SuggestIcon, resolveAsset,
 } from '../components/ui'
 
@@ -45,7 +46,7 @@ const QUOTE_FADE_MS = 320
 export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
   const {
     settings, landingImages, landingQuotes, books, authors, publishers, loading,
-    isOwner, canEdit, ownerName, browseOnly, toggleBrowseOnly, signOut,
+    isOwner, canEdit,
   } = useLibrary()
 
   const images = useMemo(
@@ -222,6 +223,36 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                 </p>
               )}
             </div>
+
+            {/*
+              أعدادُ المكتبة شريطًا في ذيل اللوحة، داخل الإطار لا تحته.
+              وموضعُها هذا مقصود: اللوحةُ صندوقٌ ارتفاعُه مضبوط، فما وُضع
+              فيه لا يكلّف الصدرَ ارتفاعًا — فتبقى صفحةُ الهبوط شاشةً واحدة
+              بلا تمرير كما هي. وكانت صفًّا تحت الأزرار فزادت في طوله فلم
+              يعد يسع الشاشةَ القصيرة، فوقع بعضُه على بطاقة الاقتباس.
+
+              وما كان صفرًا لا يُعرض: لوحٌ يقول «لا كتاب في المكتبة» ليس خبرًا.
+            */}
+            {settings.show_landing_stats && books.length > 0 && (
+              <div className="frame-tally">
+                <span className="frame-tally-item">
+                  <BooksIcon size={14} />
+                  {countLabel(books.length, BOOKS_COUNT)}
+                </span>
+                {authors.length > 0 && (
+                  <span className="frame-tally-item">
+                    <QuillIcon size={14} />
+                    {countLabel(authors.length, AUTHORS_COUNT)}
+                  </span>
+                )}
+                {publishers.length > 0 && (
+                  <span className="frame-tally-item">
+                    <PressIcon size={14} />
+                    {countLabel(publishers.length, PRESSES_COUNT)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* كل زرٍّ أيقونةٌ وحدها، واسمه ينزلق من تحتها عند التمرير */}
@@ -274,56 +305,12 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
             </button>
           </div>
 
-          {/* أعدادُ المكتبة سطرًا واحدًا. وما كان صفرًا لا يُعرض: بطاقةٌ
-              تُخبر أن لا كتاب في المكتبة ليست خبرًا. */}
-          {settings.show_landing_stats && books.length > 0 && (
-            <div className="hero-tally">
-              <span className="hero-tally-item">
-                <BooksIcon size={15} />
-                {countLabel(books.length, BOOKS_COUNT)}
-              </span>
-              {authors.length > 0 && (
-                <span className="hero-tally-item">
-                  <QuillIcon size={15} />
-                  {countLabel(authors.length, AUTHORS_COUNT)}
-                </span>
-              )}
-              {publishers.length > 0 && (
-                <span className="hero-tally-item">
-                  <PressIcon size={15} />
-                  {countLabel(publishers.length, PRESSES_COUNT)}
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* أدوات صاحب المكتبة في فراغ الهبوط عن يمين الصورة، لا في الرأس:
-            الزائر لا يرى منها شيئًا أصلًا. */}
-        {isOwner && (
-          <div className="owner-nook">
-            <span className="owner-nook-name">
-              <OwnerIcon size={16} />
-              {ownerName}
-            </span>
-            <button
-              type="button"
-              className="owner-nook-btn"
-              onClick={toggleBrowseOnly}
-              style={{
-                borderColor: browseOnly ? 'var(--accent)' : 'var(--border)',
-                background: browseOnly ? 'oklch(0.42 0.09 45 / 0.1)' : 'none',
-              }}
-            >
-              <EyeIcon size={16} />
-              {browseOnly ? 'إظهار أدوات التعديل' : 'وضع التصفُّح فقط'}
-            </button>
-            <button type="button" className="owner-nook-btn" onClick={() => void signOut()}>
-              <ExitIcon size={16} />
-              خروج
-            </button>
-          </div>
-        )}
+            الزائر لا يرى منها شيئًا أصلًا. والقطعةُ هي نفسُها التي تظهر
+            مطويّةً في زاوية سائر الصفحات، فلا يفترق اسمٌ ولا سلوك. */}
+        <OwnerTools place="nook" />
 
         <CalendarLeaf />
       </section>

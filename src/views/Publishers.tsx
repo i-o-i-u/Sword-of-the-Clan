@@ -12,8 +12,9 @@ import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { BOOKS_COUNT, countLabel } from '../lib/types'
+import { BOOKS_COUNT, countLabel, formatNumber } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
+import Roster, { RosterToggle, useRosterView } from '../components/Roster'
 import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, GlobeIcon,
   OpenBookIcon, PencilIcon, PressIcon,
@@ -61,6 +62,7 @@ function Logo({ url, name, size }: { url: string | null; name: string; size: num
 export default function Publishers() {
   const { publishers, canEdit, run, reload } = useLibrary()
   const counts = useCounts()
+  const [view, setView] = useRosterView('publishers')
 
   // نموذجُ الإضافة لا يُعرض حتى يُطلب: صفحةُ الدُّور فهرسٌ يُقرأ، وزرُّ
   // الزائد بعد البطاقات هو ما يفتحه.
@@ -85,13 +87,16 @@ export default function Publishers() {
 
   return (
     <main className="app-main" style={{ maxWidth: 1120, margin: '0 auto', padding: 32 }}>
-      <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 6px' }}>
-        دُوْر النَّشْر
-      </h1>
-      <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
-        كل دارٍ تُكتب مرةً واحدة ببلدها، ثم يأتي بلدُها مع كل كتابٍ نشرَته.
-        اضغط على بطاقة دارٍ لتصفُّح بياناتها وكُتُبها.
-      </p>
+      <div className="roster-head">
+        <div>
+          <h1>دُوْر النَّشْر</h1>
+          <p>
+            كل دارٍ تُكتب مرةً واحدة ببلدها، ثم يأتي بلدُها مع كل كتابٍ نشرَته.
+            اضغط على اسمِ دارٍ لتصفُّح بياناتها وكُتُبها.
+          </p>
+        </div>
+        {publishers.length > 0 && <RosterToggle view={view} onChange={setView} />}
+      </div>
 
       {publishers.length === 0 && !canEdit ? (
         <EmptyState
@@ -99,44 +104,43 @@ export default function Publishers() {
           hint="تُسجَّل الدار أوّلَ ما يُضاف كتابٌ من نشرها."
         />
       ) : (
-        <div className="author-grid">
-          {publishers.map((p) => (
-            <div
-              key={p.id}
-              className="author-card"
-              onClick={() => navigate({ name: 'publisher', id: p.id })}
-            >
-              <Logo url={p.logo_url ?? null} name={p.name} size={46} />
-              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div className="author-name">{p.name}</div>
-                {p.place && (
-                  <div className="author-life">
-                    <GlobeIcon size={12} />
-                    {p.place}
-                  </div>
-                )}
-                <div className="author-books">
-                  <OpenBookIcon size={12} />
-                  {countLabel(counts.get(p.id) ?? 0, BOOKS_COUNT)} في المكتبة
-                </div>
-              </div>
-            </div>
-          ))}
+        <>
+          <Roster
+            view={view}
+            headers={['بلدها', 'كتبها في المكتبة']}
+            rows={publishers.map((p) => ({
+              id: p.id,
+              name: p.name,
+              mark: <Logo url={p.logo_url ?? null} name={p.name} size={46} />,
+              lines: [
+                { icon: <GlobeIcon size={12} />, text: p.place },
+                {
+                  icon: <OpenBookIcon size={12} />,
+                  text: `${countLabel(counts.get(p.id) ?? 0, BOOKS_COUNT)} في المكتبة`,
+                  tone: 'accent' as const,
+                },
+              ],
+              cells: [p.place || '—', formatNumber(counts.get(p.id) ?? 0)],
+              onOpen: () => navigate({ name: 'publisher', id: p.id }),
+            }))}
+          />
 
-          {/* زرُّ الزائد بعد البطاقات: بطاقةٌ في هيئتها لا زرٌّ غريب عنها */}
+          {/* زرُّ الزائد بعد السجلّ: بطاقةٌ في هيئة البطاقات لا زرٌّ غريب */}
           {canEdit && (
-            <button
-              type="button"
-              className="add-card"
-              onClick={() => setAdding((v) => !v)}
-              title="إضافة دار نشر"
-              aria-expanded={adding}
-            >
-              <span className="add-card-plus" aria-hidden="true">+</span>
-              <span>{adding ? 'إغلاق النموذج' : 'إضافة دار نشر'}</span>
-            </button>
+            <div className="roster-add">
+              <button
+                type="button"
+                className="add-card"
+                onClick={() => setAdding((v) => !v)}
+                title="إضافة دار نشر"
+                aria-expanded={adding}
+              >
+                <span className="add-card-plus" aria-hidden="true">+</span>
+                <span>{adding ? 'إغلاق النموذج' : 'إضافة دار نشر'}</span>
+              </button>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {canEdit && adding && (
