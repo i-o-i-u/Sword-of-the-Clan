@@ -836,9 +836,47 @@ export function CloseButton({ onClose }: { onClose: () => void }) {
   )
 }
 
+/**
+ * زرٌّ ينسخ نصًّا، ويُعلِن تمامَ النسخ بصحٍّ يظهر لحظةً ثم ينصرف.
+ *
+ * وهو مشتركٌ بين بطاقة الكتاب وبطاقة القيد: كلتاهما تُنسخ إحالتُها ورابطُها،
+ * فلا يُكتب الزرُّ مرَّتين ويفترق سلوكُه بينهما.
+ */
+export function CopyButton(
+  { icon, label, done, value, onFail, className = 'card-action' }:
+  {
+    icon: ReactNode
+    label: string
+    done: string
+    value: string
+    onFail: (message: string) => void
+    className?: string
+  },
+) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً
+      onFail('تعذّر النسخ إلى الحافظة، فانسخه بيدك: ' + value)
+    }
+  }
+
+  return (
+    <button type="button" className={className} onClick={() => void copy()} title={label}>
+      {copied ? <CheckIcon size={15} /> : icon}
+      <span>{copied ? done : label}</span>
+    </button>
+  )
+}
+
 export function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <div style={{
+    <div className="section-heading" style={{
       fontFamily: 'var(--heading-font)', fontSize: 16, fontWeight: 700,
       color: 'var(--accent-soft)', marginTop: 8,
     }}>
@@ -1029,7 +1067,10 @@ export function Combobox(
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--muted)' }}>
+    <div
+      className="empty-state"
+      style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--muted)' }}
+    >
       <div style={{ fontFamily: 'var(--heading-font)', fontSize: 20, marginBottom: 6 }}>{title}</div>
       {hint && <div style={{ fontSize: 14 }}>{hint}</div>}
     </div>

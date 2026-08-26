@@ -13,20 +13,25 @@ import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { navigate, shortBookLink } from '../lib/router'
+import { hashFor, navigate, shortBookLink } from '../lib/router'
+import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
+import { formatIsbn, isbnInfo } from '../lib/isbn'
 import {
-  LANGUAGES, PERKS_COUNT, PERK_KINDS, QUOTES_COUNT, STATUSES, STATUS_UNKNOWN,
-  WORK_PHRASES, contributorLabel, countLabel, formatNumber,
+  LANGUAGES, PERK_KINDS, STATUSES, STATUS_UNKNOWN,
+  WORK_PHRASES, contributorLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
-  type Author, type Book, type PerkKind, type ReadingStatus,
+  type Author, type Book, type Perk, type ReadingStatus,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
+import PerkCard from '../components/PerkCard'
+import PerkEditor from '../components/PerkEditor'
+import { PerkIcon } from '../components/ui'
 import {
-  ArchiveIcon, BackButton, CheckIcon, ChevronIcon, ClearIcon, CopyIcon,
+  ArchiveIcon, BackButton, ChevronIcon, ClearIcon, CopyButton, CopyIcon,
   EmptyState, HourglassIcon, InfoIcon, LinkIcon, Money, OpenBookIcon, OwnerIcon,
   PencilIcon, PressIcon, PrinterIcon, QuoteIcon, VerifyIcon,
-  cardStyle, chipStyle, ghostButtonStyle, outlineTabStyle, resolveAsset,
+  cardStyle, ghostButtonStyle, outlineTabStyle, resolveAsset,
 } from '../components/ui'
 
 // عارض الصورة لا يُفتح في كل زيارة، فلا يُحمَّل مع الصفحة
@@ -43,7 +48,7 @@ interface Row {
 
 export default function BookDetail({ bookId }: { bookId: string }) {
   const {
-    books, bookById, authorById, works, perks, loans, settings,
+    books, bookById, authorById, works, perks, loans, publishers, settings,
     isOwner, canEdit, patchBook, run, reload,
   } = useLibrary()
 
@@ -79,6 +84,9 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   }
 
   const author = authorById(book.author_id)
+  // صفحةُ الدار لا تُعرض إلا لدارٍ بقي لها كتابٌ ظاهر، فالرابطُ إليها لا
+  // يُكتب إلا إذا كانت في القائمة التي جاءت من الخادم
+  const publisherShown = publishers.some((p) => p.id === book.publisher_id)
   const volumePages = (book.volume_pages ?? []).map((v) => parseNumber(v) ?? 0)
   const indexVolumes = book.index_volumes ?? []
   const volumeParts = book.volume_parts ?? []
@@ -94,7 +102,29 @@ export default function BookDetail({ bookId }: { bookId: string }) {
 
   // ------------------------------------------------------- ٢. بيانات الطبعة
   const editionRows: Row[] = [
-    { key: 'publisher', label: 'دار النَّشْر', value: book.publisher },
+    {
+      // اسمُ الدار بابٌ إلى صفحتها كما اسمُ المؤلِّف بابٌ إلى صفحته: فيها
+      // شعارُها وبلدُها وسائرُ كتبها. ولا يكون رابطًا إلا إذا كانت لها صفحةٌ
+      // تُعرض — أي إذا بقي لها في المكتبة كتابٌ ظاهر.
+      key: 'publisher',
+      label: 'دار النَّشْر',
+      value: book.publisher && (
+        book.publisher_id && publisherShown
+          ? (
+            <a
+              className="row-link"
+              href={hashFor({ name: 'publisher', id: book.publisher_id })}
+              onClick={(e) => {
+                e.preventDefault()
+                navigate({ name: 'publisher', id: book.publisher_id! })
+              }}
+            >
+              {book.publisher}
+            </a>
+          )
+          : book.publisher
+      ),
+    },
     { key: 'place', label: 'بلد النَّشْر', value: book.place },
     { key: 'yearLabel', label: 'سنة النَّشْر', value: publishYear(book) },
     {
@@ -136,7 +166,20 @@ export default function BookDetail({ bookId }: { bookId: string }) {
         : '',
     },
     { key: 'size', label: 'حجْم الكتاب', value: book.size },
-    { key: 'isbn', label: 'ردمك (ISBN)', value: book.isbn && <span dir="ltr">{book.isbn}</span> },
+    {
+      // الردمك يُعرض مُشرَّطًا كما يُطبَع على ظهر الكتاب، ومعه بلدُ مجموعته
+      // إن عُرفت — خبرٌ يُقرأ من الرقم نفسه لا يُدخَل
+      key: 'isbn',
+      label: 'ردمك (ISBN)',
+      value: book.isbn && (
+        <span className="isbn-value">
+          <span dir="ltr">{formatIsbn(book.isbn) || book.isbn}</span>
+          {isbnInfo(book.isbn).country && (
+            <span className="isbn-country">{isbnInfo(book.isbn).country}</span>
+          )}
+        </span>
+      ),
+    },
     {
       key: 'language',
       // العربية هي الأصل في هذه المكتبة، فلا يُشغَل بها سطر. ولا تُذكر اللغة
@@ -310,7 +353,9 @@ export default function BookDetail({ bookId }: { bookId: string }) {
                 label="شارَكه"
               />
             ))}
-            {!hidden('contributors') && <Contributors book={book} />}
+            {!hidden('contributors') && (
+              <Contributors book={book} linked={isOwner || vis.authors} />
+            )}
           </section>
 
           {/* ------------------------------------------------- أقسام البيانات */}
@@ -464,86 +509,6 @@ export default function BookDetail({ bookId }: { bookId: string }) {
 }
 
 // ---------------------------------------------------------- أدوات البطاقة
-/**
- * صياغةُ الصفة في جريدة المراجع: هناك تُذكر بالمصدر لا بالوصف — «تحقيق
- * فلان» لا «المُحقِّق فلان». وما لا مصدر له في القائمة يُترك على لفظه.
- */
-const CITATION_VERB: Record<string, string> = {
-  'المُحقِّق': 'تحقيق',
-  'المُراجِع': 'مراجعة',
-  'المُعتَني': 'اعتناء',
-  'المُصحِّح': 'تصحيح',
-  'المُخَرِّج': 'تخريج',
-  'المُتَرجِم': 'ترجمة',
-  'تَقْرِيظ': 'تقريظ',
-  'تقديم': 'تقديم',
-}
-
-/**
- * سطرُ الإحالة كما يُوضع في جريدة المصادر: العنوان، فالمؤلِّف، فمن عمل فيه،
- * فالطبعة ودارُها وسنتُها وبلدُها. وما لم يُسجَّل يسقط من السطر ولا يُترك
- * له موضعٌ فارغ.
- */
-function citationOf(book: Book, author: Author | null): string {
-  const parts: string[] = [book.title.trim()]
-
-  const name = author?.full_name?.trim() || author?.name?.trim() || book.author_name.trim()
-  if (name) parts.push(name)
-
-  // من عمل في الكتاب، مجموعًا بصفته: «تحقيق فلان وفلان»
-  const byRole = new Map<string, string[]>()
-  for (const c of book.contributors ?? []) {
-    const who = c.name.trim()
-    if (who) byRole.set(c.role, [...(byRole.get(c.role) ?? []), who])
-  }
-  byRole.forEach((names, role) => {
-    parts.push(`${CITATION_VERB[role] ?? role} ${names.join(' و')}`)
-  })
-
-  if (book.publisher.trim()) {
-    const edition = book.edition.trim()
-      ? `الطبعة ${book.edition_worded ? book.edition.trim() : toArabicDigits(book.edition.trim())}، `
-      : ''
-    parts.push(`${edition}طبعة ${book.publisher.trim()}`)
-  }
-
-  const year = book.year_approx
-    ? book.year_text.trim()
-    : (book.year != null ? yearLabel(book.year, book.year_era) : '')
-  const place = book.place.trim()
-  if (year && place) parts.push(`${year} - ${place}`)
-  else if (year) parts.push(year)
-  else if (place) parts.push(place)
-
-  return `${parts.join('، ')}.`
-}
-
-/** زرٌّ ينسخ نصًّا، ويُعلِن تمامَ النسخ بصحٍّ يظهر لحظة */
-function CopyButton(
-  { icon, label, done, value, onFail }:
-  { icon: ReactNode; label: string; done: string; value: string; onFail: (m: string) => void },
-) {
-  const [copied, setCopied] = useState(false)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً
-      onFail('تعذّر النسخ إلى الحافظة، فانسخه بيدك: ' + value)
-    }
-  }
-
-  return (
-    <button type="button" className="card-action" onClick={() => void copy()} title={label}>
-      {copied ? <CheckIcon size={15} /> : icon}
-      <span>{copied ? done : label}</span>
-    </button>
-  )
-}
-
 function CardActions({ book, author, allIds }: { book: Book; author: Author | null; allIds: string[] }) {
   const { setError } = useLibrary()
   const link = shortBookLink(book.id, allIds)
@@ -730,13 +695,7 @@ function AuthorLine(
 
   return (
     <AttribRow icon={<OwnerIcon size={14} />} label={label}>
-      {linked && author ? (
-        <span className="attrib-name attrib-link" onClick={() => navigate({ name: 'author', id: author.id })}>
-          {name}
-        </span>
-      ) : (
-        <span className="attrib-name">{name}</span>
-      )}
+      <PersonName name={name} id={author?.id ?? null} linked={linked} />
       {death && (
         <span className="attrib-note">
           <HourglassIcon size={12} />
@@ -749,19 +708,29 @@ function AuthorLine(
 
 /**
  * المشاركون مجموعين بصفاتهم: إذا اجتمع اثنان من صفةٍ واحدة ثُنِّي لفظُها،
- * وإن زادوا جُمِع، وتُعرض أسماؤهم بعضُها تحت بعض معطوفةً بالواو. وكلُّ صفةٍ
- * سطرٌ على حِدَة، فلا يُقال «المحقِّق ومن معه».
+ * وإن زادوا جُمِع، وتُعرض أسماؤهم **في سطرٍ واحد** معطوفةً بالواو كما تُكتب
+ * في صدر الكتاب: «المحقِّقان: فلانٌ وفلان». وكلُّ صفةٍ سطرٌ على حِدَة، فلا
+ * يُقال «المحقِّق ومن معه».
  *
- * وقد يختلف القائمون على المجلَّدات، فيُذكر لكلٍّ نطاقُه بين قوسين — وحينئذٍ
- * لا تُعطف الأسماء بالواو: هؤلاء ليسوا شركاء في عملٍ واحد، بل لكلٍّ عملُه.
+ * وقد يختلف القائمون على المجلَّدات، فيُذكر لكلٍّ نطاقُه إلى جانب اسمه —
+ * وحينئذٍ لا تُعطف الأسماء بالواو: هؤلاء ليسوا شركاء في عملٍ واحد بل لكلٍّ
+ * عملُه، فيُفصل بينهم بفاصلةٍ تُبيِّن ولا تجمع.
+ *
+ * ولكلّ اسمٍ صفحتُه: سجلُّ الأشخاص واحد، ومعرّفُ صاحبه محفوظٌ في
+ * `person_id`، فالضغطُ عليه يبلغ ترجمتَه وسائرَ ما عمل فيه. ومن لا سجلَّ له
+ * — اسمٌ فُهرس قبل الربط — يبقى نصًّا لا رابطَ فيه، ولا يُوهَم القارئُ بباب
+ * لا يفتح.
  */
-function Contributors({ book }: { book: Book }) {
+function Contributors({ book, linked }: { book: Book; linked: boolean }) {
   const groups = useMemo(() => {
-    const map = new Map<string, { name: string; scope: string }[]>()
+    const map = new Map<string, { name: string; scope: string; id: string | null }[]>()
     for (const c of book.contributors ?? []) {
       const name = c.name.trim()
       if (!name) continue
-      map.set(c.role, [...(map.get(c.role) ?? []), { name, scope: (c.scope ?? '').trim() }])
+      map.set(c.role, [
+        ...(map.get(c.role) ?? []),
+        { name, scope: (c.scope ?? '').trim(), id: c.person_id ?? null },
+      ])
     }
     return [...map.entries()]
   }, [book.contributors])
@@ -781,7 +750,10 @@ function Contributors({ book }: { book: Book }) {
             <span className="attrib-people">
               {people.map((p, i) => (
                 <span key={`${p.name}-${i}`} className="attrib-person">
-                  <span className="attrib-name">{i === 0 || split ? p.name : `و${p.name}`}</span>
+                  {/* الواوُ خارج الرابط: هي عاطفةٌ لا من الاسم، فلو دخلت
+                      تحته لوُصلت به عند النسخ وتحتها خطُّ الرابط */}
+                  {i > 0 && <span className="attrib-join">{split ? '،' : 'و'}</span>}
+                  <PersonName name={p.name} id={p.id} linked={linked} />
                   {p.scope && <span className="attrib-scope">{p.scope}</span>}
                 </span>
               ))}
@@ -790,6 +762,22 @@ function Contributors({ book }: { book: Book }) {
         )
       })}
     </>
+  )
+}
+
+/** اسمٌ في لوح النسبة: رابطٌ إلى صفحته إن كان له سجلّ، وإلّا فنصّ */
+function PersonName(
+  { name, id, linked }: { name: string; id: string | null; linked: boolean },
+) {
+  if (!linked || !id) return <span className="attrib-name">{name}</span>
+  return (
+    <a
+      className="attrib-name attrib-link"
+      href={hashFor({ name: 'author', id })}
+      onClick={(e) => { e.preventDefault(); navigate({ name: 'author', id }) }}
+    >
+      {name}
+    </a>
   )
 }
 
@@ -980,138 +968,74 @@ function WorksAbout({ rows }: { rows: { type: string; target: Book | undefined }
  * وصاحبُ المكتبة يبقى له سبيلٌ إلى الإضافة حين لا فائدة بعدُ: زرٌّ مفردٌ لا
  * صندوقٌ كامل، فإذا فُتح فُتح النموذجُ وحده.
  */
-function PerksPanel({ bookId, perks }: { bookId: string; perks: ReturnType<typeof useLibrary>['perks'] }) {
-  const { canEdit, run, reload } = useLibrary()
-  const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<PerkKind>(PERK_KINDS[0])
-  const [title, setTitle] = useState('')
-  const [text, setText] = useState('')
-  const [page, setPage] = useState('')
+/**
+ * صندوقُ القيود في صفحة الكتاب: ما خرج من هذا الكتاب من فوائدَ ونصوص.
+ *
+ * وهو عرضٌ لا نموذجُ إدخال: القيدُ يُكتب في نافذته حيثما كان — من هنا أو من
+ * سيل الكنّاش — فسلوكُ كل حقلٍ مكتوبٌ مرّةً واحدة في `PerkEditor`، ولا
+ * يفترق نصفُ نموذجٍ ههنا عن نموذجٍ تامٍّ هناك.
+ *
+ * ولا يُعرض فارغًا: بطاقةٌ تُخبر أن لا فائدة فيه ليست خبرًا. ويبقى لصاحب
+ * المكتبة زرٌّ مفردٌ يفتح النموذج.
+ */
+function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
+  const { canEdit } = useLibrary()
+  const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
 
-  const perkCount = perks.filter((p) => p.kind === 'فائدة').length
-  const quoteCount = perks.length - perkCount
-  const ready = !!(title.trim() && text.trim())
+  const counts = PERK_KINDS
+    .map((kind) => ({ kind, n: perks.filter((p) => p.kind === kind).length }))
+    .filter(({ n }) => n > 0)
 
-  const inputStyle = {
-    padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)',
-    background: 'var(--bg)', fontSize: 14, color: 'var(--text)', width: '100%',
-  } as const
-
-  // لا فائدةَ ولا مقتطف، ولا حقَّ للناظر في الإضافة: لا صندوق أصلًا
   if (perks.length === 0 && !canEdit) return null
 
-  // ولصاحب المكتبة زرٌّ مفرد، فإذا ضغطه ظهر النموذج وحدَه
-  if (perks.length === 0 && !open) {
-    return (
-      <div style={{ marginBottom: 20 }}>
-        <button type="button" onClick={() => setOpen(true)} style={ghostButtonStyle}>
-          + إضافة فائدة أو مقتطف من هذا الكتاب
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <div style={{ ...cardStyle, marginBottom: 20, borderRadius: 12, padding: '16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--heading-font)', fontSize: 18, fontWeight: 700 }}>الفوائد والمقتطفات</div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-            {perks.length === 0
-              ? 'ما يُستخرَج من الكتاب من فوائد ونصوص'
-              : [
-                perkCount > 0 && countLabel(perkCount, PERKS_COUNT),
-                quoteCount > 0 && countLabel(quoteCount, QUOTES_COUNT),
-              ].filter(Boolean).join(' و')}
+    <div className="book-perks">
+      {perks.length === 0 ? (
+        <button type="button" onClick={() => setEditing(null)} style={ghostButtonStyle}>
+          + قيِّد فائدةً أو نصًّا من هذا الكتاب
+        </button>
+      ) : (
+        <>
+          <div className="book-perks-head">
+            <div>
+              <h2>ما قُيِّد منه</h2>
+              <p>
+                {counts.map(({ kind, n }) => `${formatNumber(n)} ${kind}`).join('، و')}
+              </p>
+            </div>
+            <div className="book-perks-tools">
+              <button
+                type="button"
+                className="card-action"
+                onClick={() => navigate({ name: 'perks' })}
+                title="كنّاش المكتبة كلُّه"
+              >
+                <PerkIcon size={15} />
+                <span>الكنّاش كلُّه</span>
+              </button>
+              {canEdit && (
+                <button type="button" onClick={() => setEditing(null)} style={ghostButtonStyle}>
+                  + قيدٌ جديد
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-        {canEdit && (
-          <button type="button" onClick={() => { setOpen(!open); setTitle(''); setText(''); setPage('') }} style={ghostButtonStyle}>
-            {open ? 'إغلاق' : '+ إضافة فائدة أو مقتطف'}
-          </button>
-        )}
-      </div>
 
-      {canEdit && open && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14,
-          paddingBottom: 14, borderBottom: '1px solid var(--border)',
-        }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {PERK_KINDS.map((k) => (
-              <button key={k} type="button" onClick={() => setKind(k)} style={chipStyle(kind === k)}>{k}</button>
+          <div className="perk-list">
+            {perks.map((p) => (
+              <PerkCard
+                key={p.id}
+                perk={p}
+                hideSource
+                onEdit={canEdit ? setEditing : undefined}
+              />
             ))}
           </div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان الفائدة أو المقتطف" style={inputStyle} />
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="نصّ الفائدة أو المقتطف"
-            style={{ ...inputStyle, minHeight: 90, lineHeight: 1.9, resize: 'vertical' }}
-          />
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              value={page}
-              onChange={(e) => setPage(e.target.value)}
-              placeholder="الصفحة (اختياري)"
-              style={{ ...inputStyle, width: 150, padding: '8px 12px', fontSize: 13 }}
-            />
-            <button
-              type="button"
-              disabled={!ready}
-              onClick={async () => {
-                if (!ready) return
-                await run(() => api.insertPerk({
-                  book_id: bookId, kind, title: title.trim(), text: text.trim(), page: page.trim(),
-                }))
-                setOpen(false); setTitle(''); setText(''); setPage('')
-                await reload()
-              }}
-              style={{
-                background: ready ? 'var(--accent)' : 'var(--border)',
-                color: ready ? 'var(--on-accent)' : 'var(--muted)',
-                border: 'none', borderRadius: 8, padding: '9px 22px',
-                fontSize: 13.5, fontWeight: 700, cursor: ready ? 'pointer' : 'not-allowed',
-              }}
-            >
-              حفظ
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
-      {perks.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {perks.map((p) => (
-            <div key={p.id} style={{
-              border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', background: 'var(--bg)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 9px',
-                  ...(p.kind === 'فائدة'
-                    ? { color: 'var(--on-accent)', background: 'var(--accent)' }
-                    : { color: 'var(--text)', border: '1px solid var(--border)', background: 'var(--header)' }),
-                }}>
-                  {p.kind}
-                </span>
-                <span style={{ fontFamily: 'var(--heading-font)', fontSize: 15.5, fontWeight: 700, flex: 1 }}>{p.title}</span>
-                {p.page && <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>ص {p.page}</span>}
-                {canEdit && (
-                  <button
-                    type="button"
-                    aria-label="حذف"
-                    onClick={async () => { await run(() => api.deletePerk(p.id)); await reload() }}
-                    style={{ border: 'none', background: 'none', color: 'var(--muted)', fontSize: 16, lineHeight: 1 }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <div className="prose" style={{ fontSize: 14, color: 'var(--text)' }}>{p.text}</div>
-            </div>
-          ))}
-        </div>
+      {editing !== undefined && (
+        <PerkEditor perk={editing} bookId={bookId} onClose={() => setEditing(undefined)} />
       )}
     </div>
   )

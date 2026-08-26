@@ -20,7 +20,10 @@ export type Route =
   // الأشخاص واحد، فلا مسارَ ثانٍ له.
   | { name: 'people' }
   | { name: 'series' }
-  | { name: 'perks' }
+  // «الفوائد والمقتطفات» بابٌ ذو أبواب، فلكلّ بابٍ منها موضعٌ في الرابط
+  // يُشارَك ويُعاد إليه — ولولاه لعاد كلُّ رابطٍ إلى صدر السيل.
+  | { name: 'perks'; tab?: string }
+  | { name: 'perk'; id: string }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '').split('?')[0]
@@ -41,7 +44,8 @@ export function parseHash(hash: string): Route {
     case 'about': return { name: 'about' }
     case 'people': return { name: 'people' }
     case 'series': return { name: 'series' }
-    case 'perks': return { name: 'perks' }
+    case 'perks': return id ? { name: 'perks', tab: id } : { name: 'perks' }
+    case 'perk': return id ? { name: 'perk', id } : { name: 'perks' }
     default: return { name: 'landing' }
   }
 }
@@ -60,7 +64,8 @@ export function hashFor(route: Route): string {
     case 'about': return '#/about'
     case 'people': return '#/people'
     case 'series': return '#/series'
-    case 'perks': return '#/perks'
+    case 'perks': return route.tab ? `#/perks/${route.tab}` : '#/perks'
+    case 'perk': return `#/perk/${route.id}`
     default: return '#/'
   }
 }

@@ -27,6 +27,28 @@
 
   /* ارتفاع الرأس: تطرحه صفحةُ الهبوط لتملأ ما بقي من الشاشة تمامًا */
   --header-h: 70px;
+
+  /* ------------------------------------------------------ رموز الزينة
+   * ظلالٌ ثلاثة بمقاديرَ متدرّجة، تُستعمل في الواجهة كلها فلا يجتهد كلُّ
+   * موضعٍ لنفسه فتختلف الأعماق بين بطاقةٍ وبطاقة. ولونُها لونُ النصّ لا
+   * أسودَ صِرفًا: الظلُّ الأسود على أرضٍ دافئة يُرى رماديًّا غريبًا.
+   */
+  --shadow-1: 0 1px 2px oklch(0.24 0.02 50 / 0.06), 0 2px 8px oklch(0.24 0.02 50 / 0.05);
+  --shadow-2: 0 2px 6px oklch(0.24 0.02 50 / 0.07), 0 10px 26px oklch(0.24 0.02 50 / 0.09);
+  --shadow-3: 0 4px 12px oklch(0.24 0.02 50 / 0.09), 0 20px 48px oklch(0.24 0.02 50 / 0.14);
+
+  /* منحنى الحركة الواحد: كلُّ ما ينزلق في الواجهة ينزلق به، فيتّحد إحساسُ
+     الموقع. و«الوثبة» لما يُراد أن يَثِبَ وثبةً خفيفة عند ظهوره. */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  /*
+   * ربعُ الحزب: مربَّعان متقاطعان، وهو أشهرُ ما زُخرفت به المصاحف وأبسطُه.
+   * يُستعمل قناعًا (mask) لا صورةً ملوَّنة، فيُصبغ بلون المكتبة ويتبع
+   * المظاهر الثلاثة بلا نسخةٍ لكلّ مظهر. وهو محرفٌ في الملف لا ملفٌّ
+   * يُجلب، فلا يكلّف طلبًا على الشبكة.
+   */
+  --ornament: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='62' height='62' viewBox='0 0 62 62'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.3'%3E%3Crect x='16' y='16' width='30' height='30'/%3E%3Crect x='16' y='16' width='30' height='30' transform='rotate(45 31 31)'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -64,13 +86,7 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
 input, select, textarea { outline: none; }
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
+/* حلقةُ التركيز مكتوبةٌ في «زينة الواجهة كلِّها» في آخر الملف */
 
 /* حقول لاتينية: البريد وكلمة السر (§٤) */
 input[dir='ltr'] { text-align: left; }
@@ -427,10 +443,51 @@ input[dir='ltr'] { text-align: left; }
    القسمة على --ui-scale لأن #root مكبَّرٌ بـ zoom، ووحدةُ vh لا تتبع
    التكبير، فلولاها لطالت الصفحة عن الشاشة كلّما كبّر الزائر الخطّ. */
 .landing {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh / var(--ui-scale) - var(--header-h));
 }
+
+/*
+ * ما تقوم به الصفحة قبل أن تصل صورة: هالتان بلون المكتبة في الطرفين،
+ * وزخرفةٌ هندسيّة مبثوثة (ربعُ الحزب: مربَّعان متقاطعان) تحت الكلّ. وهي
+ * أنماطٌ محسوبة لا صورًا تُجلب، فلا تكلّف الشبكة حرفًا واحدًا.
+ *
+ * والزخرفةُ مرسومةٌ بالقناع لا بالصورة الملوَّنة، فتتبع لونَ المكتبة في
+ * المظاهر الثلاثة ولا تحتاج نسخةً لكلّ مظهر.
+ */
+.landing-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      44% 52% at 82% 8%,
+      color-mix(in oklch, var(--accent) 13%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 46% at 12% 96%,
+      color-mix(in oklch, var(--star) 11%, transparent) 0%,
+      transparent 72%
+    );
+}
+
+.landing-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0.045;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: 62px 62px;
+  mask-size: 62px 62px;
+}
+[data-theme='dark'] .landing-glow::after { opacity: 0.07; }
 
 .hero {
   position: relative;
@@ -454,15 +511,38 @@ input[dir='ltr'] { text-align: left; }
 /* ------------------------------------- إطار الصورة، والشعار فوقه */
 /* الصورة محصورةٌ هنا لا تملأ الصفحة. والنقر على الإطار هو ما يُعدّ
    للمدخل المخفيّ، ولذلك ما فوقه لا يلتقط النقر. */
+/* الإطارُ لوحةٌ قائمةٌ بنفسها وإن خلا من صورة: أرضيّةٌ متدرّجة، وزخرفةٌ
+   باهتة، وحاشيتان — فلا يُرى صندوقًا فارغًا ينتظر. */
 .frame {
   position: relative;
   width: 100%;
   height: clamp(200px, 38vh, 360px);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      120% 90% at 50% 0%,
+      color-mix(in oklch, var(--accent) 6%, var(--surface)) 0%,
+      var(--surface) 68%
+    );
   overflow: hidden;
-  box-shadow: 0 20px 52px oklch(0.2 0.02 50 / 0.2);
+  box-shadow:
+    0 1px 0 color-mix(in oklch, var(--surface) 90%, white) inset,
+    0 22px 56px oklch(0.2 0.02 50 / 0.22);
+}
+
+/* الزخرفة نفسها التي تحت الصفحة، أكثفُ قليلًا داخل اللوحة */
+.frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--accent);
+  opacity: 0.055;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: 54px 54px;
+  mask-size: 54px 54px;
 }
 
 .frame-shots { position: absolute; inset: 0; }
@@ -474,10 +554,34 @@ input[dir='ltr'] { text-align: left; }
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 1.4s ease-in-out;
+  /* المعروضةُ تُقبل على الناظر إقبالًا بطيئًا لا يكاد يُحسّ، فتحيا اللوحةُ
+     ولا تكون صورةً ساكنة. والحركة على المعروضة وحدها: ما خفتَ لا يُدار. */
+  transform: scale(1.06);
+  transition: opacity 1.5s ease-in-out, transform 1.5s ease-in-out;
 }
-.frame-shot-on { opacity: 0.46; }
+.frame-shot-on {
+  opacity: 0.46;
+  animation: frame-drift 26s ease-in-out infinite alternate;
+}
 [data-theme='dark'] .frame-shot-on { opacity: 0.36; }
+
+@keyframes frame-drift {
+  from { transform: scale(1.04) translate3d(0, 0, 0); }
+  to   { transform: scale(1.13) translate3d(-1.5%, 1%, 0); }
+}
+
+/* أركانٌ أربعة تُبَرْوِز اللوحة: خطّان في كل ركن، لا إطارٌ مغلق */
+.frame-corners { position: absolute; inset: 14px; z-index: 3; pointer-events: none; }
+.frame-corners i {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0 solid color-mix(in oklch, var(--accent) 45%, transparent);
+}
+.frame-corners i:nth-child(1) { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px; border-top-right-radius: 7px; }
+.frame-corners i:nth-child(2) { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px; border-top-left-radius: 7px; }
+.frame-corners i:nth-child(3) { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px; border-bottom-right-radius: 7px; }
+.frame-corners i:nth-child(4) { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px; border-bottom-left-radius: 7px; }
 
 /*
  * حجابان: هالةٌ في الوسط تحت الشعار والاسم فيبقيان مقروءَين مهما كانت
@@ -507,10 +611,10 @@ input[dir='ltr'] { text-align: left; }
 .frame::after {
   content: '';
   position: absolute;
-  inset: 10px;
+  inset: 9px;
   z-index: 3;
   border: 1px solid color-mix(in oklch, var(--surface) 55%, transparent);
-  border-radius: 11px;
+  border-radius: 12px;
   pointer-events: none;
 }
 
@@ -707,6 +811,37 @@ input[dir='ltr'] { text-align: left; }
   background: var(--accent-dark);
 }
 
+/* أعدادُ المكتبة سطرًا واحدًا تحت الأزرار: خبرٌ يُقرأ في لمحة قبل الدخول.
+   وما كان صفرًا لا يُعرض أصلًا، فلا يُقال «لا كتاب في المكتبة». */
+.hero-tally {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 18px;
+  animation: rise-in 0.62s var(--ease) 0.36s both;
+}
+
+.hero-tally-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hero-tally-item svg { flex: none; color: var(--accent-soft); opacity: 0.85; }
+
+/* فاصلٌ بين العدد والعدد: نقطةٌ لا خطّ */
+.hero-tally-item + .hero-tally-item::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  margin-inline-end: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
 /* ------------------------------ ورقة التقويم، خارج الإطار كذلك */
 .cal {
   position: absolute;
@@ -805,35 +940,47 @@ input[dir='ltr'] { text-align: left; }
    موسَّطٌ فيه رأسيًّا فلا يتعلّق القصيرُ بأعلاه. */
 .quote-card {
   position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: clamp(148px, 20vh, 194px);
   margin: 0;
-  background: var(--surface);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--accent) 4%, var(--surface)),
+    var(--surface) 60%
+  );
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: clamp(18px, 2.4vh, 26px) clamp(22px, 3.4vw, 40px) clamp(12px, 1.8vh, 18px);
   text-align: center;
-  box-shadow: 0 10px 26px oklch(0.2 0.02 50 / 0.07);
+  box-shadow: var(--shadow-2);
+  transition: box-shadow 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.quote-card:hover {
+  box-shadow: var(--shadow-3);
+  border-color: color-mix(in oklch, var(--accent) 32%, var(--border));
 }
 
-/* البطاقة لا تُعاد ولا تتحرّك — إنما يتلاشى ما فيها. والمفتاحُ في Landing
-   على النصّ ومصدره، فتُعاد هذه الحركةُ عليهما وحدهما عند كل تبديل. */
-.quote-text,
-.quote-source {
-  animation: quote-in 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+/*
+ * البطاقة لا تُعاد ولا تتحرّك، وإنما جوفُها هو الذي يتبدّل — ويتبدّل على
+ * مرحلتين لا مرحلةٍ واحدة: يخفت المعروضُ حتى يذهب، فإذا ذهب حلّ الجديدُ
+ * وصعِد. وكان القديمُ يُرفع في اللحظة ويُبدأ بإظهار الجديد، فيُرى في وسط
+ * البطاقة فراغٌ ثم قفزة — وذلك الذي كان يُشكى من ثقله.
+ */
+.quote-body {
+  transition:
+    opacity 0.32s var(--ease),
+    transform 0.32s var(--ease),
+    filter 0.32s var(--ease);
 }
-/* المصدرُ يتلو النصَّ بلحظةٍ فيُقرأ الاثنان على ترتيبهما لا دفعةً واحدة */
-.quote-source { animation-delay: 0.08s; }
+.quote-body-out { opacity: 0; transform: translateY(-9px); filter: blur(1.5px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .quote-text, .quote-source { animation-duration: 0.01ms; }
-}
-
-@keyframes quote-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  .quote-body { transition-duration: 0.01ms; }
+  .quote-body-out { transform: none; filter: none; }
+  .quote-progress { display: none; }
 }
 
 /* إطارٌ داخليّ ثانٍ — ما يعطي البطاقة هيئة الصفحة المزخرفة */
@@ -847,16 +994,36 @@ input[dir='ltr'] { text-align: left; }
   pointer-events: none;
 }
 
+/* وزخرفةٌ باهتة في أرضها، كزخرفة اللوحة فوقها */
+.quote-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  opacity: 0.035;
+  pointer-events: none;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: 48px 48px;
+  mask-size: 48px 48px;
+}
+.quote-body, .quote-dots { position: relative; z-index: 1; }
+
+/* علامتا الاقتباس تكتنفانه: واحدةٌ في أعلى يمينه وأخرى في أسفل يساره،
+   كما تُصفّ في المطبوع. وكانت واحدةً فتبدو البطاقةُ مبتورة. */
 .quote-mark {
   position: absolute;
-  top: clamp(13px, 2vh, 24px);
-  right: clamp(18px, 3vw, 38px);
   font-family: var(--heading-font);
   font-size: clamp(38px, 5vh, 58px);
   line-height: 0.55;
   color: var(--accent-soft);
-  opacity: 0.3;
+  opacity: 0.28;
+  pointer-events: none;
 }
+.quote-mark-open { top: clamp(13px, 2vh, 24px); right: clamp(18px, 3vw, 38px); }
+.quote-mark-close { bottom: clamp(4px, 1vh, 12px); left: clamp(18px, 3vw, 38px); }
 
 .quote-text {
   margin: 0 auto 14px;
@@ -883,10 +1050,30 @@ input[dir='ltr'] { text-align: left; }
 
 .quote-rule {
   display: block;
-  width: 56px;
+  width: clamp(28px, 6vw, 56px);
   height: 1px;
   background: linear-gradient(to left, transparent, var(--accent-soft));
 }
+.quote-rule-flip { background: linear-gradient(to right, transparent, var(--accent-soft)); }
+
+/*
+ * خيطٌ يقطع أسفل البطاقة بمقدار ما بقي من مهلة الاقتباس، فيصير التبديلُ
+ * متوقَّعًا ولا يُفاجئ القارئَ في وسط سطر. ويقف متى وقف المؤشِّرُ على
+ * البطاقة — تُقرأ حينئذٍ على مهلٍ لا تسابق.
+ */
+.quote-progress {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(to left, var(--accent), var(--accent-soft));
+  opacity: 0.55;
+  animation-name: quote-tick;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes quote-tick { from { width: 0; } to { width: 100%; } }
 
 .quote-dots { display: flex; justify-content: center; gap: 8px; margin-top: 14px; }
 
@@ -1459,10 +1646,24 @@ input[dir='ltr'] { text-align: left; }
 .attrib-link {
   color: var(--accent);
   cursor: pointer;
-  border-bottom: 1px dashed var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in oklch, var(--accent) 55%, transparent);
   transition: color 0.15s, border-color 0.15s;
 }
-.attrib-link:hover { color: var(--accent-dark); border-bottom-style: solid; }
+.attrib-link:hover {
+  color: var(--accent-dark);
+  border-bottom-color: var(--accent);
+  border-bottom-style: solid;
+}
+
+/* رابطٌ في صفوف البيانات — اسمُ الدار — بهيئة النصّ إلى أن يُمَرَّ عليه */
+.row-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in oklch, var(--accent) 45%, transparent);
+  transition: color 0.15s, border-color 0.15s;
+}
+.row-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 .attrib-note {
   display: inline-flex;
@@ -1477,9 +1678,33 @@ input[dir='ltr'] { text-align: left; }
 }
 .attrib-note svg { flex: none; }
 
-/* أصحاب الصفة الواحدة: بعضهم تحت بعض، ولكلٍّ نطاقُه إن اختلفت أعمالُهم */
-.attrib-people { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.attrib-person { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+/*
+ * أصحاب الصفة الواحدة في سطرٍ واحد يتلو بعضُهم بعضًا، كما تُكتب أسماؤهم في
+ * صدر الكتاب: «المحقِّقان: فلانٌ وفلان». وكانوا بعضُهم تحت بعض، فيقوم لكل
+ * اسمٍ سطرٌ ويطول لوحُ النسبة بلا حاجة. والانسيابُ يردّ الزائدَ إلى سطرٍ
+ * ثانٍ من نفسه إذا ضاق العرض.
+ */
+.attrib-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 7px;
+  min-width: 0;
+}
+.attrib-person { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+
+/* حرفُ العطف بين الاسمين: ملتصقٌ بما بعده كما يُكتب — «وفلان» لا «و فلان» */
+.attrib-join {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-inline-end: -4px;
+}
+/* والفاصلةُ حين تختلف النطاقات تلتصق بما قبلها لا بما بعده */
+.attrib-person:has(.attrib-scope) .attrib-join {
+  margin-inline: -5px 2px;
+  color: var(--border);
+}
 
 .attrib-scope {
   padding: 1px 8px;
@@ -2152,4 +2377,1115 @@ input[dir='ltr'] { text-align: left; }
   }
   .frame-shot-on { animation: none; transform: none; }
   .hero-btn span { max-width: 260px; margin-inline-start: 10px; opacity: 1; }
+}
+
+/* ================================================= حقل الردمك (ISBN) */
+/* الحكمُ خبرٌ تحت الحقل لا حاجزٌ دونه: الرقمُ المُحرَّف يُحفظ كما كُتب — قد
+   يكون الخطأ مطبوعًا على ظهر الكتاب نفسه — وإنما يُنبَّه عليه. */
+.isbn-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  min-height: 18px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.isbn-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--header);
+  white-space: nowrap;
+}
+.isbn-flag svg { flex: none; }
+
+.isbn-flag-ok {
+  color: var(--accent-soft);
+  background: color-mix(in oklch, var(--accent) 11%, transparent);
+}
+.isbn-flag-bad {
+  color: var(--danger);
+  background: color-mix(in oklch, var(--danger) 11%, transparent);
+  white-space: normal;
+}
+
+/* تحويلُ العشاريّ عرضٌ يُقبل بضغطة، لا تبديلٌ يجري على صاحبه */
+.isbn-swap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border: 1px dashed var(--accent-soft);
+  border-radius: 999px;
+  background: none;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: background 0.16s, color 0.16s;
+}
+.isbn-swap:hover { background: var(--accent); color: var(--on-accent); border-style: solid; }
+
+/* وفي بطاقة الكتاب: الرقمُ مُشرَّطًا، وبلدُ مجموعته إلى جانبه */
+.isbn-value { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.isbn-country {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--header);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ==================================================== الفوائد والمقتطفات */
+/*
+ * كنّاشُ المكتبة. وهو بابٌ ذو أبواب لا صفحةً واحدة، فله صدرٌ يُعرِّف به
+ * ويعدّ ما فيه، ثم تبويبٌ لأبوابه، ثم السيلُ بمُصفِّياته.
+ */
+.perks-page { max-width: 1060px; margin: 0 auto; padding: 32px; }
+
+/* -------------------------------------------------------------- الصدر */
+.perks-hero {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 22px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklch, var(--accent) 9%, var(--surface)),
+    var(--surface) 62%
+  );
+  box-shadow: var(--shadow-1);
+}
+
+/* زخرفةٌ باهتة في أرضه، كزخرفة اللوحة في صفحة الهبوط */
+.perks-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0.04;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: 52px 52px;
+  mask-size: 52px 52px;
+}
+
+.perks-hero-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.perks-hero-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  color: var(--accent-soft);
+}
+
+.perks-hero h1 {
+  margin: 0 0 5px;
+  font-family: var(--heading-font);
+  font-size: 27px;
+  font-weight: 700;
+}
+.perks-hero p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--muted);
+}
+
+.perks-new {
+  margin-inline-start: auto;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+  transition: transform 0.16s var(--ease), background 0.16s, box-shadow 0.16s;
+}
+.perks-new:hover { background: var(--accent-dark); transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.perks-new:active { transform: translateY(0) scale(0.97); }
+
+/* أعدادُ الكنّاش: ألواحٌ مفردة، وما كان صفرًا لا يُعرض أصلًا */
+.perks-tally {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.perks-tile {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.perks-tile-value {
+  font-family: var(--heading-font);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.perks-tile-label { font-size: 12px; color: var(--muted); }
+
+/* ------------------------------------------------------------ التبويب */
+.perks-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+}
+.perks-tabs::-webkit-scrollbar { display: none; }
+
+.perks-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.18s;
+}
+.perks-tab svg { flex: none; opacity: 0.75; }
+.perks-tab:hover { color: var(--text); }
+
+/* الشريطُ تحت البابِ العامل يعرف موضعَه بالخطّ لا باللون وحده */
+.perks-tab::after {
+  content: '';
+  position: absolute;
+  inset-inline: 12px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.24s var(--ease);
+}
+.perks-tab-on { color: var(--accent); }
+.perks-tab-on svg { opacity: 1; }
+.perks-tab-on::after { transform: scaleX(1); }
+
+/* ------------------------------------------------------- شريط الترشيح */
+.perks-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+
+.perks-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.perks-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 12%, transparent);
+}
+.perks-search > svg { flex: none; color: var(--muted); }
+.perks-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 0;
+  border: none;
+  background: none;
+  font-size: 14.5px;
+}
+.perks-search button {
+  flex: none;
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+}
+.perks-search button:hover { color: var(--danger); }
+
+.perks-views { display: flex; gap: 5px; flex: none; }
+
+.perks-facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+/* فاصلٌ يدفع المُنتقيات إلى طرف السطر، فتنفصل الأنواعُ عن الترتيب */
+.perks-facet-gap { flex: 1 1 20px; }
+
+.perks-select {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.perks-tagline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.perks-count {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.perks-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+.perks-clear:hover { background: color-mix(in oklch, var(--danger) 10%, transparent); }
+
+.perks-hint {
+  margin: 0 0 18px;
+  max-width: 72ch;
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+/* ======================================================= بطاقة القيد */
+.perk-list { display: flex; flex-direction: column; gap: 16px; }
+
+.perk {
+  position: relative;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.22s var(--ease), border-color 0.22s var(--ease);
+}
+.perk:hover {
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in oklch, var(--accent) 28%, var(--border));
+}
+
+/* شريطٌ ملوَّن على حرف البطاقة، كلوح النسبة في بطاقة الكتاب */
+.perk::before {
+  content: '';
+  position: absolute;
+  inset-block: 14px;
+  inset-inline-end: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+  opacity: 0;
+  transition: opacity 0.22s;
+}
+.perk:hover::before { opacity: 0.8; }
+
+.perk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.perk-kind {
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--header);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* لونُ الشارة يتبع النوع، ولا تُلوَّن الأنواعُ كلُّها: كثرةُ الألوان في
+   الصفحة الواحدة تُذهب دلالتَها */
+.perk-kind-solid {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.perk-kind-quote {
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent-soft);
+}
+.perk-kind-warn {
+  border-color: color-mix(in oklch, var(--danger) 40%, transparent);
+  background: color-mix(in oklch, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.perk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+.perk-chip svg { flex: none; }
+button.perk-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+}
+/* الفرعُ يتلو رئيسَه، وحاشيتُه مُقطَّعة: فيُعرف أنه تحته لا قسيمٌ له */
+.perk-chip-sub { border-style: dashed; }
+.perk-chip-book { color: var(--accent-soft); border-color: color-mix(in oklch, var(--accent) 35%, transparent); }
+
+.perk-head-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-inline-start: auto;
+}
+
+.perk-stars { color: var(--star); font-size: 12px; letter-spacing: 1.5px; }
+.perk-date { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+.perk-pen {
+  display: flex;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  transition: background 0.16s, color 0.16s, border-color 0.16s;
+}
+.perk-pen:hover { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+.perk-title {
+  margin: 0 0 9px;
+  font-family: var(--heading-font);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.perk-text { font-size: 14.5px; }
+
+/*
+ * النصُّ الطويل يُطوى في السيل ولا يُقصّ: التلاشي في آخره يقول إن تحته
+ * بقيّةً، والقصُّ الحادّ يوهم أن هذا آخرُه. وفي صفحة القيد لا يُطوى أصلًا.
+ */
+.perk-text-folded {
+  max-height: 15em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+}
+
+.perk-more {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.perk-more:hover { color: var(--accent-dark); text-decoration: underline; }
+
+/* تعليقُ المُقيِّد: لوحٌ مائلٌ عن النصّ بشارته وشريطه، فلا يُخلَط كلامُه
+   بكلام صاحب الكتاب — وهذا أوَّلُ ما يُتحرَّى في النقل */
+.perk-comment {
+  position: relative;
+  margin-top: 13px;
+  padding: 11px 15px 11px 13px;
+  border-inline-end: 3px solid color-mix(in oklch, var(--accent) 45%, transparent);
+  border-radius: 4px 10px 10px 4px;
+  background: color-mix(in oklch, var(--accent) 5%, transparent);
+  font-size: 13.5px;
+}
+.perk-comment-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+
+/* ------------------------------------------------------------- العزو */
+.perk-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 11px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.perk-source-title {
+  font-family: var(--heading-font);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.perk-source-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in oklch, var(--accent) 45%, transparent);
+  transition: color 0.15s, border-color 0.15s;
+}
+.perk-source-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+.perk-source-author { color: var(--text); }
+.perk-source-edition { flex-basis: 100%; font-size: 12px; line-height: 1.8; }
+
+.perk-source-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-inline-start: auto;
+}
+
+.perk-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--header);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.perk-place svg { flex: none; color: var(--accent-soft); }
+
+/* «ليس في المكتبة» خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره.
+   ولا يُقال «في المكتبة» — ذاك هو الأصل ههنا فلا يُخبَر عنه. */
+.perk-outside {
+  padding: 2px 9px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------- الأعلام والوسوم */
+.perk-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 11px;
+}
+.perk-marks-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.perk-marks-label { font-size: 11.5px; color: var(--muted); }
+
+.perk-person {
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  transition: border-color 0.16s, color 0.16s;
+}
+button.perk-person:hover { color: var(--accent); border-color: var(--accent); }
+
+.perk-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 7px;
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+  color: var(--accent-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: background 0.16s, color 0.16s;
+}
+.perk-tag svg { flex: none; opacity: 0.7; }
+button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
+.perk-tag-on { background: var(--accent); color: var(--on-accent); }
+.perk-tag-count { opacity: 0.6; font-size: 10.5px; }
+
+.perk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+.perk-actions .card-action { padding: 7px 13px; font-size: 12px; }
+
+/* ==================================================== فهرسٌ ومطالعة */
+/* الفهرسُ سطرٌ لكل قيدٍ يُمسح بالعين: نوعُه فعنوانُه فكتابُه فتاريخُه.
+   لمن يبحث عن قيدٍ يعرفه لا عمّا لا يعرف. */
+.perk-index { margin: 0; padding: 0; list-style: none; }
+.perk-index li + li { border-top: 1px solid var(--border); }
+
+.perk-index button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  text-align: start;
+  transition: background 0.15s;
+}
+.perk-index button:hover { background: var(--header); }
+
+.perk-index-kind {
+  flex: none;
+  width: 62px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.perk-index-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.perk-index-book {
+  flex: none;
+  max-width: 30%;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.perk-index-date { flex: none; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* والمطالعةُ المتّصلة: النصوصُ وحدها يتلو بعضُها بعضًا كصفحة كتاب، ولكلٍّ
+   عزوُه تحته. لمن أراد أن يقرأ الكنّاش لا أن يبحث فيه. */
+.perk-reading {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: 8px 4px;
+  font-size: 15.5px;
+}
+.perk-reading section + section {
+  margin-top: 34px;
+  padding-top: 30px;
+  border-top: 1px solid var(--border);
+}
+.perk-reading h3 {
+  margin: 0 0 10px;
+  font-family: var(--heading-font);
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+.perk-reading footer { margin-top: 10px; text-align: left; }
+.perk-reading footer button {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-family: var(--heading-font);
+}
+.perk-reading footer button::before { content: '— '; }
+.perk-reading footer button:hover { text-decoration: underline; }
+
+/* ================================================ الأبواب والأعلام */
+.tally-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.tally-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: box-shadow 0.2s var(--ease), transform 0.2s var(--ease), border-color 0.2s;
+}
+.tally-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in oklch, var(--accent) 30%, var(--border));
+}
+
+.tally-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border: none;
+  background: none;
+  text-align: start;
+}
+.tally-name { font-family: var(--heading-font); font-size: 16px; font-weight: 700; }
+.tally-count { flex: none; font-size: 11.5px; color: var(--accent-soft); }
+
+.tally-kids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 14px 13px;
+}
+.tally-kids button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tally-kids button:hover { color: var(--accent); border-color: var(--accent); }
+.tally-kids button span { opacity: 0.6; }
+
+/* ================================================ صفحة القيد الواحد */
+.perk-single .perk { padding: 24px 26px 18px; }
+.perk-single .perk-title { font-size: 24px; }
+.perk-single .perk-text { font-size: 16px; }
+
+.perk-kin { margin-top: 34px; }
+.perk-kin h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--heading-font);
+  font-size: 18px;
+  font-weight: 700;
+}
+.perk-kin h2 span { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+/* ==================================================== نموذج القيد */
+.perk-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+
+.perk-editor-head {
+  position: sticky;
+  top: -22px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -22px -24px 0;
+  padding: 18px 24px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.perk-editor-head h2 {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.perk-field { display: flex; flex-direction: column; gap: 7px; }
+.perk-field-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.perk-field-wide { grid-column: 1 / -1; }
+
+.perk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.perk-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.perk-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+.perk-tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+.perk-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--accent) 9%, transparent);
+  color: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.perk-token:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
+.perk-token svg { flex: none; opacity: 0.7; }
+
+.perk-editor-foot {
+  position: sticky;
+  bottom: -24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px -24px -24px;
+  padding: 16px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+/* الحفظُ والإلغاء في طرف السطر، والحذفُ في الطرف الآخر: لا يُضغط سهوًا */
+.perk-editor-foot > :nth-last-child(2) { margin-inline-start: auto; }
+.perk-editor-foot .perk-remove { margin-inline-end: auto; }
+
+.perk-remove {
+  padding: 9px 16px;
+  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
+  border-radius: 9px;
+  background: none;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.16s, color 0.16s;
+}
+.perk-remove:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
+
+/* ============================================ صندوق القيود في صفحة الكتاب */
+.book-perks { margin-bottom: 22px; }
+
+.book-perks-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.book-perks-head h2 {
+  margin: 0 0 3px;
+  font-family: var(--heading-font);
+  font-size: 19px;
+  font-weight: 700;
+}
+.book-perks-head p { margin: 0; font-size: 12px; color: var(--muted); }
+.book-perks-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------- الكنّاش على الشاشات الضيّقة */
+@media (max-width: 720px) {
+  .perks-page { padding: 20px 14px; }
+  .perks-hero { padding: 18px 16px; border-radius: 14px; }
+  .perks-hero h1 { font-size: 22px; }
+  .perks-new { margin-inline-start: 0; width: 100%; }
+  .perks-bar { flex-wrap: wrap; }
+  .perks-views { width: 100%; justify-content: flex-end; }
+  .perk { padding: 15px 16px 12px; }
+  .perk-head-tail { margin-inline-start: 0; width: 100%; }
+  .perk-source-tail { margin-inline-start: 0; }
+  .perk-grid { grid-template-columns: 1fr; }
+  .perk-editor { padding: 18px 16px 20px; border-radius: 14px; }
+  .perk-editor-head { margin: -18px -16px 0; padding: 16px; top: -18px; }
+  .perk-editor-foot { margin: 6px -16px -20px; padding: 14px 16px; bottom: -20px; }
+  .perk-index button { flex-wrap: wrap; gap: 6px 10px; }
+  .perk-index-book, .perk-index-date { max-width: none; }
+}
+
+/* ═════════════════════════════════════════════════════ زينة الواجهة كلِّها */
+/*
+ * ما يعمّ الموقعَ من الهيئة والحركة، مجموعًا ههنا لا مفرَّقًا على المواضع:
+ * فلونٌ يُصحَّح، أو حركةٌ تُبطَّأ، أو ظلٌّ يُعمَّق — يُكتب مرّةً واحدة ويسري
+ * على الصفحات كلِّها.
+ */
+
+/* ------------------------------------------------ المظهر الجِلْديّ الداكن */
+/*
+ * لون المكتبة (`--accent`) مقدَّرٌ على أرضٍ فاتحة: `oklch(0.42 …)` نبيذيٌّ
+ * غامق، يقرؤه الناظرُ على الورق ولا يكاد يراه على الجِلد. و`applyTheme`
+ * يكتب `--accent-soft` وحدَه لكلّ مظهر، فتبقى الروابطُ والحروفُ الملوَّنة
+ * في الداكن على لونٍ لا يُقرأ.
+ *
+ * فتُرفع ههنا إشراقُه في الداكن وحده. ولا تُكتب من `theme.ts` لأنها تُكتب
+ * هناك في نمطٍ سطريّ على الجذر، فيغلب المظاهرَ الثلاثة جميعًا.
+ */
+:root[data-theme='dark'] {
+  --accent: oklch(0.66 0.11 52);
+  --accent-dark: oklch(0.76 0.1 58);
+  --on-accent: oklch(0.18 0.015 45);
+  --star: oklch(0.78 0.13 78);
+  --danger: oklch(0.68 0.15 28);
+  --cover-bg: oklch(0.33 0.02 50);
+
+  /* والظلُّ على الأرض الداكنة لا يُرى إلا إذا اشتدّ سوادُه */
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.28), 0 2px 8px oklch(0 0 0 / 0.22);
+  --shadow-2: 0 2px 6px oklch(0 0 0 / 0.3), 0 10px 26px oklch(0 0 0 / 0.32);
+  --shadow-3: 0 4px 12px oklch(0 0 0 / 0.35), 0 20px 48px oklch(0 0 0 / 0.45);
+}
+:root[data-theme='dark'] ::selection { background: oklch(0.66 0.11 52 / 0.3); }
+
+/* ------------------------------------------------------ شريط التمرير */
+/* شريطٌ رفيعٌ بلون الحاشية لا بلون النظام: الشريطُ الرماديُّ العريض ينقض
+   دفء الصفحة كلَّه، وهو أوّلُ ما تقع عليه العينُ في أطرافها. */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--border);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
+
+/* --------------------------------------------------- انتقال الصفحات */
+/*
+ * الصفحةُ تصعد صعودًا يسيرًا عند فتحها فيُعلم أنها جديدة، ولا تُقذف قذفًا.
+ * والحركةُ على `.app-main` وحدها لا على الجسد: الرأسُ ثابتٌ لا يُعاد رسمُه
+ * مع كل انتقال، وحركتُه معها تُشعِر بالاضطراب.
+ *
+ * و`8px` لا أكثر: الصعودُ الطويل يؤخِّر القراءة، والمقصودُ إشارةٌ لا عرض.
+ */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.app-main { animation: page-in 0.34s var(--ease) both; }
+
+/* إلّا صفحةَ التصفُّح: فيها عمودٌ ملتصق (`position: sticky`)، والتحويلُ على
+   أبٍ من آبائه — ولو لحظةَ الحركة — يُنشئ له حاويةً جديدة فيتزحزح عن
+   موضعه ثم يعود. فتُقتصر على الشفافية وحدها. */
+.browse-layout { animation-name: fade-in; }
+
+/* ------------------------------------------------------------- الرأس */
+/*
+ * الرأسُ ملتصقٌ فوق الصفحة، وتحته يمرّ ما يُقرأ. فيُضبَّب ما وراءه ضبابًا
+ * خفيفًا، ويُشفّ لونُه قليلًا — فيُعلَم أن تحته صفحةً تجري، ولا يُرى لوحًا
+ * مصمتًا مقطوعًا عمّا بعده.
+ */
+.app-header {
+  background: color-mix(in oklch, var(--header) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  box-shadow: 0 1px 0 color-mix(in oklch, var(--border) 60%, transparent);
+  transition: box-shadow 0.25s;
+}
+/* المتصفّح الذي لا يعرف الضباب يبقى على اللون تامًّا، ولا يُرى الرأسُ شفيفًا
+   على نصٍّ يمرّ تحته */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-header { background: var(--header); }
+}
+
+/* --------------------------------------------------- حلقة التركيز */
+/* حلقةٌ بلون المكتبة لا بأزرق النظام، ولها هالةٌ خفيفة تُبيِّنها على الحواشي
+   الملوَّنة. وهي على `:focus-visible` وحده: من ساق بالفأرة لا يُحاط زرُّه. */
+a:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent) 16%, transparent);
+}
+
+/* ---------------------------------------------------- ألواحُ الصفحات */
+/* الظلالُ من الرموز الثلاثة لا يجتهد كلُّ لوحٍ لنفسه، فتتّحد الأعماقُ في
+   الصفحة الواحدة ولا يبدو لوحٌ أقربَ من أخيه بلا سبب. */
+.card { box-shadow: var(--shadow-1); }
+
+.book-card {
+  transition:
+    transform 0.2s var(--ease),
+    box-shadow 0.2s var(--ease),
+    border-color 0.2s var(--ease);
+}
+.book-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in oklch, var(--accent) 30%, var(--border));
+}
+
+.author-card { transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s; }
+.author-card:hover { box-shadow: var(--shadow-2); }
+
+/* كعبُ الكتاب في الرفّ يُسحب سحبًا خفيفًا كما يُسحب من رفٍّ حقيقيّ */
+.spine { transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease); }
+
+/* ------------------------------------------------------- الطبقات */
+/* النافذةُ تُقبل على الناظر إقبالًا يسيرًا، والأرضُ من ورائها تُظلم معها في
+   الوقت نفسه — فلا تُرى النافذةُ قبل أرضها ولا أرضُها قبلها. */
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.overlay-wrap { animation: overlay-in 0.2s ease-out both; }
+.overlay-wrap > * > * { animation: sheet-in 0.28s var(--ease) both; }
+
+/* -------------------------------------------------------- الروابط */
+a { transition: color 0.15s; }
+
+/* --------------------------------------------- ما ليس فيه شيء بعد */
+/*
+ * الصفحةُ الخالية لا تُترك بيضاء: فيها زخرفةُ الموقع نفسها باهتةً، فيُعلم
+ * أن الفراغَ حالٌ لا عطبٌ في الصفحة.
+ */
+.empty-state { position: relative; }
+.empty-state::before {
+  content: '';
+  display: block;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 18px;
+  background: var(--accent);
+  opacity: 0.22;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* ------------------------------------------------------ الانتظار */
+/*
+ * ما يُعرض ريثما تُجلب قطعةُ الصفحة. وكان سطرًا مكتوبًا وحده في وسط بياض،
+ * فصار ثلاثةَ ألواحٍ تنبض بموضع ما سيأتي — فيُعلم أن شيئًا يجيء، ويُعرف
+ * أين موضعُه من الصفحة قبل أن يحلّ فيه.
+ */
+.wait { max-width: 1000px; margin: 0 auto; padding: 40px 32px; }
+.wait span {
+  display: block;
+  height: 15px;
+  margin-bottom: 13px;
+  border-radius: 7px;
+  background: linear-gradient(
+    to left,
+    var(--header) 0%,
+    color-mix(in oklch, var(--surface) 70%, var(--header)) 50%,
+    var(--header) 100%
+  );
+  background-size: 300% 100%;
+  animation: wait-sweep 1.5s linear infinite;
+}
+.wait span:nth-child(1) { width: 42%; height: 27px; margin-bottom: 22px; }
+.wait span:nth-child(2) { width: 100%; }
+.wait span:nth-child(3) { width: 88%; }
+.wait span:nth-child(4) { width: 64%; }
+@keyframes wait-sweep {
+  from { background-position: 300% 0; }
+  to   { background-position: -300% 0; }
+}
+
+/* --------------------------------------------- عناوين الأقسام مزخرفة */
+/* عنوانُ القسم يمتدّ منه خيطٌ إلى آخر السطر، كما تُفصل الأبوابُ في المطبوع */
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.section-heading::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklch, var(--accent) 40%, transparent),
+    transparent
+  );
+}
+
+/* ------------------------------------------------- من كره الحركة */
+/*
+ * `prefers-reduced-motion` ليس تفضيلًا في الذوق: من الناس من تُدير الحركةُ
+ * رأسَه فعلًا. فتُلغى الحركاتُ كلُّها إلغاءً — لا تُبطَّأ — ويبقى ما تُعرِّفه
+ * من مواضعَ ومقادير على حاله، فلا تنكسر صفحة.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .frame-shot-on { animation: none; transform: none; }
 }

@@ -9,7 +9,8 @@ export const LIBRARY_PLACE = 'أبها - حيُّ المُوظَّفين - شا�
 
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
 export type ReadingStatus = 'لم يُقرأ' | 'قيد القراءة' | 'مقروء'
-export type PerkKind = 'فائدة' | 'مقتطف'
+export type PerkKind =
+  | 'فائدة' | 'مقتطف' | 'نقل' | 'تعقُّب' | 'مسألة' | 'تحرير' | 'نادرة'
 export type ViewMode = 'grid' | 'table' | 'shelf'
 export type ThemeName = 'warm' | 'sepia' | 'dark'
 export type FontName = 'kitab' | 'classic' | 'modern'
@@ -19,7 +20,36 @@ export const STATUSES: ReadingStatus[] = ['لم يُقرأ', 'قيد القرا�
 
 /** ما يُعرض حين لا حالة للكتاب. الفراغ هو ما يُخزَّن، وهذا لفظُه. */
 export const STATUS_UNKNOWN = 'غير معروفة'
-export const PERK_KINDS: PerkKind[] = ['فائدة', 'مقتطف']
+/**
+ * أنواع القيد. ليس كلُّ ما يُقيَّد من الكتب فائدةً مستنبَطة ولا نصًّا
+ * منقولًا: منه التعقُّبُ على قول، والمسألةُ تُحرَّر، وتحريرُ مصطلح،
+ * والنادرةُ تُستملَح. والأوّلان أوّلُ ما كان، وعليهما قيودٌ في القاعدة.
+ */
+export const PERK_KINDS: PerkKind[] = [
+  'فائدة', 'نقل', 'مقتطف', 'تعقُّب', 'مسألة', 'تحرير', 'نادرة',
+]
+
+/** شرحُ كل نوعٍ، يُعرض تحت اختياره في نموذج القيد فلا يُخلَط نوعٌ بنوع */
+export const PERK_KIND_HINTS: Record<PerkKind, string> = {
+  'فائدة': 'ما استُنبط أو استُفيد، بلفظ المُقيِّد أو بلفظ صاحبه',
+  'نقل': 'نصٌّ يُنقل بحروفه عن قائله ليُعتمَد عليه',
+  'مقتطف': 'ما استُملح من كلامٍ أو شعرٍ لجماله لا للاحتجاج به',
+  'تعقُّب': 'استدراكٌ على قولٍ أو تنبيهٌ على وهمٍ فيه',
+  'مسألة': 'مسألةٌ تُحرَّر ويُجمع فيها كلامُ أهل العلم',
+  'تحرير': 'ضبطُ مصطلحٍ أو لفظٍ وبيانُ حدِّه',
+  'نادرة': 'مُلحةٌ أو خبرٌ طريف يُستظرَف',
+}
+
+/** مراتبُ النفاسة الثلاث، وما فوقها فهو من «النفائس» */
+export const PERK_RATINGS = [
+  { value: 0, label: 'بلا وسم' },
+  { value: 1, label: 'حسن' },
+  { value: 2, label: 'نفيس' },
+  { value: 3, label: 'من النفائس' },
+]
+
+/** حدُّ ما يُعرض من نصّ القيد في البطاقة قبل أن يُطوى */
+export const PERK_PREVIEW_CHARS = 520
 export const LANGUAGES = ['العربية', 'مُترجَمٌ إلى العربية', 'لغةٌ أخرى']
 
 /** لغة الأصل، تُسأل حين يكون الكتاب مترجَمًا. فيها القديم كما فيها الحيّ. */
@@ -334,13 +364,36 @@ export interface BookWork {
   type: string
 }
 
+/** مصدرُ القيد حين لا يكون من كتب المكتبة، يُكتب نصًّا كما يُكتب في العزو */
+export interface PerkSource {
+  title: string
+  author: string
+  edition: string
+}
+
 export interface Perk {
   id: string
-  book_id: string
+  /** فارغٌ إذا كان القيدُ من كتابٍ ليس في المكتبة، وحينئذٍ يُقرأ `source` */
+  book_id: string | null
   kind: PerkKind
   title: string
   text: string
   page: string
+  /** المجلَّد الذي فيه الموضع، حين يكون الكتابُ مجلَّدات */
+  volume: string
+  /** بابُ القيد، وهو من تصنيفات المكتبة نفسها */
+  category: string
+  sub_category: string
+  tags: string[]
+  /** الأعلامُ المذكورون في القيد */
+  people: string[]
+  /** النفاسة من صفرٍ إلى ثلاث */
+  rating: number
+  /** الكرّاسة: اسمُ المسألة التي يُجمع لها المتفرِّق */
+  notebook: string
+  /** تعليقُ المُقيِّد على النصّ، يُميَّز عنه */
+  comment: string
+  source: PerkSource | null
   created_at: string
 }
 
@@ -676,6 +729,10 @@ export const VOLUMES_COUNT: CountForms = {
 export const AUTHORS_COUNT: CountForms = {
   none: 'لا مؤلِّف', one: 'مؤلِّفٌ واحد', two: 'مؤلِّفان',
   few: 'مؤلِّفين', many: 'مؤلِّفًا',
+}
+
+export const PRESSES_COUNT: CountForms = {
+  none: 'لا دار', one: 'دارٌ واحدة', two: 'دارانِ', few: 'دُورٍ', many: 'دارًا',
 }
 
 export const PERKS_COUNT: CountForms = {

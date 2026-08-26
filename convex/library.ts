@@ -82,7 +82,11 @@ export const perks = query({
         .filter((b) => bookIsPublic(b, s))
         .map((b) => b._id),
     )
-    return all.filter((p) => visible.has(p.book_id)).map(toClient)
+    // القيدُ من كتابٍ ليس في المكتبة لا كتابَ له يُخفى، فحكمُه حكمُ الباب
+    // كلِّه: إن عُرضت القيودُ عُرض معها، وإن حُجبت حُجب.
+    return all
+      .filter((p) => p.book_id === null || visible.has(p.book_id))
+      .map(toClient)
   },
 })
 

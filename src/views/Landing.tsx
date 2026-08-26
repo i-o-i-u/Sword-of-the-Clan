@@ -6,16 +6,29 @@
 //
 // مدخل صاحب المكتبة مخفيّ: ثلاث نقراتٍ على الإطار تفتح نافذة الدخول. لا
 // يعرفه إلا من يعرفه، ولا يرى الزائر بابًا مقفلًا.
+//
+// ------------------------------------------------------------------ الحِمْل
+// الصفحة تُرسم قبل أن تصل صورةٌ واحدة، ولا تنتظرها: للإطار زخرفتُه وهالتُه
+// فيقوم بنفسه، ثم تحلّ الصورةُ فيه إذا وصلت. وهذا هو الفرق بين انتظارٍ
+// صريحٍ يراه الزائر وبين صفحةٍ تامّةٍ تزداد حُسنًا.
+//
+// ولا يُركَّب في الصفحة من الصور إلا ما يُحتاج إليه: الأولى وحدها في أوّل
+// رسم، ثم تُضاف التي تليها **بعد أن تفرغ الأولى من الجلب** فلا تزاحمها على
+// شبكةٍ ضيّقة. وكانت تُركَّب كلُّها دفعةً واحدة، فتتقاسم خمسُ صورٍ عرضَ
+// الشبكة وتبطؤ أُولاها — وهي وحدها المعروضة.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { makkahMoment } from '../lib/hijri'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { LIBRARY_NAME, LIBRARY_PLACE } from '../lib/types'
+import {
+  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, PRESSES_COUNT,
+  countLabel,
+} from '../lib/types'
 import Footer from '../components/Footer'
 import {
   BookPlusIcon, BooksIcon, ClockIcon, ExitIcon, EyeIcon, OwnerIcon, PinIcon,
-  SearchIcon, SuggestIcon, resolveAsset,
+  PressIcon, QuillIcon, SearchIcon, SuggestIcon, resolveAsset,
 } from '../components/ui'
 
 interface Props {
@@ -26,9 +39,12 @@ interface Props {
 /** مهلة النقرات الثلاث المتتابعة على الإطار */
 const TRIPLE_CLICK_MS = 900
 
+/** زمنُ تلاشي الاقتباس قبل أن يحلّ محلَّه الذي بعده */
+const QUOTE_FADE_MS = 320
+
 export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
   const {
-    settings, landingImages, landingQuotes, books, loading,
+    settings, landingImages, landingQuotes, books, authors, publishers, loading,
     isOwner, canEdit, ownerName, browseOnly, toggleBrowseOnly, signOut,
   } = useLibrary()
 
@@ -41,33 +57,89 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
     [landingQuotes],
   )
 
+  // ------------------------------------------------------------- الصور
   const [imageIndex, setImageIndex] = useState(0)
-  const [quoteIndex, setQuoteIndex] = useState(0)
+  /** ما رُكِّب منها في الصفحة فعلًا — تكبر على مهلها لا دفعةً واحدة */
+  const [mounted, setMounted] = useState<string[]>([])
+  /** وما فرغ منها المتصفّح من الجلب، فصار يُعرض */
+  const [loaded, setLoaded] = useState<string[]>([])
 
-  // الصور تتبدّل على مهلها، والاقتباسات على مهلٍ آخر — كلٌّ بمؤقّته
+  const markLoaded = useCallback((id: string) => {
+    setLoaded((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  }, [])
+
+  // المعروضةُ تُركَّب فورًا: هي وحدها ما يراه الداخل
+  useEffect(() => {
+    const current = images[imageIndex]
+    if (!current) return
+    setMounted((prev) => (prev.includes(current.id) ? prev : [...prev, current.id]))
+  }, [images, imageIndex])
+
+  // والتي تليها تُركَّب بعد أن تفرغ الحاليّةُ من الجلب، فتكون حاضرةً في
+  // موعدها ولم تزاحمها في الطريق
+  useEffect(() => {
+    const current = images[imageIndex]
+    if (!current || !loaded.includes(current.id)) return
+    const next = images[(imageIndex + 1) % images.length]
+    if (!next) return
+    setMounted((prev) => (prev.includes(next.id) ? prev : [...prev, next.id]))
+  }, [images, imageIndex, loaded])
+
+  // الصور تتبدّل على مهلها، والاقتباسات على مهلٍ آخر — كلٌّ بمؤقّته.
+  // ولا يُنتقل إلا إلى صورةٍ وصلت: الانتقالُ إلى ما لم يصل يُخلي الإطار.
   useEffect(() => {
     if (!settings.auto_rotate || images.length <= 1) return
-    const timer = setInterval(
-      () => setImageIndex((i) => (i + 1) % images.length),
-      Math.max(2, settings.rotate_seconds) * 1000,
-    )
+    const timer = setInterval(() => {
+      setImageIndex((i) => {
+        for (let step = 1; step < images.length; step++) {
+          const candidate = (i + step) % images.length
+          if (loaded.includes(images[candidate].id)) return candidate
+        }
+        return i
+      })
+    }, Math.max(2, settings.rotate_seconds) * 1000)
     return () => clearInterval(timer)
-  }, [settings.auto_rotate, settings.rotate_seconds, images.length])
+  }, [settings.auto_rotate, settings.rotate_seconds, images, loaded])
+
+  // ------------------------------------------------------- الاقتباسات
+  //
+  // البطاقة قائمةٌ لا تتزحزح، وإنما يتلاشى ما فيها ثم يحلّ الذي بعده. وكان
+  // القديمُ يُرفع في اللحظة ويُبدأ بإظهار الجديد، فيُرى في الوسط فراغٌ ثم
+  // قفزةٌ — وهو الذي كان يُشكى منه. فالآن مرحلتان: يخفت المعروضُ، فإذا خفت
+  // بُدِّل النصُّ وأُصعد الجديد.
+  const [quoteIndex, setQuoteIndex] = useState(0)
+  const [shownQuote, setShownQuote] = useState(0)
+  const [fading, setFading] = useState(false)
+  const [paused, setPaused] = useState(false)
 
   useEffect(() => {
-    if (!settings.auto_rotate || quotes.length <= 1) return
+    if (!settings.auto_rotate || quotes.length <= 1 || paused) return
     const timer = setInterval(
       () => setQuoteIndex((i) => (i + 1) % quotes.length),
       Math.max(2, settings.quote_seconds) * 1000,
     )
     return () => clearInterval(timer)
-  }, [settings.auto_rotate, settings.quote_seconds, quotes.length])
+  }, [settings.auto_rotate, settings.quote_seconds, quotes.length, paused])
+
+  useEffect(() => {
+    if (shownQuote === quoteIndex) return
+    setFading(true)
+    const timer = setTimeout(() => {
+      setShownQuote(quoteIndex)
+      setFading(false)
+    }, QUOTE_FADE_MS)
+    return () => clearTimeout(timer)
+  }, [quoteIndex, shownQuote])
 
   // حذفُ صورةٍ أو اقتباسٍ يترك المؤشّر خارج القائمة، فيُردّ إلى أوّلها
   useEffect(() => { if (imageIndex >= images.length) setImageIndex(0) }, [images.length, imageIndex])
-  useEffect(() => { if (quoteIndex >= quotes.length) setQuoteIndex(0) }, [quotes.length, quoteIndex])
+  useEffect(() => {
+    if (quoteIndex < quotes.length) return
+    setQuoteIndex(0)
+    setShownQuote(0)
+  }, [quotes.length, quoteIndex])
 
-  const quote = quotes[Math.min(quoteIndex, Math.max(0, quotes.length - 1))]
+  const quote = quotes[Math.min(shownQuote, Math.max(0, quotes.length - 1))]
 
   // ------------------------------------------------ المدخل المخفيّ للمالك
   const clickTimes = useRef<number[]>([])
@@ -89,27 +161,50 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
 
   return (
     <div className="landing">
+      {/* هالتان في الخلف وزخرفةٌ مبثوثة: بها تقوم الصفحة قبل أن تصل صورة،
+          ولا تُرى بيضاء قطّ */}
+      <div className="landing-glow" aria-hidden="true" />
+
       <section className="hero">
         <div className="stage">
           <div className="frame" onClick={countFrameClick}>
             <div className="frame-shots" aria-hidden="true">
               {images.map((img, i) => (
-                <img
-                  key={img.id}
-                  src={resolveAsset(img.image_url) ?? ''}
-                  alt=""
-                  // فكّ الصورة خارج خيط الرسم: صورُ الإطار خلفيّةٌ باهتة، فلا
-                  // تستحقّ أن تُجمّد الصفحة ريثما تُفكّ
-                  decoding="async"
-                  // الأولى هي المعروضة أوّلَ ما تُفتح الصفحة، فتُقدَّم على ما
-                  // سواها من الطلبات. وأخواتُها لا تُعرض إلا بعد ثوانٍ فتؤخَّر
-                  // كي لا تزاحمها على شبكةٍ ضيّقة.
-                  fetchPriority={i === 0 ? 'high' : 'low'}
-                  className={i === imageIndex ? 'frame-shot frame-shot-on' : 'frame-shot'}
-                />
+                mounted.includes(img.id) && (
+                  <img
+                    key={img.id}
+                    src={resolveAsset(img.image_url) ?? ''}
+                    alt=""
+                    // فكّ الصورة خارج خيط الرسم: صورُ الإطار خلفيّةٌ باهتة،
+                    // فلا تستحقّ أن تُجمّد الصفحة ريثما تُفكّ
+                    decoding="async"
+                    // الأولى هي المعروضة أوّلَ ما تُفتح الصفحة، فتُقدَّم على
+                    // ما سواها من الطلبات.
+                    //
+                    // والاسمُ يُكتب صغيرًا كما هو في HTML لا بصيغة React:
+                    // React 18 لا يعرف `fetchPriority` فيُسقطه من العنصر
+                    // إسقاطًا — ويشكو منه في السجلّ — فيذهب المقصودُ منه
+                    // ولا يبلغ المتصفّحَ حرف. وتُعرَف الصيغةُ الأولى في
+                    // React 19، فمتى رُقّي رُدَّ إليها.
+                    {...{ fetchpriority: i === 0 ? 'high' : 'low' }}
+                    onLoad={() => markLoaded(img.id)}
+                    // ولو أخفق جلبُها عُدَّت واصلةً: الإطارُ يبقى على زخرفته،
+                    // ولا يقف الدورانُ على صورةٍ لا تجيء
+                    onError={() => markLoaded(img.id)}
+                    className={
+                      i === imageIndex && loaded.includes(img.id)
+                        ? 'frame-shot frame-shot-on'
+                        : 'frame-shot'
+                    }
+                  />
+                )
               ))}
             </div>
             <div className="frame-veil" aria-hidden="true" />
+            {/* أركانٌ أربعة تُبَرْوِز اللوحة */}
+            <span className="frame-corners" aria-hidden="true">
+              <i /><i /><i /><i />
+            </span>
 
             <div className="frame-content">
               <img
@@ -180,6 +275,29 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
               <span>اقترح لي كتابًا</span>
             </button>
           </div>
+
+          {/* أعدادُ المكتبة سطرًا واحدًا. وما كان صفرًا لا يُعرض: بطاقةٌ
+              تُخبر أن لا كتاب في المكتبة ليست خبرًا. */}
+          {settings.show_landing_stats && books.length > 0 && (
+            <div className="hero-tally">
+              <span className="hero-tally-item">
+                <BooksIcon size={15} />
+                {countLabel(books.length, BOOKS_COUNT)}
+              </span>
+              {authors.length > 0 && (
+                <span className="hero-tally-item">
+                  <QuillIcon size={15} />
+                  {countLabel(authors.length, AUTHORS_COUNT)}
+                </span>
+              )}
+              {publishers.length > 0 && (
+                <span className="hero-tally-item">
+                  <PressIcon size={15} />
+                  {countLabel(publishers.length, PRESSES_COUNT)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* أدوات صاحب المكتبة في فراغ الهبوط عن يمين الصورة، لا في الرأس:
@@ -214,24 +332,31 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
 
       {settings.show_landing_quote && quote && (
         <section className="quote-wrap">
-          {/* المفتاحُ على النصّ ومصدره لا على البطاقة: البطاقةُ قائمةٌ لا
-              تتزحزح، وإنما يتلاشى ما فيها ويحلّ محلَّه الآخر. ولو كان
-              المفتاحُ على البطاقة لأُعيد بناؤها كلَّها عند كل تبديل، فرآها
-              القارئ تختفي وتظهر — وهي في موضعها لم تبرح. */}
-          <figure className="quote-card">
-            <span className="quote-mark" aria-hidden="true">”</span>
+          <figure
+            className="quote-card"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+            onFocusCapture={() => setPaused(true)}
+            onBlurCapture={() => setPaused(false)}
+          >
+            <span className="quote-mark quote-mark-open" aria-hidden="true">”</span>
+            <span className="quote-mark quote-mark-close" aria-hidden="true">“</span>
 
-            {/* المفتاحان مختلفان بالضرورة: الأخوان في أبٍ واحد لا يجوز أن
-                يتّفقا في المفتاح، وإلّا اضطرب التوفيقُ في React فتراكم
-                القديمُ على الجديد بدل أن يحلّ محلَّه. */}
-            <blockquote className="quote-text" key={`نص-${quote.id}`}>{quote.text}</blockquote>
+            {/* المفتاحُ على جوف البطاقة لا على البطاقة: البطاقةُ قائمةٌ لا
+                تتزحزح، وإنما يتلاشى ما فيها ويحلّ محلَّه الآخر. ولو كان
+                المفتاحُ عليها لأُعيد بناؤها كلَّها عند كل تبديل، فرآها
+                القارئُ تختفي وتظهر — وهي في موضعها لم تبرح. */}
+            <div className={fading ? 'quote-body quote-body-out' : 'quote-body'}>
+              <blockquote className="quote-text">{quote.text}</blockquote>
 
-            {quote.author && (
-              <figcaption className="quote-source" key={`مصدر-${quote.id}`}>
-                <span className="quote-rule" aria-hidden="true" />
-                {quote.author}
-              </figcaption>
-            )}
+              {quote.author && (
+                <figcaption className="quote-source">
+                  <span className="quote-rule" aria-hidden="true" />
+                  {quote.author}
+                  <span className="quote-rule quote-rule-flip" aria-hidden="true" />
+                </figcaption>
+              )}
+            </div>
 
             {quotes.length > 1 && (
               <div className="quote-dots">
@@ -246,6 +371,21 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
                   />
                 ))}
               </div>
+            )}
+
+            {/* خيطٌ يقطع عرض البطاقة بمقدار ما بقي من مهلة الاقتباس: التبديلُ
+                يصير متوقَّعًا فلا يُفاجئ القارئ في وسط سطر. ويقف متى وقف
+                المؤشّر على البطاقة. */}
+            {quotes.length > 1 && settings.auto_rotate && (
+              <span
+                key={quoteIndex}
+                className="quote-progress"
+                aria-hidden="true"
+                style={{
+                  animationDuration: `${Math.max(2, settings.quote_seconds)}s`,
+                  animationPlayState: paused ? 'paused' : 'running',
+                }}
+              />
             )}
           </figure>
         </section>

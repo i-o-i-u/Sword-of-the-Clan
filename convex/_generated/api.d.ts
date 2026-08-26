@@ -14,6 +14,7 @@ import type * as catalog from "../catalog.js";
 import type * as http from "../http.js";
 import type * as images from "../images.js";
 import type * as library from "../library.js";
+import type * as maintenance from "../maintenance.js";
 import type * as owner from "../owner.js";
 import type * as privacy from "../privacy.js";
 import type * as seed from "../seed.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   images: typeof images;
   library: typeof library;
+  maintenance: typeof maintenance;
   owner: typeof owner;
   privacy: typeof privacy;
   seed: typeof seed;

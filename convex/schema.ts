@@ -29,7 +29,29 @@ export const readingStatus = v.union(
   v.literal('تم القراءة'), v.literal('لم تُقرأ'), v.literal(''),
 )
 
-export const perkKind = v.union(v.literal('فائدة'), v.literal('مقتطف'))
+/**
+ * أنواع القيد. كانت اثنين — فائدةً ومقتطفًا — ثم زِيدت، إذ ليس كلُّ ما
+ * يُقيَّد من الكتب فائدةً مستنبَطة ولا نصًّا منقولًا: منه التعقُّب على
+ * قولٍ، والمسألةُ تُحرَّر، وتحريرُ مصطلح، والنادرةُ تُستملَح.
+ *
+ * واللفظان الأوّلان في صدر الاتحاد لأن في القاعدة مستنداتٍ كُتبت بهما.
+ */
+export const perkKind = v.union(
+  v.literal('فائدة'), v.literal('مقتطف'), v.literal('نقل'),
+  v.literal('تعقُّب'), v.literal('مسألة'), v.literal('تحرير'), v.literal('نادرة'),
+)
+
+/**
+ * مصدرُ القيد حين لا يكون من كتب المكتبة: ما قُرئ في مكتبةٍ عامّة، أو في
+ * نسخةٍ إلكترونيّة، أو في كتابٍ مستعار. يُكتب نصًّا كما يُكتب في العزو، ولا
+ * يُفهرس — فليس من كتب البيت حتى تُطلب بياناتُه كاملة.
+ */
+export const perkSource = v.object({
+  title: v.string(),
+  author: v.string(),
+  /** الطبعةُ ودارُها وسنتُها ومحقِّقُها، سطرًا واحدًا كما يُكتب في الحاشية */
+  edition: v.string(),
+})
 
 /** مفاتيح «ما يراه الزوار» (§٦-أ) */
 export const visibility = v.object({
@@ -222,12 +244,40 @@ export default defineSchema({
     .index('by_book', ['book_id'])
     .index('by_target', ['target_book_id']),
 
+  /**
+   * القيود: ما استُخرج من الكتب من فوائدَ ونصوصٍ وتعقُّبات.
+   *
+   * و`book_id` يجوز أن يكون فارغًا (null): القيدُ قد يكون من كتابٍ ليس في
+   * المكتبة، فيُكتب مصدرُه في `source` نصًّا. وما فُهرس قبل ذلك يحمل معرّفًا
+   * صحيحًا فلا يمسّه هذا شيء.
+   *
+   * والحقولُ المستجدّة كلُّها اختياريّة بالضرورة: في القاعدة قيودٌ كُتبت
+   * قبلها، وإلزامُها يُفشل تحقُّقَ المخطّط عليها.
+   */
   perks: defineTable({
-    book_id: v.id('books'),
+    book_id: v.union(v.id('books'), v.null()),
     kind: perkKind,
     title: v.string(),
     text: v.string(),
     page: v.string(),
+
+    /** المجلَّد الذي فيه الموضع، حين يكون الكتابُ مجلَّدات */
+    volume: v.optional(v.string()),
+    /** بابُ القيد من أبواب العلم، وهي تصنيفات المكتبة نفسها لا جدولٌ ثانٍ */
+    category: v.optional(v.string()),
+    sub_category: v.optional(v.string()),
+    /** كلماتٌ يُهتدى بها إليه، تُعرض وسومًا ويُبحث بها */
+    tags: v.optional(v.array(v.string())),
+    /** الأعلامُ المذكورون في القيد، يُجمع بهم ما تفرَّق عنهم */
+    people: v.optional(v.array(v.string())),
+    /** النفاسة: من صفرٍ إلى ثلاث. وما بلغ الثالثة فهو من «النفائس». */
+    rating: v.optional(v.number()),
+    /** الكرّاسة: اسمُ المسألة التي يُجمع لها المتفرّق، تُشتقّ من القيود */
+    notebook: v.optional(v.string()),
+    /** تعليقُ المُقيِّد على النصّ، يُميَّز عنه فلا يلتبس كلامُه بكلام غيره */
+    comment: v.optional(v.string()),
+    /** مصدرُه إن لم يكن في المكتبة */
+    source: v.optional(perkSource),
   }).index('by_book', ['book_id']),
 
   loans: defineTable({

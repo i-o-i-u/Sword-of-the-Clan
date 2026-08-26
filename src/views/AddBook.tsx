@@ -26,6 +26,7 @@ import {
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
+import IsbnField from '../components/IsbnField'
 import {
   BackButton, Combobox, RiyalGlyph, SectionHeading, TagIcon,
   cardStyle, primaryButtonStyle,
@@ -1020,7 +1021,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
             <label style={labelStyle}>
               ردمك (ISBN)
-              <input value={isbn} onChange={(e) => setIsbn(e.target.value)} dir="ltr" style={inputStyle} />
+              <IsbnField value={isbn} onChange={setIsbn} style={inputStyle} />
             </label>
             <label style={labelStyle}>
               اللغة

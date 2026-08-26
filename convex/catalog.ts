@@ -3,7 +3,7 @@
 
 import { v } from 'convex/values'
 import { mutation } from './_generated/server'
-import { era, perkKind, visibility } from './schema'
+import { era, perkKind, perkSource, visibility } from './schema'
 import { DEFAULT_SETTINGS, requireOwner, toClient } from './privacy'
 
 // ---------------------------------------------------------------------------
@@ -112,17 +112,47 @@ export const updateAuthor = mutation({
 // الفوائد والمقتطفات
 // ---------------------------------------------------------------------------
 
+/**
+ * حقول القيد. مُصدَّرة ليقرأها الإدخالُ والتعديل جميعًا، فلا يُكتب الحقلُ
+ * مرَّتين ويُنسى في إحداهما.
+ *
+ * والكتابُ يجوز أن يكون فارغًا: القيدُ قد يكون من كتابٍ ليس في المكتبة،
+ * فيُكتب مصدرُه في `source` نصًّا.
+ */
+const perkFields = {
+  book_id: v.union(v.id('books'), v.null()),
+  kind: perkKind,
+  title: v.string(),
+  text: v.string(),
+  page: v.string(),
+  volume: v.optional(v.string()),
+  category: v.optional(v.string()),
+  sub_category: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+  people: v.optional(v.array(v.string())),
+  rating: v.optional(v.number()),
+  notebook: v.optional(v.string()),
+  comment: v.optional(v.string()),
+  source: v.optional(perkSource),
+}
+
 export const insertPerk = mutation({
-  args: {
-    book_id: v.id('books'),
-    kind: perkKind,
-    title: v.string(),
-    text: v.string(),
-    page: v.string(),
-  },
+  args: perkFields,
   handler: async (ctx, perk) => {
     await requireOwner(ctx)
-    await ctx.db.insert('perks', perk)
+    return await ctx.db.insert('perks', perk)
+  },
+})
+
+/**
+ * تعديلُ القيد. وكان يُحذف ويُعاد كتابتُه إذ لم يكن له تعديل، فيضيع تاريخُ
+ * تقييده — و`_creationTime` هو الذي يُبنى عليه ترتيبُ «آخر ما قُيِّد».
+ */
+export const updatePerk = mutation({
+  args: { id: v.id('perks'), patch: v.object(perkFields) },
+  handler: async (ctx, { id, patch }) => {
+    await requireOwner(ctx)
+    await ctx.db.patch(id, patch)
   },
 })
 

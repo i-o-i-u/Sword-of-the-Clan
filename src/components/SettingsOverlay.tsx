@@ -384,6 +384,15 @@ function LandingTab(
 
       <div style={{ marginBottom: 14 }}>
         <ToggleRow
+          label="إظهار أعداد المكتبة"
+          hint="سطرٌ تحت أزرار الهبوط: الكتبُ والمؤلِّفون والدُّور. ولا يظهر ما دامت المكتبة خالية."
+          on={settings.show_landing_stats}
+          onChange={() => setField({ show_landing_stats: !settings.show_landing_stats })}
+        />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <ToggleRow
           label="التبديل التلقائي"
           hint="تدوير الصور والاقتباسات كلٌّ على مهلته"
           on={settings.auto_rotate}

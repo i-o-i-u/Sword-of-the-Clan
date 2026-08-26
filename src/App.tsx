@@ -62,12 +62,20 @@ const PublisherPage = page(() => import('./views/Publishers').then((m) => ({ def
 const People = page(() => import('./views/People'))
 const Series = page(() => import('./views/Series'))
 const Perks = page(() => import('./views/Perks'))
+const PerkPage = page(() => import('./views/Perks').then((m) => ({ default: m.PerkPage })))
 const LoginOverlay = page(() => import('./components/LoginOverlay'))
 const SettingsOverlay = page(() => import('./components/SettingsOverlay'))
 const ViewerSettingsOverlay = page(() => import('./components/ViewerSettingsOverlay'))
 
+/*
+ * ما يُعرض ريثما تُجلب قطعةُ الصفحة وتصل بياناتُها. وكان سطرًا مكتوبًا في
+ * وسط بياضٍ — «…جاري التحميل» — فصار ألواحًا تنبض في مواضع ما سيأتي: عنوانٌ
+ * فسطورٌ تحته. فتُعرف هيئةُ الصفحة قبل أن تحلّ فيها، ولا يُرى البياضُ عطبًا.
+ */
 const loadingBox = (
-  <div style={{ textAlign: 'center', padding: '90px 20px', color: 'var(--muted)' }}>…جاري التحميل</div>
+  <div className="wait" aria-label="جارٍ التحميل" aria-busy="true">
+    <span /><span /><span /><span />
+  </div>
 )
 
 export default function App() {
@@ -166,7 +174,8 @@ export default function App() {
           {route.name === 'publisher' && <PublisherPage publisherId={route.id} />}
           {route.name === 'people' && canSeeAuthors && <People />}
           {route.name === 'series' && <Series />}
-          {route.name === 'perks' && <Perks />}
+          {route.name === 'perks' && <Perks tab={route.tab} />}
+          {route.name === 'perk' && <PerkPage perkId={route.id} />}
         </Suspense>
       )}
 

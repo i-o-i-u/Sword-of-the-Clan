@@ -11,7 +11,8 @@ import type { Id } from '../../convex/_generated/dataModel'
 import {
   DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
   type Author, type Book, type BookWork, type Category, type LandingImage,
-  type LandingQuote, type Loan, type Perk, type Publisher, type Settings,
+  type LandingQuote, type Loan, type Perk, type PerkSource, type Publisher,
+  type Settings,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -49,8 +50,31 @@ export async function fetchWorks(_owner: boolean): Promise<BookWork[]> {
   return (await convex.query(api.library.works, {})) as unknown as BookWork[]
 }
 
+/**
+ * القيود. حقولُها المستجدّة اختياريّةٌ في المخطّط — في القاعدة قيودٌ كُتبت
+ * قبلها — فتُسدّ ههنا مرّةً واحدة، ولا تُترك الواجهةُ تحرس كلَّ حقلٍ في كل
+ * موضعٍ يقرؤه.
+ */
+function toPerk(row: Record<string, unknown>): Perk {
+  const src = row.source as PerkSource | undefined | null
+  return {
+    ...(row as unknown as Perk),
+    book_id: (row.book_id as string | null) ?? null,
+    volume: (row.volume as string) ?? '',
+    category: (row.category as string) ?? '',
+    sub_category: (row.sub_category as string) ?? '',
+    tags: (row.tags as string[]) ?? [],
+    people: (row.people as string[]) ?? [],
+    rating: (row.rating as number) ?? 0,
+    notebook: (row.notebook as string) ?? '',
+    comment: (row.comment as string) ?? '',
+    source: src ?? null,
+  }
+}
+
 export async function fetchPerks(_owner: boolean): Promise<Perk[]> {
-  return (await convex.query(api.library.perks, {})) as unknown as Perk[]
+  const rows = await convex.query(api.library.perks, {})
+  return (rows as unknown as Record<string, unknown>[]).map(toPerk)
 }
 
 export async function fetchLoans(_owner: boolean): Promise<Loan[]> {
@@ -128,13 +152,26 @@ export async function deleteWork(id: string): Promise<void> {
   await convex.mutation(api.books.removeWork, { id: id as Id<'book_works'> })
 }
 
-export async function insertPerk(
-  perk: { book_id: string; kind: string; title: string; text: string; page: string },
-): Promise<void> {
-  await convex.mutation(api.catalog.insertPerk, {
+/** ما يُكتب في القيد إدخالًا وتعديلًا، وهو حقولُه كلُّها دون معرّفه */
+export type PerkInput = Omit<Perk, 'id' | 'created_at'>
+
+/** المستندُ كما يقبله المُحوِّل: المعرّفُ معرّفَ Convex، والفارغُ null */
+function fromPerk(perk: PerkInput) {
+  return {
     ...perk,
-    book_id: perk.book_id as Id<'books'>,
-    kind: perk.kind as 'فائدة' | 'مقتطف',
+    book_id: (perk.book_id as Id<'books'> | null) ?? null,
+    source: perk.source ?? undefined,
+  }
+}
+
+export async function insertPerk(perk: PerkInput): Promise<void> {
+  await convex.mutation(api.catalog.insertPerk, fromPerk(perk) as never)
+}
+
+export async function updatePerk(id: string, perk: PerkInput): Promise<void> {
+  await convex.mutation(api.catalog.updatePerk, {
+    id: id as Id<'perks'>,
+    patch: fromPerk(perk) as never,
   })
 }
 
