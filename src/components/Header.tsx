@@ -45,7 +45,10 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
   }
 
   return (
-    <header className="app-header">
+    /* علامةُ الرأس المزدحم: صاحبُ المكتبة يرى فوق ما يراه الزائرُ أربعةَ
+       عناصر — اسمَه، ووضعَ التصفُّح، والخروجَ، وإضافةَ كتاب — فلا يسعه من
+       العرض ما يسع الزائرَ. وبها يلتفّ الرأسُ عنده قبل أن يلتفّ عنده. */
+    <header className="app-header" data-owner={isOwner && !onLanding ? '' : undefined}>
       <div className="brand" onClick={() => navigate({ name: 'landing' })}>
         <span className="brand-badge">
           <img src={resolveAsset('assets/logo.svg') ?? ''} alt="شعار المكتبة" />

@@ -161,10 +161,8 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
 
   return (
     <div className="landing">
-      {/* هالتان في الخلف وزخرفةٌ مبثوثة: بها تقوم الصفحة قبل أن تصل صورة،
-          ولا تُرى بيضاء قطّ */}
-      <div className="landing-glow" aria-hidden="true" />
-
+      {/* ورقُ الجدران وهالتاه صارا في `body` يعمّان الموقعَ كلَّه، فلا طبقةَ
+          خاصّة بالهبوط ههنا */}
       <section className="hero">
         <div className="stage">
           <div className="frame" onClick={countFrameClick}>

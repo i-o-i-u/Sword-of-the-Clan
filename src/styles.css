@@ -48,18 +48,31 @@
    * المظاهر الثلاثة بلا نسخةٍ لكلّ مظهر. وهو محرفٌ في الملف لا ملفٌّ
    * يُجلب، فلا يكلّف طلبًا على الشبكة.
    */
-  --ornament: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='62' height='62' viewBox='0 0 62 62'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.3'%3E%3Crect x='16' y='16' width='30' height='30'/%3E%3Crect x='16' y='16' width='30' height='30' transform='rotate(45 31 31)'/%3E%3C/g%3E%3C/svg%3E");
+  --ornament: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='88' viewBox='0 0 88 88'%3E%3Cg fill='none' stroke='%23000' stroke-width='1'%3E%3Crect x='22' y='22' width='44' height='44'/%3E%3Crect x='22' y='22' width='44' height='44' transform='rotate(45 44 44)'/%3E%3Ccircle cx='44' cy='44' r='7.5'/%3E%3C/g%3E%3Cg fill='%23000'%3E%3Ccircle cx='0' cy='0' r='1.7'/%3E%3Ccircle cx='88' cy='0' r='1.7'/%3E%3Ccircle cx='0' cy='88' r='1.7'/%3E%3Ccircle cx='88' cy='88' r='1.7'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
 
 html, body { margin: 0; padding: 0; }
 
-body {
+/*
+ * لونُ الأرض على `html` لا على `body`، وورقُ الجدران طبقةٌ في `body::before`
+ * برتبةٍ سالبة (`z-index: -1`) — فهو فوق اللون وتحت المحتوى كلِّه لا محالة.
+ *
+ * ولو كان اللونُ على `body` لنُقل إلى لوحة الرسم فبقي `body` بلا أرضٍ
+ * مرسومة، ثم لَما دُري أفوق ورقِ الجدران هو أم تحته. وموضعُه من `html`
+ * يقطع الشكّ.
+ */
+html {
   background: var(--bg);
+  transition: background 0.25s;
+}
+
+body {
+  background: transparent;
   color: var(--text);
   font-family: var(--body-font);
-  transition: background 0.25s, color 0.25s;
+  transition: color 0.25s;
   /* شبكةُ أمانٍ للشاشات الضيّقة: ما تجاوز العرضَ يُقصّ ولا يفتح تمريرًا
      أفقيًّا للصفحة كلِّها. و`clip` لا `hidden` عمدًا: الأخير يُنشئ حاويةَ
      تمرير فيُبطل `position: sticky` في الرأس وفي عمود التصفُّح. */
@@ -90,6 +103,57 @@ input, select, textarea { outline: none; }
 
 /* حقول لاتينية: البريد وكلمة السر (§٤) */
 input[dir='ltr'] { text-align: left; }
+
+/*
+ * ورقُ الجدران: نقشٌ هندسيّ (نجمةٌ ثمانيّة بقلبها دارة) وهالتان بلون المكتبة،
+ * طبقةً واحدةً ثابتةً خلف الصفحات كلِّها لا صفحةَ الهبوط وحدها.
+ *
+ * وثلاثةُ شروطٍ لا تُخالَف فيه، وبها كان قبيحًا قبلَ اليوم:
+ *
+ *  ١. **تحت المحتوى لا فوقه**: رتبتُه سالبة، وموضعُه `body` لا صفحةٌ بعينها.
+ *     وكلُّ لوحٍ في الموقع أرضُه مصمتة (`--surface`)، فلا ينفذ النقشُ من
+ *     تحته إلى وجهه. وكان مبثوثًا في جوف الإطار وبطاقةِ الاقتباس وصدرِ
+ *     الكنّاش، فيُرى كأنه مطبوعٌ على الصورة وعلى النصّ.
+ *  ٢. **ثابتٌ لا يجري مع التمرير** (`fixed`): الجدارُ لا يتحرّك خلف
+ *     النافذة، وجريانُه مع النصّ يُشغل العين عمّا تقرأ.
+ *  ٣. **باهتٌ جدًّا**: أربعةٌ من مئة. ما زاد عليها صار خبرًا يُنظَر إليه،
+ *     وإنما هو أرضٌ يُنظَر عليها.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0.045;
+  -webkit-mask-image: var(--ornament);
+  mask-image: var(--ornament);
+  -webkit-mask-size: 88px 88px;
+  mask-size: 88px 88px;
+}
+[data-theme='dark'] body::before { opacity: 0.075; }
+
+/* والهالتان طبقةٌ ثانية فوق النقش وتحت المحتوى: بهما يذهب عن الأرض جمودُ
+   اللون الواحد، ويتلوّن طرفا الشاشة بلون المكتبة تلوُّنًا لا يكاد يُحسّ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      46% 40% at 88% 0%,
+      color-mix(in oklch, var(--accent) 12%, transparent) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      52% 44% at 6% 100%,
+      color-mix(in oklch, var(--star) 10%, transparent) 0%,
+      transparent 70%
+    );
+}
 
 /* ------------------------------------------------------------------ الجذر */
 #root {
@@ -248,9 +312,35 @@ input[dir='ltr'] { text-align: left; }
   box-shadow: 0 8px 16px oklch(0.2 0.02 50 / 0.3);
 }
 
-/* حاشية طبقات النوافذ. في ملف الأنماط لا في النمط السطريّ كي تضيق على
-   الشاشات الضيّقة، فالنافذة هناك تكاد تملأ الشاشة. */
-.overlay-wrap { padding: 20px; }
+/*
+ * طبقاتُ النوافذ.
+ *
+ * `overflow-y: auto` على الطبقة نفسها هو حارسُ كلِّ نافذةٍ في الموقع: النافذةُ
+ * قد تطول عن الشاشة — بنموذجٍ ذي حقولٍ كثيرة، أو بشاشةٍ قصيرة، أو بتكبير
+ * الخطّ — فتُمرَّر الطبقةُ ولا يُقصّ أسفلُها. وكان زرّا الحفظ والإلغاء يقعان
+ * تحت حافّة الشاشة فلا يُبلغان.
+ *
+ * ولا تُقاس أطوالُ النوافذ بـ`vh` أبدًا: `#root` مكبَّرٌ بـ`zoom`، ووحدةُ
+ * `vh` لا تتبع التكبير — فتخرج النافذةُ عن الشاشة كلّما كبّر القارئ الخطّ.
+ * وإنما تُقاس بـ`max-height: 100%` من هذه الطبقة: هي مثبَّتةٌ على الشاشة
+ * (`inset: 0`) فحدُّها حدُّها، وحاشيتُها مطروحةٌ منه أصلًا.
+ *
+ * والحاشيةُ ههنا لا في النمط السطريّ كي تضيق على الشاشات الضيّقة، فالنافذة
+ * هناك تكاد تملأ الشاشة.
+ */
+.overlay-wrap {
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* لوحُ النافذة: لا يطول عن الطبقة، وما زاد من جوفه مُرِّر فيه */
+.overlay-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  min-height: 0;
+}
 
 /* شريط تمرير رفيع داخل نافذة الإعدادات */
 .thin-scroll {
@@ -418,6 +508,7 @@ input[dir='ltr'] { text-align: left; }
 .gear-btn:hover svg { transform: rotate(60deg); }
 
 .owner-pill {
+  flex: none;
   border: 1px solid var(--border);
   background: var(--bg);
   border-radius: 999px;
@@ -428,6 +519,7 @@ input[dir='ltr'] { text-align: left; }
 }
 
 .owner-button {
+  flex: none;
   border: 1.5px solid var(--border);
   background: none;
   color: var(--text);
@@ -444,54 +536,23 @@ input[dir='ltr'] { text-align: left; }
    التكبير، فلولاها لطالت الصفحة عن الشاشة كلّما كبّر الزائر الخطّ. */
 .landing {
   position: relative;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh / var(--ui-scale) - var(--header-h));
 }
 
+/* وهالةُ الهبوط وزخرفتُه صارتا من ورق الجدران العامّ في `body` */
+
 /*
- * ما تقوم به الصفحة قبل أن تصل صورة: هالتان بلون المكتبة في الطرفين،
- * وزخرفةٌ هندسيّة مبثوثة (ربعُ الحزب: مربَّعان متقاطعان) تحت الكلّ. وهي
- * أنماطٌ محسوبة لا صورًا تُجلب، فلا تكلّف الشبكة حرفًا واحدًا.
+ * `flex: 1 0 auto` — يكبر ليملأ ما بقي من الشاشة، **ولا ينضغط دون محتواه**.
  *
- * والزخرفةُ مرسومةٌ بالقناع لا بالصورة الملوَّنة، فتتبع لونَ المكتبة في
- * المظاهر الثلاثة ولا تحتاج نسخةً لكلّ مظهر.
+ * وكان `1 1 auto` فينضغط الصندوقُ ويبقى ما فيه على قدره، فيخرج من أسفله
+ * ويقع على بطاقة الاقتباس. وهذا الذي كان يُرى تراكبًا في الشاشات القصيرة:
+ * زِيد في الصدر سطرُ الأعداد فلم يعد يسع الشاشةَ الواحدة، فتزاحم ما فيه.
  */
-.landing-glow {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      44% 52% at 82% 8%,
-      color-mix(in oklch, var(--accent) 13%, transparent) 0%,
-      transparent 70%
-    ),
-    radial-gradient(
-      50% 46% at 12% 96%,
-      color-mix(in oklch, var(--star) 11%, transparent) 0%,
-      transparent 72%
-    );
-}
-
-.landing-glow::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--accent);
-  opacity: 0.045;
-  -webkit-mask-image: var(--ornament);
-  mask-image: var(--ornament);
-  -webkit-mask-size: 62px 62px;
-  mask-size: 62px 62px;
-}
-[data-theme='dark'] .landing-glow::after { opacity: 0.07; }
-
 .hero {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -503,7 +564,8 @@ input[dir='ltr'] { text-align: left; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  /* الفراغُ يتبع الارتفاعَ المتاح: على الشاشة القصيرة يضيق فيسع المحتوى */
+  gap: clamp(12px, 2.8vh, 22px);
   width: 100%;
   max-width: 760px;
 }
@@ -531,19 +593,9 @@ input[dir='ltr'] { text-align: left; }
     0 22px 56px oklch(0.2 0.02 50 / 0.22);
 }
 
-/* الزخرفة نفسها التي تحت الصفحة، أكثفُ قليلًا داخل اللوحة */
-.frame::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: var(--accent);
-  opacity: 0.055;
-  -webkit-mask-image: var(--ornament);
-  mask-image: var(--ornament);
-  -webkit-mask-size: 54px 54px;
-  mask-size: 54px 54px;
-}
+/* ولا نقشَ في جوف الإطار: الصورةُ فيه باهتةٌ (٠٫٤٦)، فينفذ النقشُ من تحتها
+   فتُرى كأنّ النجومَ مطبوعةٌ على رفوف الكتب. ورقُ الجدران خلف الصفحة كلِّها
+   ويكفي. */
 
 .frame-shots { position: absolute; inset: 0; }
 
@@ -994,21 +1046,7 @@ input[dir='ltr'] { text-align: left; }
   pointer-events: none;
 }
 
-/* وزخرفةٌ باهتة في أرضها، كزخرفة اللوحة فوقها */
-.quote-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: 14px;
-  background: var(--accent);
-  opacity: 0.035;
-  pointer-events: none;
-  -webkit-mask-image: var(--ornament);
-  mask-image: var(--ornament);
-  -webkit-mask-size: 48px 48px;
-  mask-size: 48px 48px;
-}
+/* ولا نقشَ في أرضها: النصُّ المقروء لا يُكتب على نقش */
 .quote-body, .quote-dots { position: relative; z-index: 1; }
 
 /* علامتا الاقتباس تكتنفانه: واحدةٌ في أعلى يمينه وأخرى في أسفل يساره،
@@ -2156,9 +2194,21 @@ input[dir='ltr'] { text-align: left; }
    دونه تنساب الصفحة ويُمرَّر فيها كما على الجوّال. */
 @media (min-width: 1081px) and (min-height: 620px) {
   .landing {
-    height: calc(100vh / var(--ui-scale) - var(--header-h));
-    overflow: hidden;
+    /*
+     * أدنى ارتفاعٍ لا ارتفاعٌ مقطوع. وكان `height` مع `overflow: hidden`،
+     * فمتى زاد المحتوى على الشاشة ازدحم بعضُه على بعضٍ ثم قُصّ ما فاض —
+     * ولا يُرى للقارئ سببٌ لِمَا رأى. والآن: إن وسِعته الشاشةُ فشاشةٌ واحدة
+     * بلا تمرير وهو الأصل، وإن لم تسعه انسابت الصفحةُ ومُرِّرت. تمريرةٌ
+     * قصيرة أهونُ من تراكب.
+     */
+    min-height: calc(100vh / var(--ui-scale) - var(--header-h));
   }
+}
+
+/* وسطرُ الأعداد يتنحّى عن الشاشة القصيرة: هو خبرٌ زائد، والشاشةُ الواحدة
+   بلا تمرير أولى منه. فإذا اتّسع الارتفاعُ عاد. */
+@media (max-height: 820px) {
+  .hero-tally { display: none; }
 }
 
 /* ورقة التقويم تنزل تحت الأزرار قبل أن تزاحمها */
@@ -2184,6 +2234,19 @@ input[dir='ltr'] { text-align: left; }
     margin-top: 4px;
   }
   .hero { flex-direction: column; gap: 14px; }
+}
+
+/*
+ * الرأسُ يلتفّ عند صاحب المكتبة قبل أن يلتفّ عند الزائر: عنده فوق ما عنده
+ * اسمُه ووضعُ التصفُّح والخروجُ وإضافةُ كتاب، فيضيق به العرضُ وهو لا يزال
+ * واسعًا على الزائر. وكان لا يلتفّ إلا دون التسعمئة، فيتزاحم ما بين ذلك
+ * ويخرج بعضُه عن الحدّ.
+ */
+@media (max-width: 1240px) {
+  .app-header[data-owner] { flex-wrap: wrap; row-gap: 10px; }
+  .app-header[data-owner] .quick-search { flex: 1 1 100%; order: 3; }
+  .app-header[data-owner] .head-nav { order: 4; flex: 1 1 100%; }
+  .app-header[data-owner] .head-tools { order: 2; }
 }
 
 @media (max-width: 900px) {
@@ -2278,6 +2341,10 @@ input[dir='ltr'] { text-align: left; }
 .print-sheet { display: none; }
 
 @media print {
+  /* ورقُ الجدران لا يُطبَع: هو زينةُ الشاشة، وطبعُه يُتلف الورقةَ ويستنزف
+     الحبر. والطبقتان مثبَّتتان على الشاشة، فلو بقيتا لطُبعتا في كل صفحة. */
+  body::before, body::after { display: none !important; }
+
   /* الصفحةُ كلُّها تُطوى، والورقةُ وحدها تبقى. وهي خارج `#root` — تُركَّب في
      `document.body` — فلا يطويها طيُّه. ولو أُخفيت الصفحةُ بالشفافية لبقيت
      شاغلةً مواضعها فخرجت أوراقٌ بيضٌ قبل الورقة وبعدها. */
@@ -2462,21 +2529,6 @@ input[dir='ltr'] { text-align: left; }
     var(--surface) 62%
   );
   box-shadow: var(--shadow-1);
-}
-
-/* زخرفةٌ باهتة في أرضه، كزخرفة اللوحة في صفحة الهبوط */
-.perks-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: var(--accent);
-  opacity: 0.04;
-  -webkit-mask-image: var(--ornament);
-  mask-image: var(--ornament);
-  -webkit-mask-size: 52px 52px;
-  mask-size: 52px 52px;
 }
 
 .perks-hero-head {
@@ -3131,58 +3183,92 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
 .perk-kin h2 span { font-size: 12px; font-weight: 400; color: var(--muted); }
 
 /* ==================================================== نموذج القيد */
+/*
+ * نافذةٌ لا صفحة: القيدُ يُكتب وأنت في موضعك من السيل أو من صفحة الكتاب.
+ *
+ * وبنيتُها ثلاثةُ أثلاث: ترويسةٌ ثابتة، وجوفٌ هو وحدَه الذي يُمرَّر، وذيلٌ
+ * ثابتٌ فيه الحفظ. وكانت ترويسةً وذيلًا «لاصقَين» (`sticky`) في جوفٍ واحد
+ * يُمرَّر — فإذا لم تسع النافذةُ الشاشةَ وقع الذيلُ تحت حافّتها فلا يُبلغ
+ * زرُّ الحفظ. والقسمةُ ثلاثًا تجعل الذيلَ خارج الممرَّر أصلًا، فلا يغيب.
+ */
 .perk-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  width: min(720px, 100%);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  padding: 22px 24px 24px;
+  width: min(760px, 100%);
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow-3);
+  overflow: hidden;
 }
 
 .perk-editor-head {
-  position: sticky;
-  top: -22px;
-  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: -22px -24px 0;
-  padding: 18px 24px 14px;
-  background: var(--surface);
+  flex: none;
+  padding: 16px 22px;
   border-bottom: 1px solid var(--border);
+  background: var(--header);
 }
 .perk-editor-head h2 {
   margin: 0;
   font-family: var(--heading-font);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
 }
 
-.perk-field { display: flex; flex-direction: column; gap: 7px; }
-.perk-field-label { font-size: 13px; font-weight: 600; color: var(--muted); }
-.perk-field-wide { grid-column: 1 / -1; }
-
-.perk-grid {
+/* الجوف: هو وحده الذي يُمرَّر، وحقولُه في شبكةٍ عمودُها اثنان على السَّعة */
+.perk-editor-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 15px;
+  gap: 14px 18px;
+  padding: 18px 22px 22px;
+  align-content: start;
 }
+
+.perk-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.perk-field-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+/* ما طال من الحقول يأخذ عرضَ الشبكة كلَّه: النصوصُ والاختياراتُ الكثيرة */
+.perk-field-wide { grid-column: 1 / -1; }
+
+/* فاصلٌ يقسم النموذج أقسامًا، وله عنوانُه على خيطٍ يمتدّ إلى آخر السطر */
+.perk-part {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-family: var(--heading-font);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.perk-part::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to left, var(--border), transparent);
+}
+.perk-part:first-child { margin-top: 0; }
 
 .perk-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .perk-hint {
   margin: 0;
   font-size: 11.5px;
-  line-height: 1.75;
+  line-height: 1.7;
   color: var(--muted);
 }
+
+.perk-area {
+  min-height: 132px;
+  line-height: 2;
+  resize: vertical;
+}
+.perk-area-small { min-height: 74px; line-height: 1.9; }
 
 .perk-tokens { display: flex; flex-wrap: wrap; gap: 6px; }
 .perk-token {
@@ -3201,20 +3287,18 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
 .perk-token:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
 .perk-token svg { flex: none; opacity: 0.7; }
 
+/* الذيلُ خارج الممرَّر، فلا يغيب تحت حافّة الشاشة مهما طال النموذج.
+   والحذفُ في طرفٍ والحفظُ في الطرف الآخر: لا يُضغط أحدُهما مكان الآخر. */
 .perk-editor-foot {
-  position: sticky;
-  bottom: -24px;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 6px -24px -24px;
-  padding: 16px 24px;
-  background: var(--surface);
+  flex: none;
+  padding: 13px 22px;
   border-top: 1px solid var(--border);
+  background: var(--header);
 }
-/* الحفظُ والإلغاء في طرف السطر، والحذفُ في الطرف الآخر: لا يُضغط سهوًا */
-.perk-editor-foot > :nth-last-child(2) { margin-inline-start: auto; }
-.perk-editor-foot .perk-remove { margin-inline-end: auto; }
+.perk-editor-foot .perk-save { margin-inline-start: auto; }
 
 .perk-remove {
   padding: 9px 16px;
@@ -3224,6 +3308,7 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
   color: var(--danger);
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
   transition: background 0.16s, color 0.16s;
 }
 .perk-remove:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
@@ -3259,10 +3344,13 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
   .perk { padding: 15px 16px 12px; }
   .perk-head-tail { margin-inline-start: 0; width: 100%; }
   .perk-source-tail { margin-inline-start: 0; }
-  .perk-grid { grid-template-columns: 1fr; }
-  .perk-editor { padding: 18px 16px 20px; border-radius: 14px; }
-  .perk-editor-head { margin: -18px -16px 0; padding: 16px; top: -18px; }
-  .perk-editor-foot { margin: 6px -16px -20px; padding: 14px 16px; bottom: -20px; }
+  /* عمودٌ واحد: حقلانِ في سطرٍ على عرض ٣٧٥ يصيران خانتين لا يُقرأ ما فيهما */
+  .perk-editor-body { grid-template-columns: 1fr; padding: 14px 16px 18px; gap: 12px; }
+  .perk-editor { border-radius: 14px; }
+  .perk-editor-head { padding: 13px 16px; }
+  .perk-editor-foot { padding: 11px 16px; gap: 8px; }
+  .perk-editor-foot button { padding-inline: 14px; font-size: 12.5px; }
+  .perk-area { min-height: 116px; }
   .perk-index button { flex-wrap: wrap; gap: 6px 10px; }
   .perk-index-book, .perk-index-date { max-width: none; }
 }
@@ -3339,7 +3427,7 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
  * مصمتًا مقطوعًا عمّا بعده.
  */
 .app-header {
-  background: color-mix(in oklch, var(--header) 88%, transparent);
+  background: color-mix(in oklch, var(--header) 96%, transparent);
   backdrop-filter: saturate(1.4) blur(12px);
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
   box-shadow: 0 1px 0 color-mix(in oklch, var(--border) 60%, transparent);
@@ -3488,4 +3576,194 @@ a { transition: color 0.15s; }
     scroll-behavior: auto !important;
   }
   .frame-shot-on { animation: none; transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════ لوحة البحث */
+/*
+ * بابُ الموقع الأسرع: حقلٌ في صدرها، فإرشادُ البحث، فالنتائجُ قسمين —
+ * الكتبُ والقيود. والقسمة ثلاثًا كنموذج القيد: صدرٌ ثابت، وجوفٌ يُمرَّر،
+ * فلا يغيب الحقلُ عن الناظر وهو ينزل في النتائج.
+ */
+.search-panel {
+  width: min(660px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 14px 16px 12px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 12%, transparent);
+}
+.search-box > svg { flex: none; color: var(--muted); }
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  font-size: 15px;
+}
+.search-box input:focus-visible { outline: none; box-shadow: none; }
+.search-box button {
+  flex: none;
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+}
+.search-box button:hover { color: var(--danger); }
+
+/* إرشادُ البحث: خصالُ الخوارزمية تُقال ليُنتفَع بها، وإلّا فهي معطَّلة */
+.search-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  flex: none;
+  margin: 0;
+  padding: 0 18px 13px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.search-guide span {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--header);
+  white-space: nowrap;
+}
+.search-guide-key {
+  margin-inline-start: auto;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.3px;
+}
+
+.search-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.search-total {
+  padding: 8px 10px 10px;
+  font-size: 12.5px;
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* صدرُ القسم: اسمُه وعددُه على خيطٍ يمتدّ إلى آخر السطر */
+.search-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.search-section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.search-section-count { order: 3; flex: none; color: var(--accent-soft); font-weight: 600; }
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: start;
+  transition: background 0.15s;
+}
+.search-row:hover { background: var(--header); }
+
+.search-cover {
+  flex: none;
+  width: 36px;
+  height: 50px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--cover-bg);
+}
+
+/* والقيدُ لا غلافَ له، فله علامةٌ بقامة الغلاف تُسوّي الصفَّين */
+.search-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 50px;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 11%, transparent);
+  color: var(--accent-soft);
+}
+
+.search-row-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.search-row-title {
+  font-family: var(--heading-font);
+  font-weight: 700;
+  font-size: 14.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-row-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 46px 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.search-blank svg { color: var(--border); }
+.search-blank p { margin: 0; font-size: 14.5px; }
+.search-blank span { font-size: 12.5px; }
+
+@media (max-width: 620px) {
+  .search-head { padding: 12px 12px 10px; }
+  .search-guide { padding: 0 14px 11px; }
+  .search-guide-key { display: none; }
+  .search-panel { border-radius: 14px; }
 }

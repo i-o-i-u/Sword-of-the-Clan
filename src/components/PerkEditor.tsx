@@ -152,122 +152,126 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   if (!canEdit) return null
 
   return (
-    <Overlay onClose={onClose} align="flex-start" paddingTop={40}>
-      <div className="perk-editor thin-scroll">
+    <Overlay onClose={onClose} align="flex-start">
+      <div className="perk-editor overlay-sheet">
         <header className="perk-editor-head">
           <h2>{perk ? 'تعديل القيد' : 'قيدٌ جديد'}</h2>
           <CloseButton onClose={onClose} />
         </header>
 
-        {/* ------------------------------------------------------ النوع */}
-        <div className="perk-field">
-          <span className="perk-field-label">نوعه</span>
-          <div className="perk-kinds">
-            {PERK_KINDS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => set('kind', k)}
-                style={chipStyle(d.kind === k)}
-              >
-                {k}
-              </button>
-            ))}
+        <div className="perk-editor-body thin-scroll">
+          {/* ------------------------------------------------ ١. القيد */}
+          <span className="perk-part">القيد</span>
+
+          <div className="perk-field perk-field-wide">
+            <span className="perk-field-label">نوعه</span>
+            <div className="perk-kinds">
+              {PERK_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => set('kind', k)}
+                  style={chipStyle(d.kind === k)}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            <p className="perk-hint">{PERK_KIND_HINTS[d.kind]}</p>
           </div>
-          <p className="perk-hint">{PERK_KIND_HINTS[d.kind]}</p>
-        </div>
 
-        {/* ------------------------------------------------------ المتن */}
-        <label className="perk-field">
-          <span className="perk-field-label">عنوانه</span>
-          <input
-            value={d.title}
-            onChange={(e) => set('title', e.target.value)}
-            placeholder="عنوانٌ يدلّ عليه — «أوّل من رُويت له ثلاثون بيتًا»"
-            style={inputStyle}
-          />
-        </label>
-
-        <label className="perk-field">
-          <span className="perk-field-label">نصّه</span>
-          <textarea
-            value={d.text}
-            onChange={(e) => set('text', e.target.value)}
-            placeholder="النصّ كما هو في الكتاب"
-            style={{ ...inputStyle, minHeight: 190, lineHeight: 2, resize: 'vertical' }}
-          />
-        </label>
-
-        <label className="perk-field">
-          <span className="perk-field-label">تعليقي عليه</span>
-          <textarea
-            value={d.comment}
-            onChange={(e) => set('comment', e.target.value)}
-            placeholder="ما تُعقِّب به على النصّ أو تُنبِّه عليه — يُعرض مفصولًا عنه فلا يلتبس بكلام صاحبه"
-            style={{ ...inputStyle, minHeight: 80, lineHeight: 1.9, resize: 'vertical' }}
-          />
-        </label>
-
-        {/* ---------------------------------------------------- المصدر */}
-        <div className="perk-field">
-          <span className="perk-field-label">مصدره</span>
-          <div className="perk-kinds">
-            <button type="button" onClick={() => set('fromLibrary', true)} style={chipStyle(d.fromLibrary)}>
-              من كتب المكتبة
-            </button>
-            <button type="button" onClick={() => set('fromLibrary', false)} style={chipStyle(!d.fromLibrary)}>
-              من كتابٍ ليس فيها
-            </button>
-          </div>
-        </div>
-
-        {d.fromLibrary ? (
-          <label className="perk-field">
-            <span className="perk-field-label">الكتاب</span>
-            <Combobox
-              value={d.bookName}
-              onChange={(v) => set('bookName', v)}
-              options={bookTitles}
-              placeholder="اكتب أوّل العنوان…"
-              emptyHint={
-                d.bookName.trim() && !chosen
-                  ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من كتابٍ ليس فيها».'
-                  : undefined
-              }
+          <label className="perk-field perk-field-wide">
+            <span className="perk-field-label">عنوانه</span>
+            <input
+              value={d.title}
+              onChange={(e) => set('title', e.target.value)}
+              placeholder="عنوانٌ يدلّ عليه — «أوّل من رُويت له ثلاثون بيتًا»"
+              style={inputStyle}
             />
           </label>
-        ) : (
-          <div className="perk-grid">
-            <label className="perk-field">
-              <span className="perk-field-label">عنوان الكتاب</span>
-              <input
-                value={d.sourceTitle}
-                onChange={(e) => set('sourceTitle', e.target.value)}
-                style={inputStyle}
-              />
-            </label>
-            <label className="perk-field">
-              <span className="perk-field-label">مؤلِّفه</span>
-              <input
-                value={d.sourceAuthor}
-                onChange={(e) => set('sourceAuthor', e.target.value)}
-                placeholder="باسمه ووفاته — «أبو العبَّاس ثعلب (ت ٢٩١ هـ)»"
-                style={inputStyle}
-              />
-            </label>
-            <label className="perk-field perk-field-wide">
-              <span className="perk-field-label">طبعته</span>
-              <input
-                value={d.sourceEdition}
-                onChange={(e) => set('sourceEdition', e.target.value)}
-                placeholder="تحقيقُه ودارُه وبلدُه وسنتُه، سطرًا واحدًا كما يُكتب في الحاشية"
-                style={inputStyle}
-              />
-            </label>
-          </div>
-        )}
 
-        <div className="perk-grid">
+          <label className="perk-field perk-field-wide">
+            <span className="perk-field-label">نصّه</span>
+            <textarea
+              value={d.text}
+              onChange={(e) => set('text', e.target.value)}
+              placeholder="النصّ كما هو في الكتاب"
+              className="perk-area"
+              style={inputStyle}
+            />
+          </label>
+
+          <label className="perk-field perk-field-wide">
+            <span className="perk-field-label">تعليقي عليه</span>
+            <textarea
+              value={d.comment}
+              onChange={(e) => set('comment', e.target.value)}
+              placeholder="ما تُعقِّب به عليه — يُعرض مفصولًا عنه فلا يلتبس بكلام صاحبه"
+              className="perk-area perk-area-small"
+              style={inputStyle}
+            />
+          </label>
+
+          {/* ------------------------------------------------ ٢. مصدره */}
+          <span className="perk-part">مصدره</span>
+
+          <div className="perk-field perk-field-wide">
+            <div className="perk-kinds">
+              <button type="button" onClick={() => set('fromLibrary', true)} style={chipStyle(d.fromLibrary)}>
+                من كتب المكتبة
+              </button>
+              <button type="button" onClick={() => set('fromLibrary', false)} style={chipStyle(!d.fromLibrary)}>
+                من كتابٍ ليس فيها
+              </button>
+            </div>
+          </div>
+
+          {d.fromLibrary ? (
+            <label className="perk-field perk-field-wide">
+              <span className="perk-field-label">الكتاب</span>
+              <Combobox
+                value={d.bookName}
+                onChange={(v) => set('bookName', v)}
+                options={bookTitles}
+                placeholder="اكتب أوّل العنوان…"
+                emptyHint={
+                  d.bookName.trim() && !chosen
+                    ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من كتابٍ ليس فيها».'
+                    : undefined
+                }
+              />
+            </label>
+          ) : (
+            <>
+              <label className="perk-field">
+                <span className="perk-field-label">عنوان الكتاب</span>
+                <input
+                  value={d.sourceTitle}
+                  onChange={(e) => set('sourceTitle', e.target.value)}
+                  style={inputStyle}
+                />
+              </label>
+              <label className="perk-field">
+                <span className="perk-field-label">مؤلِّفه</span>
+                <input
+                  value={d.sourceAuthor}
+                  onChange={(e) => set('sourceAuthor', e.target.value)}
+                  placeholder="باسمه ووفاته — «أبو العبَّاس ثعلب (ت ٢٩١ هـ)»"
+                  style={inputStyle}
+                />
+              </label>
+              <label className="perk-field perk-field-wide">
+                <span className="perk-field-label">طبعته</span>
+                <input
+                  value={d.sourceEdition}
+                  onChange={(e) => set('sourceEdition', e.target.value)}
+                  placeholder="تحقيقُه ودارُه وبلدُه وسنتُه، سطرًا واحدًا كما يُكتب في الحاشية"
+                  style={inputStyle}
+                />
+              </label>
+            </>
+          )}
+
           <label className="perk-field">
             <span className="perk-field-label">المجلَّد</span>
             <input
@@ -287,10 +291,10 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
               style={inputStyle}
             />
           </label>
-        </div>
 
-        {/* ------------------------------------------------ بابه ونفاسته */}
-        <div className="perk-grid">
+          {/* ------------------------------------- ٣. موضعه من الكنّاش */}
+          <span className="perk-part">موضعه من الكنّاش</span>
+
           <label className="perk-field">
             <span className="perk-field-label">بابه</span>
             <select
@@ -316,66 +320,69 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
               {subCats.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-        </div>
 
-        <div className="perk-field">
-          <span className="perk-field-label">نفاسته</span>
-          <div className="perk-kinds">
-            {PERK_RATINGS.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => set('rating', r.value)}
-                style={chipStyle(d.rating === r.value)}
-              >
-                {r.value > 0 ? `${'★'.repeat(r.value)} ${r.label}` : r.label}
-              </button>
-            ))}
+          <div className="perk-field perk-field-wide">
+            <span className="perk-field-label">نفاسته</span>
+            <div className="perk-kinds">
+              {PERK_RATINGS.map((r) => (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => set('rating', r.value)}
+                  style={chipStyle(d.rating === r.value)}
+                >
+                  {r.value > 0 ? `${'★'.repeat(r.value)} ${r.label}` : r.label}
+                </button>
+              ))}
+            </div>
+            <p className="perk-hint">وما بلغ النجومَ الثلاث اجتمع في «النفائس».</p>
           </div>
-          <p className="perk-hint">وما بلغ النجومَ الثلاث اجتمع في «النفائس».</p>
+
+          <label className="perk-field perk-field-wide">
+            <span className="perk-field-label">كرّاسته</span>
+            <Combobox
+              value={d.notebook}
+              onChange={(v) => set('notebook', v)}
+              options={notebooks}
+              placeholder="مسألةٌ يُجمع لها المتفرِّق — «عقِبُ خالد بن الوليد»"
+              emptyHint={
+                d.notebook.trim() && !notebooks.includes(d.notebook.trim())
+                  ? 'كرّاسةٌ جديدة، تقوم بأوّل قيدٍ فيها.'
+                  : undefined
+              }
+            />
+          </label>
+
+          <TokenField
+            label="الأعلام المذكورون فيه"
+            hint="يُجمع بالعَلَم ما تفرَّق عنه من القيود"
+            values={d.people}
+            options={knownPeople}
+            onChange={(v) => set('people', v)}
+            placeholder="اسمُ العَلَم، ثم Enter"
+          />
+
+          <TokenField
+            label="وسومه"
+            hint="كلماتٌ يُهتدى بها إليه في البحث وتُعرض عليه"
+            values={d.tags}
+            options={knownTags}
+            onChange={(v) => set('tags', v)}
+            placeholder="وسمٌ، ثم Enter"
+          />
         </div>
 
-        <label className="perk-field">
-          <span className="perk-field-label">كرّاسته</span>
-          <Combobox
-            value={d.notebook}
-            onChange={(v) => set('notebook', v)}
-            options={notebooks}
-            placeholder="مسألةٌ يُجمع لها المتفرِّق — «عقِبُ خالد بن الوليد»"
-            emptyHint={
-              d.notebook.trim() && !notebooks.includes(d.notebook.trim())
-                ? 'كرّاسةٌ جديدة، تقوم بأوّل قيدٍ فيها.'
-                : undefined
-            }
-          />
-        </label>
-
-        <TokenField
-          label="الأعلام المذكورون فيه"
-          hint="يُجمع بالعَلَم ما تفرَّق عنه من القيود"
-          values={d.people}
-          options={knownPeople}
-          onChange={(v) => set('people', v)}
-          placeholder="اسمُ العَلَم، ثم Enter"
-        />
-
-        <TokenField
-          label="وسومه"
-          hint="كلماتٌ يُهتدى بها إليه في البحث وتُعرض عليه"
-          values={d.tags}
-          options={knownTags}
-          onChange={(v) => set('tags', v)}
-          placeholder="وسمٌ، ثم Enter"
-        />
-
-        {/* --------------------------------------------------- الحفظ */}
+        {/* الذيلُ خارج الجوف المُمرَّر، فلا يغيب تحت حافّة الشاشة مهما طال
+            النموذج. وكان لاصقًا داخله فيقع زرُّ الحفظ تحتها فلا يُبلغ. */}
         <footer className="perk-editor-foot">
           {perk && (
             <button type="button" onClick={() => void remove()} className="perk-remove">
               حذف القيد
             </button>
           )}
-          <button type="button" onClick={onClose} style={ghostButtonStyle}>إلغاء</button>
+          <button type="button" onClick={onClose} className="perk-save" style={ghostButtonStyle}>
+            إلغاء
+          </button>
           <button
             type="button"
             disabled={!ready || saving}

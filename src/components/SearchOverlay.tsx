@@ -1,18 +1,40 @@
-// لوحة البحث السريع (§٥-٨): تفتح فوق الصفحة، وتبحث في الحقول كلها،
-// وتعرض عشرين نتيجة على الأكثر.
+// لوحة البحث السريع (§٥-٨): تفتح فوق الصفحة وتبحث في المكتبة كلِّها —
+// في الكتب وفي قيود الكنّاش جميعًا.
+//
+// وهي بابُ الموقع الأسرع، فبُنيت على ما تُبنى عليه أبوابُ البحث:
+//
+//  • **زرُّ إغلاقٍ ظاهر**، لا الضغطَ في الخارج وحدَه ولا Esc وحدَه: منهما ما
+//    لا يعرفه الزائر، ومنهما ما لا يبلغه بإصبعه على الجوّال.
+//  • **عددُ ما وُجد** قبل النتائج: القارئُ يعرف أَوَجَدَ كثيرًا فيُضيّق، أم
+//    قليلًا فيُوسّع — ولا يعدّها بعينه.
+//  • **إرشادُ البحث** تحت الحقل: أنّ التشكيل لا يُشترط، وأنّ الهمزات سواء،
+//    وأنّ الكلمات تُطلب مجتمعةً على أيّ ترتيب. وهي خصالٌ في الخوارزمية قائمة
+//    من قبل، غير أن أحدًا لم يكن يعلمها فلا يُنتفَع بها.
+//  • **قسمان لا قسمٌ واحد**: الكتبُ والقيود، لكلٍّ صدرُه وعددُه — فالباحث عن
+//    فائدةٍ لا يُغرقه ركامُ الكتب، والعكسُ كذلك.
+//
+// وما حجبه الخادم لا يصل هذه اللوحة أصلًا: الكتبُ والقيودُ تأتيان مُرشَّحتين.
 
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { QUICK_OPTS, ALL_SEARCH_KEYS, matchBook } from '../lib/search'
+import { QUICK_OPTS, ALL_SEARCH_KEYS, matchBook, matchPerk } from '../lib/search'
+import { sourceAuthor, sourceTitle } from '../lib/perks'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
+import { BOOKS_COUNT, PERKS_COUNT, countLabel, formatNumber } from '../lib/types'
 import ImageSlot from './ImageSlot'
-import { Overlay, cardStyle } from './ui'
+import {
+  ClearIcon, CloseButton, Overlay, PerkIcon, SearchIcon,
+} from './ui'
+
+/** ما يُعرض من كل قسمٍ على الأكثر. وما فوقه يُقال عددُه ولا يُسرَد. */
+const MAX_BOOKS = 14
+const MAX_PERKS = 12
 
 export default function SearchOverlay(
   { onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string },
 ) {
-  const { books } = useLibrary()
+  const { books, perks, bookById, settings, isOwner } = useLibrary()
   // ما كُتب في حقل الرأس يصل هنا فتبدأ اللوحة بنتائجه، لا فارغةً
   const [query, setQuery] = useState(initialQuery)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -21,70 +43,160 @@ export default function SearchOverlay(
   useEscapeKey(onClose)
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  const results = useMemo(
-    () => books.filter((b) => matchBook(b, query, QUICK_OPTS, ALL_SEARCH_KEYS)).slice(0, 20),
-    [books, query],
+  const trimmed = query.trim()
+  const canSeePerks = isOwner || settings.visibility.perks
+
+  const bookHits = useMemo(
+    () => (trimmed ? books.filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)) : []),
+    [books, trimmed],
   )
 
+  const perkHits = useMemo(() => {
+    if (!trimmed || !canSeePerks) return []
+    return perks.filter((p) => {
+      const book = p.book_id ? bookById(p.book_id) : undefined
+      const source = `${sourceTitle(p, book)} ${sourceAuthor(p, book)}`
+      return matchPerk(p, trimmed, QUICK_OPTS, source)
+    })
+  }, [perks, trimmed, canSeePerks, bookById])
+
+  const total = bookHits.length + perkHits.length
+
+  function go(to: () => void) { to(); onClose() }
+
   return (
-    <Overlay onClose={onClose} align="flex-start" paddingTop={110} zIndex={90}>
-      <div
-        style={{
-          ...cardStyle, width: 'min(600px, 100%)', maxHeight: 'calc(70vh / var(--ui-scale))',
-          borderRadius: 16, boxShadow: '0 30px 70px oklch(0.1 0.01 50 / 0.4)',
-          overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        }}
-      >
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)' }}>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث بالعنوان أو المؤلف…"
-            aria-label="ابحث بالعنوان أو المؤلف"
-            style={{
-              width: '100%', padding: '12px 16px', borderRadius: 10,
-              border: '1px solid var(--border)', background: 'var(--bg)',
-              fontSize: 15, color: 'var(--text)',
-            }}
-          />
+    <Overlay onClose={onClose} align="flex-start">
+      <div className="search-panel overlay-sheet">
+        {/* ------------------------------------------------------ الحقل */}
+        <div className="search-head">
+          <div className="search-box">
+            <SearchIcon size={17} />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ابحث في المكتبة: عنوانًا، أو مؤلِّفًا، أو فائدة…"
+              aria-label="ابحث في المكتبة"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="امسح ما كُتب">
+                <ClearIcon size={14} />
+              </button>
+            )}
+          </div>
+          <CloseButton onClose={onClose} />
         </div>
 
-        <div style={{ overflowY: 'auto', padding: 8 }}>
-          {results.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 14 }}>
-              لا نتائج مطابقة
+        {/* إرشادُ البحث: خصالٌ في الخوارزمية قائمةٌ من قبل، وإنما تُقال لتُنتفع */}
+        <p className="search-guide">
+          <span>لا يلزمك التشكيل</span>
+          <span>الهمزاتُ والألفُ سواء</span>
+          <span>الكلماتُ تُطلب مجتمعةً على أيّ ترتيب</span>
+          <span className="search-guide-key">Esc للإغلاق</span>
+        </p>
+
+        <div className="search-results thin-scroll">
+          {!trimmed ? (
+            <div className="search-blank">
+              <SearchIcon size={26} />
+              <p>اكتب كلمةً يُبحث بها في الكتب وفي قيود الكنّاش جميعًا.</p>
+            </div>
+          ) : total === 0 ? (
+            <div className="search-blank">
+              <p>لا شيء يطابق «{trimmed}».</p>
+              <span>جرِّب كلمةً واحدةً منه، أو اسمَ المؤلِّف.</span>
             </div>
           ) : (
-            results.map((book) => (
-              <div
-                key={book.id}
-                className="row-hover"
-                onClick={() => { navigate({ name: 'book', id: book.id }); onClose() }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-                }}
-              >
-                <div style={{ width: 38, height: 52, borderRadius: 4, overflow: 'hidden', flex: 'none' }}>
-                  <ImageSlot url={book.cover_url} folder="covers" onUploaded={() => {}} canEdit={false} placeholder="" />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{
-                    fontFamily: 'var(--heading-font)', fontWeight: 700, fontSize: 14.5,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {book.title}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                    {book.author_name} · {book.category}
-                  </div>
-                </div>
+            <>
+              <div className="search-total">
+                {countLabel(total, RESULTS_COUNT)}
+                {' في '}
+                {[
+                  bookHits.length > 0 && countLabel(bookHits.length, BOOKS_COUNT),
+                  perkHits.length > 0 && countLabel(perkHits.length, PERKS_COUNT),
+                ].filter(Boolean).join(' و')}
               </div>
-            ))
+
+              {bookHits.length > 0 && (
+                <>
+                  <Head label="الكتب" count={bookHits.length} shown={MAX_BOOKS} />
+                  {bookHits.slice(0, MAX_BOOKS).map((book) => (
+                    <button
+                      key={book.id}
+                      type="button"
+                      className="search-row"
+                      onClick={() => go(() => navigate({ name: 'book', id: book.id }))}
+                    >
+                      <span className="search-cover">
+                        <ImageSlot
+                          url={book.cover_url}
+                          folder="covers"
+                          onUploaded={() => {}}
+                          canEdit={false}
+                          placeholder=""
+                        />
+                      </span>
+                      <span className="search-row-body">
+                        <span className="search-row-title">{book.title}</span>
+                        <span className="search-row-sub">
+                          {[book.author_name, book.category].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {perkHits.length > 0 && (
+                <>
+                  <Head label="الفوائد والمقتطفات" count={perkHits.length} shown={MAX_PERKS} />
+                  {perkHits.slice(0, MAX_PERKS).map((perk) => {
+                    const book = perk.book_id ? bookById(perk.book_id) : undefined
+                    return (
+                      <button
+                        key={perk.id}
+                        type="button"
+                        className="search-row"
+                        onClick={() => go(() => navigate({ name: 'perk', id: perk.id }))}
+                      >
+                        <span className="search-mark"><PerkIcon size={16} /></span>
+                        <span className="search-row-body">
+                          <span className="search-row-title">
+                            {perk.title || perk.text.slice(0, 60) + '…'}
+                          </span>
+                          <span className="search-row-sub">
+                            {[perk.kind, sourceTitle(perk, book)].filter(Boolean).join(' · ')}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
     </Overlay>
   )
+}
+
+/** صدرُ القسم: اسمُه وعددُه، وما زاد على المعروض يُقال ولا يُسرَد */
+function Head({ label, count, shown }: { label: string; count: number; shown: number }) {
+  return (
+    <div className="search-section">
+      <span>{label}</span>
+      <span className="search-section-count">
+        {count > shown
+          ? `${formatNumber(shown)} من ${formatNumber(count)}`
+          : formatNumber(count)}
+      </span>
+    </div>
+  )
+}
+
+/** صيغُ عدّ النتائج: «نتيجةٌ واحدة»، «نتيجتان»، «٣ نتائجَ»، «١١ نتيجةً» */
+const RESULTS_COUNT = {
+  none: 'لا نتيجة', one: 'نتيجةٌ واحدة', two: 'نتيجتان',
+  few: 'نتائجَ', many: 'نتيجةً',
 }
