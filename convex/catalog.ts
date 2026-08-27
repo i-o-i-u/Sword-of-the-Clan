@@ -335,6 +335,20 @@ export const updatePublisher = mutation({
         ...(moved ? { place: patch.place } : {}),
       })
     }
+
+    // والدارُ المشارِكة اسمُها مُكرَّرٌ على الكتاب كاسم الأولى، فيُزامَن مثلَه
+    // — وإغفالُه يترك على غلافٍ اسمًا قديمًا وعلى غيره الجديد. ولا فهرس
+    // لها فتُمسح الكتبُ كلُّها؛ وهي مسحةٌ لا تقع إلا عند تسمية دارٍ من جديد.
+    if (!renamed) return
+    for (const b of await ctx.db.query('books').collect()) {
+      const presses = b.co_publishers ?? []
+      if (!presses.some((c) => c.publisher_id === id)) continue
+      await ctx.db.patch(b._id, {
+        co_publishers: presses.map(
+          (c) => (c.publisher_id === id ? { ...c, name: patch.name! } : c),
+        ),
+      })
+    }
   },
 })
 
@@ -348,6 +362,18 @@ export const removePublisher = mutation({
       .withIndex('by_publisher', (q) => q.eq('publisher_id', id))
       .collect()
     for (const b of books) await ctx.db.patch(b._id, { publisher_id: null })
+
+    // وتُفكّ عن الكتب التي شارَكت في إخراجها كذلك، ويبقى اسمُها مكتوبًا
+    for (const b of await ctx.db.query('books').collect()) {
+      const presses = b.co_publishers ?? []
+      if (!presses.some((c) => c.publisher_id === id)) continue
+      await ctx.db.patch(b._id, {
+        co_publishers: presses.map(
+          (c) => (c.publisher_id === id ? { ...c, publisher_id: null } : c),
+        ),
+      })
+    }
+
     await ctx.db.delete(id)
   },
 })

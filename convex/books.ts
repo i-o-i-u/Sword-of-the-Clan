@@ -9,7 +9,7 @@
 
 import { v } from 'convex/values'
 import { mutation } from './_generated/server'
-import { coAuthor, contributor, era, missingVolume, readingStatus } from './schema'
+import { coAuthor, coPublisher, contributor, era, missingVolume, readingStatus } from './schema'
 import { requireOwner, toClient } from './privacy'
 import type { Doc } from './_generated/dataModel'
 
@@ -27,6 +27,8 @@ const bookInput = {
   sub_category: v.optional(v.string()),
   publisher_id: v.optional(v.union(v.id('publishers'), v.null())),
   publisher: v.optional(v.string()),
+  publisher_scope: v.optional(v.string()),
+  co_publishers: v.optional(v.array(coPublisher)),
   place: v.optional(v.string()),
   year: v.optional(v.union(v.number(), v.null())),
   year_month: v.optional(v.union(v.number(), v.null())),
@@ -43,7 +45,11 @@ const bookInput = {
   volume_pages: v.optional(v.array(v.union(v.number(), v.string()))),
   volume_parts: v.optional(v.array(v.string())),
   index_volumes: v.optional(v.array(v.number())),
+  volume_years: v.optional(v.array(v.number())),
   missing_volumes: v.optional(v.array(missingVolume)),
+  issue_kind: v.optional(v.string()),
+  issue_by: v.optional(v.string()),
+  issue_year: v.optional(v.union(v.number(), v.null())),
   pages: v.optional(v.union(v.number(), v.null())),
   size: v.optional(v.string()),
   isbn: v.optional(v.string()),
@@ -63,7 +69,12 @@ const bookInput = {
   acquired_text: v.optional(v.string()),
   margin_note: v.optional(v.string()),
   value: v.optional(v.union(v.number(), v.null())),
+  copies: v.optional(v.number()),
   topic: v.optional(v.string()),
+  is_matn: v.optional(v.boolean()),
+  edition_of: v.optional(v.union(v.id('books'), v.null())),
+  within_book_id: v.optional(v.union(v.id('books'), v.null())),
+  within_pages: v.optional(v.string()),
   tags: v.optional(v.array(v.string())),
   keywords: v.optional(v.array(v.string())),
   blurb: v.optional(v.string()),
@@ -92,6 +103,8 @@ function withDefaults(input: BookInput) {
     sub_category: input.sub_category ?? '',
     publisher_id: input.publisher_id ?? null,
     publisher: input.publisher ?? '',
+    publisher_scope: input.publisher_scope ?? '',
+    co_publishers: input.co_publishers ?? [],
     place: input.place ?? '',
     year: input.year ?? null,
     year_month: input.year_month ?? null,
@@ -108,7 +121,11 @@ function withDefaults(input: BookInput) {
     volume_pages: input.volume_pages ?? [],
     volume_parts: input.volume_parts ?? [],
     index_volumes: input.index_volumes ?? [],
+    volume_years: input.volume_years ?? [],
     missing_volumes: input.missing_volumes ?? [],
+    issue_kind: input.issue_kind ?? '',
+    issue_by: input.issue_by ?? '',
+    issue_year: input.issue_year ?? null,
     pages: input.pages ?? null,
     size: input.size ?? '',
     isbn: input.isbn ?? '',
@@ -128,7 +145,13 @@ function withDefaults(input: BookInput) {
     acquired_text: input.acquired_text ?? '',
     margin_note: input.margin_note ?? '',
     value: input.value ?? 0,
+    // النسخةُ الواحدة هي الأصل، فالصفرُ ههنا معناه: لم يُسأل عنها بعد
+    copies: input.copies ?? 1,
     topic: input.topic ?? '',
+    is_matn: input.is_matn ?? false,
+    edition_of: input.edition_of ?? null,
+    within_book_id: input.within_book_id ?? null,
+    within_pages: input.within_pages ?? '',
     tags: input.tags ?? [],
     keywords: input.keywords ?? [],
     blurb: input.blurb ?? '',
@@ -176,6 +199,16 @@ export const remove = mutation({
     const loans = await ctx.db.query('loans').withIndex('by_book', (q) => q.eq('book_id', id)).collect()
 
     for (const doc of [...works, ...perks, ...loans]) await ctx.db.delete(doc._id)
+
+    // وما أشار إليه من الكتب يُفكّ عنه: نشرةٌ نُسبت إليه، وكتابٌ طُبع ضمنه.
+    // وهذا من الحذف المتسلسل نفسِه — إغفالُه يترك كتابًا يقول «نشرةٌ أخرى
+    // من» ولا مُشارَ إليه، فيسقط الخبرُ صامتًا في العرض ويبقى في القاعدة.
+    for (const b of await ctx.db.query('books').collect()) {
+      if (b.edition_of === id) await ctx.db.patch(b._id, { edition_of: null })
+      if (b.within_book_id === id) {
+        await ctx.db.patch(b._id, { within_book_id: null, within_pages: '' })
+      }
+    }
 
     // وأزِله من قوائم المخفيّ في الإعدادات حتى لا تتراكم فيها معرّفاتٌ ميّتة:
     // المخفيُّ بعينه، وما أُخفي منه من حقول، واستثناؤه من إخفاءٍ عامّ.

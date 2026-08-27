@@ -59,6 +59,12 @@ function fieldText(b: Book, key: string): string {
     // اسم المؤلِّف الأول ومن شاركه
     case 'author': return [b.author_name, ...(b.co_authors ?? []).map((c) => c.name)].join(' ')
     case 'contributors': return (b.contributors ?? []).map((c) => c.name).join(' ')
+    // دُورُ النشرة كلُّها: من بحث عن دارٍ شارَكت في إخراج كتابٍ أصابه بها
+    case 'publisher': return [
+      b.publisher,
+      ...(b.co_publishers ?? []).map((c) => c.name),
+      b.issue_by ?? '',
+    ].filter(Boolean).join(' ')
     // التصنيف رئيسُه وفرعُه جميعًا: من بحث عن «النحو» أصابه من فرعه
     case 'category': return [b.category, b.sub_category].filter(Boolean).join(' ')
     case 'marginNote': return b.margin_note ?? ''

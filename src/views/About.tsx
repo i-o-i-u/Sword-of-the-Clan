@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
+import { countAuthors } from '../lib/people'
 import { navigate } from '../lib/router'
 import {
   AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, aboutTextOf, countLabel,
@@ -67,7 +68,10 @@ export default function About() {
 
   const parts = useMemo(() => splitAbout(aboutTextOf(settings.about_text)), [settings.about_text])
 
-  const authorCount = new Set(books.map((b) => b.author_name).filter(Boolean)).size
+  // مَن له تأليفٌ مسجَّل، لا أهلُ سجلّ الأشخاص كلُّهم: فيه المحقِّقُ ومن على
+  // صفته. ومَرْجِعُه `people.countAuthors` كمَرْجِع سائر المواضع، فلا يختلف
+  // رقمانِ في صفحتين عن شيءٍ واحد.
+  const authorCount = countAuthors(books, authors)
 
   return (
     <>
@@ -126,7 +130,7 @@ export default function About() {
         <div className="about-figures">
           {([
             [countLabel(books.length, BOOKS_COUNT), 'في الفهرس'],
-            [countLabel(authorCount || authors.length, AUTHORS_COUNT), 'لهم فيه كتاب'],
+            [countLabel(authorCount, AUTHORS_COUNT), 'لهم فيه كتاب'],
           ] as const).map(([value, caption]) => (
             <div key={caption} className="about-figure">
               <span className="about-figure-value">{value}</span>

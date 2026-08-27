@@ -7,9 +7,9 @@
 
 import { query } from './_generated/server'
 import {
-  authorIsPublic, bookIsPublic, bookPublisherVisible, isOwner, loadSettings,
-  publisherIsPublic, redactAuthor, redactBook, redactPublisher, redactSettings,
-  toClient,
+  authorIsPublic, bookIsPublic, bookPressIds, bookPublisherVisible, isOwner,
+  loadSettings, publisherIsPublic, redactAuthor, redactBook, redactPublisher,
+  redactSettings, toClient,
 } from './privacy'
 
 export const books = query({
@@ -19,7 +19,24 @@ export const books = query({
     if (await isOwner(ctx)) return all.map(toClient)
 
     const s = await loadSettings(ctx)
-    return all.filter((b) => bookIsPublic(b, s)).map((b) => redactBook(b, s))
+    const shown = all.filter((b) => bookIsPublic(b, s))
+    const visible = new Set(shown.map((b) => b._id))
+
+    // صلةُ الكتاب بكتابٍ آخر لا تظهر إلا إذا ظهر طرفاها، كما في `works`:
+    // «نشرةٌ أخرى من» و«مطبوعٌ ضمن» بابانِ إلى كتابٍ بعينه، فلو بقيا وقد
+    // حُجب المُشارُ إليه دلّا عليه ولم يفتحا — والدلالةُ على المحجوب حجبٌ
+    // ناقص. ولا يُصنع هذا في `redactBook` لأنها لا تعلم بسائر الكتب.
+    return shown.map((b) => {
+      const row = redactBook(b, s)
+      return {
+        ...row,
+        edition_of: row.edition_of && visible.has(row.edition_of) ? row.edition_of : null,
+        within_book_id:
+          row.within_book_id && visible.has(row.within_book_id) ? row.within_book_id : null,
+        within_pages:
+          row.within_book_id && visible.has(row.within_book_id) ? row.within_pages : '',
+      }
+    })
   },
 })
 
@@ -123,11 +140,11 @@ export const publishers = query({
     if (await isOwner(ctx)) return all.map(toClient)
 
     const s = await loadSettings(ctx)
+    // الدارُ المشارِكة كالأولى: لها من الكتاب نصيبٌ فتُعرض به
     const visible = new Set(
       (await ctx.db.query('books').collect())
         .filter((b) => bookIsPublic(b, s) && bookPublisherVisible(b, s))
-        .map((b) => b.publisher_id)
-        .filter((id): id is NonNullable<typeof id> => id !== null),
+        .flatMap((b) => bookPressIds(b)),
     )
     return all
       .filter((p) => visible.has(p._id) && publisherIsPublic(p, s))

@@ -169,6 +169,18 @@ export function bookPublisherVisible(book: Doc<'books'>, s: Settings): boolean {
 }
 
 /**
+ * معرّفاتُ دُور النشرة كلِّها من كتابٍ ظاهر: الأولى ومن شارَكها. وبها تُعرف
+ * الدارُ التي بقي لها في المكتبة كتابٌ منسوبٌ إليها — والدارُ المشارِكة
+ * كالأولى في ذلك، فغلافُ الكتاب يحمل شعارَ الدارَين معًا.
+ */
+export function bookPressIds(book: Doc<'books'>): string[] {
+  return [
+    book.publisher_id,
+    ...(book.co_publishers ?? []).map((c) => c.publisher_id),
+  ].filter((id): id is NonNullable<typeof id> => id !== null && id !== undefined)
+}
+
+/**
  * يحجب حقول الكتاب حسب قائمة «حقول بيانات الكتاب» (§٦-ب) ومفاتيح «ما يراه
  * الزوار» (§٦-أ). مطابقٌ لتعبيرات CASE في العرض public_books — ومفاتيح
  * hidden_fields تُكتب كما هي هناك (`seriesNo`, `yearLabel`, `volumePagesText`,
@@ -200,6 +212,10 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     // حُجب اسمُه: يبقى الكتابُ عند الزائر غيرَ منسوبٍ إلى دارٍ أصلًا.
     publisher:    hidden('publisher')    ? '' : book.publisher,
     publisher_id: hidden('publisher')    ? null : book.publisher_id,
+    // الدُّورُ المشارِكة ونطاقُ كلٍّ تابعةٌ لاسم الدار: من حجب الدارَ حجبها
+    // كلَّها، وإلّا دلّت الشريكةُ على ما سُتر اسمُ صاحبته.
+    publisher_scope: hidden('publisher') ? '' : (book.publisher_scope ?? ''),
+    co_publishers: hidden('publisher')   ? [] : (book.co_publishers ?? []),
     place:        hidden('place')        ? '' : book.place,
     year:         hidden('yearLabel')    ? null : book.year,
     year_month:   hidden('yearLabel')    ? null : book.year_month,
@@ -213,6 +229,13 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     volume_pages: hidden('volumePagesText') ? [] : book.volume_pages,
     volume_parts: hidden('volumePagesText') ? [] : (book.volume_parts ?? []),
     index_volumes: hidden('volumePagesText') ? [] : (book.index_volumes ?? []),
+    // سنواتُ المجلَّدات من تفصيلها، وهي في الوقت نفسه تُبيِّن مَدى سنة
+    // النشر — فمن حجب أحدَهما حُجبت عنه.
+    volume_years: hidden('volumePagesText') || hidden('yearLabel')
+      ? [] : (book.volume_years ?? []),
+    issue_kind:   hidden('issueKind')    ? '' : (book.issue_kind ?? ''),
+    issue_by:     hidden('issueKind')    ? '' : (book.issue_by ?? ''),
+    issue_year:   hidden('issueKind')    ? null : (book.issue_year ?? null),
     size:         hidden('size')         ? '' : book.size,
     isbn:         hidden('isbn')         ? '' : book.isbn,
     language:     hidden('language')     ? '' : book.language,
@@ -229,7 +252,16 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     acquired_year:  hidden('acquired')   ? null : book.acquired_year,
     acquired_text:  hidden('acquired')   ? '' : book.acquired_text,
     margin_note:  hidden('marginNote')   ? '' : book.margin_note,
+    // النسخةُ الواحدة هي الأصل، فالمحجوبُ يُردّ إليها لا إلى صفر
+    copies:       hidden('copies')       ? 1 : (book.copies ?? 1),
     topic:        hidden('topic')        ? '' : book.topic,
+    // المتنُ الدرسيّ وصفٌ للكتاب كتصنيفه، فحكمُه حكمُه
+    is_matn:      hidden('category')     ? false : (book.is_matn ?? false),
+    // والصلتان تُفكَّان أيضًا إذا كان طرفُهما الآخر محجوبًا، ويتكفّل بذلك
+    // `library.books` — فليس ههنا علمٌ بسائر الكتب.
+    edition_of:   hidden('otherEditions') ? null : (book.edition_of ?? null),
+    within_book_id: hidden('within')     ? null : (book.within_book_id ?? null),
+    within_pages: hidden('within')       ? '' : (book.within_pages ?? ''),
     // الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث، لا خبرٌ عنه، فتمرّ كما هي
     keywords:     book.keywords ?? [],
 

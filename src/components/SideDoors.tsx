@@ -1,4 +1,5 @@
-// مداخلُ الصفحات الثلاث المستجدّة: المحقِّقون ونحوهم، والسلاسل، والفوائد.
+// مداخلُ الصفحات التي لا تُعرض في الرأس: المحقِّقون ونحوهم، والسلاسل،
+// والمتون الدرسية، والفوائد.
 //
 // ولا تُعرض في الرأس أبدًا: الرأسُ للطريق الذي يسلكه كل زائر — الهبوطُ
 // والتصفُّح — وهذه صفحاتٌ يُقصَد إليها قصدًا. فمدخلُها من داخل «تصفُّح
@@ -7,11 +8,12 @@
 // وهي قطعةٌ واحدة في الموضعين كي لا يفترق الاسمُ والأيقونة بينهما.
 
 import { navigate, type Route } from '../lib/router'
-import { PerkIcon, SeriesIcon, VerifyIcon } from './ui'
+import { PerkIcon, ScrollIcon, SeriesIcon, VerifyIcon } from './ui'
 
 const DOORS: { route: Route; label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
   { route: { name: 'people' }, label: 'المُحقِّقون ونحوهم', icon: VerifyIcon },
   { route: { name: 'series' }, label: 'السَّلاسل',           icon: SeriesIcon },
+  { route: { name: 'matns' },  label: 'المُتُون الدَّرْسيَّة',    icon: ScrollIcon },
   { route: { name: 'perks' },  label: 'الفوائد والمقتطفات', icon: PerkIcon },
 ]
 

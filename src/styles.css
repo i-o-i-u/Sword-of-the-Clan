@@ -361,6 +361,112 @@ body::after {
   max-width: calc(100% / var(--ui-scale));
 }
 
+/*
+ * بطاقةُ القرعة. وهي ثلاثةُ أثلاث كسائر النوافذ: صدرٌ ثابت، وجوفٌ يُمرَّر،
+ * وذيلٌ **خارج الجوف** — لأنّ فيه زرَّ الفتح وزرَّ القرعة الثانية، ولو كان
+ * لاصقًا في الجوف لوقع تحت حافّة الشاشة على الجوّال فلم يُبلَغ.
+ *
+ * ولا يُقاس طولُها بـ`vh`: `.overlay-sheet` تتكفّل بحدِّها من الطبقة.
+ */
+.suggest-sheet { width: min(640px, 100%); overflow: hidden; }
+
+.suggest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.suggest-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--heading-font);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+
+.suggest-body {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* الغلافُ لا ينضغط دون قدره: نسبتُه ثلاثةٌ إلى أربعة كما في صفحة الكتاب */
+.suggest-cover {
+  width: 148px;
+  flex: none;
+  aspect-ratio: 3 / 4;
+  border-radius: 11px;
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+
+.suggest-text { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.suggest-chip {
+  align-self: flex-start;
+  font-size: 11.5px;
+  background: var(--header);
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.suggest-name {
+  font-family: var(--heading-font);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.suggest-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.suggest-line-soft { font-size: 12.5px; color: var(--muted); }
+.suggest-line svg { color: var(--accent-soft); flex: none; }
+
+.suggest-death {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.suggest-blurb { font-size: 13px; line-height: 2; margin: 4px 0 0; }
+
+.suggest-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--header);
+  flex: none;
+}
+
+@media (max-width: 560px) {
+  /* الغلافُ فوق النصّ لا عن يمينه: العرضُ لا يسع عمودَين */
+  .suggest-body { flex-direction: column; align-items: center; text-align: center; }
+  .suggest-text { align-items: center; }
+  .suggest-line, .suggest-blurb { justify-content: center; text-align: center; }
+  .suggest-foot > * { flex: 1 1 100%; justify-content: center; text-align: center; }
+}
+
 /* شريط تمرير رفيع داخل نافذة الإعدادات */
 .thin-scroll {
   scrollbar-width: thin;
@@ -940,28 +1046,24 @@ body::after {
  * وتحتها حجابٌ متدرّج يعزلها عن تفاصيل الصورة، فتُقرأ عليها كما تُقرأ على
  * أرضٍ خالية.
  */
-.frame-tally {
-  position: absolute;
-  z-index: 4;
-  inset-inline: 0;
-  bottom: 0;
+/*
+ * أعدادُ المكتبة في التذييل، تحت خيطه الزخرفيّ وفوق سطر الحقوق.
+ *
+ * وكانت شريطًا في ذيل إطار الهبوط، فوقعت تحت سطر الموضع مباشرةً فزاحمته —
+ * واللوحةُ صندوقٌ ارتفاعُه مضبوط لا يتّسع لما طال. وموضعُها هذا يجمع
+ * الحُسنيَين: هو أسفلُ الصفحة على الحقيقة، وهو دون الطيّة أصلًا فلا يكلّف
+ * صدرَ الهبوط ارتفاعًا — وذاك كان مقصودَ وضعها في اللوحة أوّلَ مرّة.
+ */
+.footer-tally {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 6px 16px;
-  padding: 22px 18px 11px;
-  background: linear-gradient(
-    to top,
-    color-mix(in oklch, var(--surface) 92%, transparent) 0%,
-    color-mix(in oklch, var(--surface) 70%, transparent) 55%,
-    transparent 100%
-  );
-  pointer-events: none;
-  animation: fade-in 0.6s ease-out 0.45s both;
+  gap: 6px 18px;
+  margin-bottom: 13px;
 }
 
-.frame-tally-item {
+.footer-tally-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -970,10 +1072,10 @@ body::after {
   color: var(--text);
   white-space: nowrap;
 }
-.frame-tally-item svg { flex: none; color: var(--accent-soft); }
+.footer-tally-item svg { flex: none; color: var(--accent-soft); }
 
 /* فاصلٌ بين العدد والعدد: نقطةٌ لا خطّ */
-.frame-tally-item + .frame-tally-item::before {
+.footer-tally-item + .footer-tally-item::before {
   content: '';
   width: 3px;
   height: 3px;
@@ -981,11 +1083,6 @@ body::after {
   border-radius: 50%;
   background: var(--accent-soft);
   opacity: 0.5;
-}
-
-/* واللوحةُ القصيرة لا تسعها مع الشعار والاسم والموضع، فتتنحّى */
-@media (max-height: 560px) {
-  .frame-tally { display: none; }
 }
 
 /* ------------------------------ ورقة التقويم، خارج الإطار كذلك */
@@ -2251,6 +2348,44 @@ body::after {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* صفُّ المتون: في موضع رقم السلسلة اسمُ الفرع، والاسمُ لا يسع أربعًا
+   وأربعين بكسلًا — فيُوسَّع العمودُ ويُردّ الخطُّ إلى مقدار ما يُقرأ. */
+.series-list-filed li { grid-template-columns: 140px minmax(0, 1fr) minmax(0, 0.8fr); }
+
+.series-no-text {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* شاراتُ الكتاب في صدر بطاقته، إلى جانب تصنيفه وموضعه من الرفّ.
+   وهي أخبارٌ تُعرف بنظرةٍ لا بقراءة صفّ: أنّ الكتاب متنٌ دَرْسيّ، وأنّ
+   هذه النشرة مصوَّرةٌ أو إعادةُ صفٍّ لا أصل. */
+.book-flag {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.book-flag-matn {
+  color: var(--accent-soft);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  text-decoration: none;
+}
+.book-flag-matn:hover { background: color-mix(in oklch, var(--accent) 20%, transparent); }
+
+/* والمصوَّرةُ خبرٌ عن نقصٍ في القيمة الأثريّة لا عن عيب، فحدُّها خطٌّ
+   وليست مصمتةً كشارة المتن — لا يُصرَخ بها في وجه القارئ. */
+.book-flag-issue {
+  color: var(--muted);
+  border: 1px dashed var(--border);
 }
 
 /* شارةُ نقص الفهرسة على بطاقة الشبكة — لصاحب المكتبة وحده.

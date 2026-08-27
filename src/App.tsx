@@ -62,6 +62,7 @@ const PublishersView = page(() => import('./views/Publishers'))
 const PublisherPage = page(() => import('./views/Publishers').then((m) => ({ default: m.PublisherPage })))
 const People = page(() => import('./views/People'))
 const Series = page(() => import('./views/Series'))
+const Matns = page(() => import('./views/Matns'))
 const Perks = page(() => import('./views/Perks'))
 const PerkPage = page(() => import('./views/Perks').then((m) => ({ default: m.PerkPage })))
 const LoginOverlay = page(() => import('./components/LoginOverlay'))
@@ -175,6 +176,7 @@ export default function App() {
           {route.name === 'publisher' && <PublisherPage publisherId={route.id} />}
           {route.name === 'people' && canSeeAuthors && <People />}
           {route.name === 'series' && <Series />}
+          {route.name === 'matns' && <Matns />}
           {route.name === 'perks' && <Perks tab={route.tab} />}
           {route.name === 'perk' && <PerkPage perkId={route.id} />}
         </Suspense>

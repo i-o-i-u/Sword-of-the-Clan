@@ -1,16 +1,44 @@
-// الذيل: سطر الحقوق بالسنة الهجرية، وبإزائه سبيلُ التواصل مع صاحب المكتبة.
-// الرابط الفارغ لا يُعرض أصلًا، فلا يظهر زرٌّ لا يذهب إلى شيء.
+// الذيل: أعدادُ المكتبة، ثم سطر الحقوق بالسنة الهجرية وبإزائه سبيلُ التواصل
+// مع صاحب المكتبة. والرابط الفارغ لا يُعرض أصلًا، فلا يظهر زرٌّ لا يذهب إلى
+// شيء.
+//
+// وأعدادُ المكتبة ههنا لا في جوف إطار الهبوط: كانت شريطًا في ذيل اللوحة
+// فوقعت تحت سطر الموضع مباشرةً فزاحمته — واللوحةُ صندوقٌ ارتفاعُه مضبوط، فما
+// طال محتواه ضاق عنه. والتذييلُ موضعُها: هو أسفلُ الصفحة على الحقيقة، وهو
+// دون الطيّة أصلًا فلا يكلّف الصدرَ ارتفاعًا — وذلك كان مقصودَ وضعها في
+// اللوحة أوّلَ مرّة.
 
 import { makkahMoment } from '../lib/hijri'
 import { useLibrary } from '../lib/library'
-import { LIBRARY_NAME } from '../lib/types'
-import { TelegramIcon, XIcon } from './ui'
+import { countAuthors } from '../lib/people'
+import {
+  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, PRESSES_COUNT, countLabel,
+} from '../lib/types'
+import { BooksIcon, PressIcon, QuillIcon, TelegramIcon, XIcon } from './ui'
 
-export default function Footer() {
-  const { settings } = useLibrary()
+/**
+ * `tally` يطلب شريطَ الأعداد. وهو للهبوط وحده: صفحةُ «عن المكتبة» تعرض
+ * أعدادَها في لوحها الخاصّ، فلو عُرضت ههنا أيضًا لتكرَّر الرقمُ في صفحةٍ
+ * واحدة.
+ */
+export default function Footer({ tally = false }: { tally?: boolean }) {
+  const { settings, books, authors, publishers } = useLibrary()
 
   // السنة تُقرأ مرّةً عند العرض: لا داعي لمؤقّتٍ من أجل رقمٍ يتبدّل مرّةً في العام
   const year = makkahMoment().year
+
+  // المؤلِّفون مَن له تأليفٌ مسجَّل لا أهلُ السجلّ كلُّهم: فيه المحقِّقُ ومن
+  // على صفته، وعدُّه كلِّه يجعلهم مؤلِّفين وليسوا كذلك.
+  const authorTotal = countAuthors(books, authors)
+
+  // وما كان صفرًا لا يُعرض: لوحٌ يقول «لا كتاب في المكتبة» ليس خبرًا
+  const figures = [
+    { key: 'books', icon: <BooksIcon size={14} />, text: countLabel(books.length, BOOKS_COUNT), n: books.length },
+    { key: 'authors', icon: <QuillIcon size={14} />, text: countLabel(authorTotal, AUTHORS_COUNT), n: authorTotal },
+    { key: 'presses', icon: <PressIcon size={14} />, text: countLabel(publishers.length, PRESSES_COUNT), n: publishers.length },
+  ].filter((f) => f.n > 0)
+
+  const showTally = tally && settings.show_landing_stats && figures.length > 0
 
   const links = [
     { url: settings.x_url, label: 'إكس', icon: <XIcon size={14} /> },
@@ -25,6 +53,17 @@ export default function Footer() {
           <span className="footer-lozenge" />
           <span className="footer-line" />
         </span>
+
+        {showTally && (
+          <div className="footer-tally">
+            {figures.map((f) => (
+              <span key={f.key} className="footer-tally-item">
+                {f.icon}
+                {f.text}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="footer-row">
           <p className="footer-copy">

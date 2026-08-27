@@ -22,6 +22,30 @@ function roleOrder(role: string): number {
   return i === -1 ? CONTRIBUTOR_ROLES.length : i
 }
 
+/**
+ * مَن له في المكتبة تأليفٌ مسجَّل، بمعرّفاتهم.
+ *
+ * وسجلُّ الأشخاص واحدٌ يجمع المؤلِّفَ والمحقِّقَ ومن على صفتهما، فعدُّ السجلّ
+ * كلِّه يجعل كلَّ ذي صفةٍ مؤلِّفًا — وليس كذلك: مَن حقَّق كتابًا ولم يؤلِّف
+ * ليس بمؤلِّف. **فحيثما عُدَّ المؤلِّفون فمن ههنا**، ليكون العددُ المعروضُ في
+ * كل موضعٍ هو عددَ من تعرضهم صفحةُ المؤلِّفين نفسُها، فلا يختلف رقمانِ في
+ * صفحتين عن شيءٍ واحد.
+ */
+export function authorIds(books: Book[]): Set<string> {
+  const ids = new Set<string>()
+  for (const b of books) {
+    if (b.author_id) ids.add(b.author_id)
+    for (const c of b.co_authors ?? []) if (c.author_id) ids.add(c.author_id)
+  }
+  return ids
+}
+
+/** عددُ مؤلِّفي المكتبة: من له تأليفٌ مسجَّل وله في السجلّ ترجمةٌ تُعرض */
+export function countAuthors(books: Book[], authors: { id: string }[]): number {
+  const ids = authorIds(books)
+  return authors.reduce((n, a) => n + (ids.has(a.id) ? 1 : 0), 0)
+}
+
 /** ما ألَّفه الرجل: كتبٌ هو مؤلِّفُها الأول أو شارَك في تأليفها */
 export function authoredBooks(books: Book[], personId: string): Book[] {
   return books.filter(

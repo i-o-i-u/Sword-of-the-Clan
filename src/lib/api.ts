@@ -38,8 +38,38 @@ export async function claimOwnership(_userId: string, displayName: string): Prom
 // القراءة
 // ---------------------------------------------------------------------------
 
+/**
+ * الكتاب. حقولُه المستجدّة اختياريّةٌ في المخطّط بالضرورة — في القاعدة كتبٌ
+ * فُهرست قبلها، وإلزامُها يُفشل تحقّقَ المخطّط على مستنداتها — فتُسدّ ههنا
+ * مرّةً واحدة كما تُسدّ حقولُ القيد في `toPerk`، ولا تُترك الواجهةُ تحرس
+ * كلَّ حقلٍ في كل موضعٍ يقرؤه.
+ *
+ * وهذا حدُّ الدرس الذي كلّفنا صفحةً بيضاء: `condition_notes` كان اختياريًّا،
+ * فنادَى عليه `catalogScore` بـ`.trim()` فسقطت شجرةُ العرض كلُّها على صاحب
+ * المكتبة دون الزائر — إذ الزائرُ يقرأ ما مرّ بـ`redactBook` وهي تسدّ، وهو
+ * يقرأ المستندَ خامًا. فالسدُّ ههنا يعمّ الطريقَين جميعًا.
+ */
+function toBook(row: Record<string, unknown>): Book {
+  return {
+    ...(row as unknown as Book),
+    publisher_scope: (row.publisher_scope as string) ?? '',
+    co_publishers: (row.co_publishers as Book['co_publishers']) ?? [],
+    volume_years: (row.volume_years as number[]) ?? [],
+    issue_kind: (row.issue_kind as string) ?? '',
+    issue_by: (row.issue_by as string) ?? '',
+    issue_year: (row.issue_year as number | null) ?? null,
+    // النسخةُ الواحدة هي الأصل، فالغيابُ يُردّ إليها لا إلى صفر
+    copies: (row.copies as number) ?? 1,
+    is_matn: (row.is_matn as boolean) ?? false,
+    edition_of: (row.edition_of as string | null) ?? null,
+    within_book_id: (row.within_book_id as string | null) ?? null,
+    within_pages: (row.within_pages as string) ?? '',
+  }
+}
+
 export async function fetchBooks(_owner: boolean): Promise<Book[]> {
-  return (await convex.query(api.library.books, {})) as unknown as Book[]
+  const rows = await convex.query(api.library.books, {})
+  return (rows as unknown as Record<string, unknown>[]).map(toBook)
 }
 
 export async function fetchAuthors(_owner: boolean): Promise<Author[]> {

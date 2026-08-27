@@ -4,6 +4,7 @@
 // إلى مصدره، وصياغةُ العزو واحدةٌ في الموضعين فلا تفترق.
 
 import { toArabicDigits, yearLabel } from './hijri'
+import { pressesLine } from './editions'
 import type { Author, Book, Perk } from './types'
 
 /**
@@ -17,6 +18,9 @@ const CITATION_VERB: Record<string, string> = {
   'المُصحِّح': 'تصحيح',
   'المُخَرِّج': 'تخريج',
   'المُتَرجِم': 'ترجمة',
+  'ضبْط النصّ': 'ضبط نصّه',
+  // الإشرافُ يُذكر في العزو بحرفه: «بإشراف فلان»، لا «إشراف فلان»
+  'الإشراف العلميّ': 'بإشراف',
   'تَقْرِيظ': 'تقريظ',
   'تقديم': 'تقديم',
 }
@@ -42,11 +46,13 @@ export function citationOf(book: Book, author: Author | null): string {
     parts.push(`${CITATION_VERB[role] ?? role} ${names.join(' و')}`)
   })
 
-  if (book.publisher.trim()) {
+  // دُورُ النشرة كلُّها معطوفةً: الغلافُ يحمل شعارَ الدارَين، فيُذكران معًا
+  const presses = pressesLine(book)
+  if (presses) {
     const edition = book.edition.trim()
       ? `الطبعة ${book.edition_worded ? book.edition.trim() : toArabicDigits(book.edition.trim())}، `
       : ''
-    parts.push(`${edition}طبعة ${book.publisher.trim()}`)
+    parts.push(`${edition}طبعة ${presses}`)
   }
 
   const year = book.year_approx
@@ -56,6 +62,18 @@ export function citationOf(book: Book, author: Author | null): string {
   if (year && place) parts.push(`${year} - ${place}`)
   else if (year) parts.push(year)
   else if (place) parts.push(place)
+
+  // والمصوَّرةُ وإعادةُ الصفّ تُذكران في العزو: العزوُ إلى النشرة الأصل —
+  // وهي ما تقدَّم — وهذا خبرٌ عن النسخة التي وقع النقلُ منها، ومن حقّ من
+  // يراجع أن يعرفه ليُصيب الصفحة نفسَها.
+  const issue = (book.issue_kind ?? '').trim()
+  if (issue) {
+    const by = (book.issue_by ?? '').trim()
+    const at = book.issue_year != null
+      ? toArabicDigits(yearLabel(book.issue_year, book.year_era))
+      : ''
+    parts.push([issue, by, at].filter(Boolean).join(' '))
+  }
 
   return `${parts.join('، ')}.`
 }

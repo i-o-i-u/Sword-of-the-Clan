@@ -75,6 +75,21 @@ export const coAuthor = v.object({
 })
 
 /**
+ * دارٌ شارَكت في إخراج النشرة. الأولى تبقى في `publisher_id` كما يبقى
+ * المؤلِّفُ الأول في `author_id`، وهؤلاء من بعدها.
+ *
+ * و`scope` نطاقُ ما أخرجَته منه، كنطاق المشارِك سواءً بسواء: الفراغُ معناه
+ * أنها شريكةٌ في النشرة كلِّها — كدار ابن النفيس ودار التدوين العربي على
+ * غلافٍ واحد — والمكتوبُ فيه يقسمها بينها وبين غيرها: «١-٣» لدار القلم،
+ * و«٤-٢٠» لكنوز إشبيليا.
+ */
+export const coPublisher = v.object({
+  publisher_id: v.union(v.id('publishers'), v.null()),
+  name: v.string(),
+  scope: v.string(),
+})
+
+/**
  * مَن عمل في الكتاب غير مؤلِّفه، ودورُه معه: محقِّقٌ ومراجعٌ ومخرِّج… وقد
  * يجتمع في كتابٍ واحد محقِّقان ومقدِّمون، فهي قائمةٌ لا حقولٌ معدودة.
  *
@@ -122,6 +137,10 @@ export const bookFields = {
   // ٢. بيانات الطبعة
   publisher_id: v.union(v.id('publishers'), v.null()),
   publisher: v.string(),            // مُكرَّر لاسم الدار كما في الكتاب
+  // نطاقُ ما أخرجَته الدارُ الأولى، ودُورٌ شارَكتها. اختياريّان لأن المفهرَس
+  // قبلهما لا يحملهما، والفراغُ فيهما: دارٌ واحدة أخرجت النشرة كلَّها.
+  publisher_scope: v.optional(v.string()),
+  co_publishers: v.optional(v.array(coPublisher)),
   place: v.string(),                // تابعٌ للدار، يُملأ منها
   year: v.union(v.number(), v.null()),
   year_month: v.union(v.number(), v.null()),   // شهرٌ هجريّ، وقد لا يُعرف
@@ -142,9 +161,18 @@ export const bookFields = {
   volume_parts: v.optional(v.array(v.string())),
   // أرقام مجلَّدات الفهارس. لا تُحسب صفحاتُها في الإجمالي: فهرسٌ لا متن.
   index_volumes: v.optional(v.array(v.number())),
+  // سنةُ صدور كل مجلَّد على حِدَة، حين تتفاوت: قد يمتدّ إخراجُ الكتاب عشرين
+  // سنةً بين مجلَّده الأول وآخره، فسنةُ النشر مَدًى لا نقطة. والصفرُ فيها:
+  // لم تُعرف سنةُ هذا المجلَّد.
+  volume_years: v.optional(v.array(v.number())),
   // ما نقص من مجلَّدات الطبعة، لكلٍّ رقمُه وسببُ فقده على حِدَة: قد يتلف
   // الثاني وتضيع إعارةُ السابع.
   missing_volumes: v.optional(v.array(missingVolume)),
+  // هيئةُ هذه النشرة، والفراغُ فيها هو الأصل: النُّسَخُ أصولٌ حتى يُقال غيرُ
+  // ذلك. وما سواه «مصوَّرة» أو «إعادة صفّ»، ومعه من فعله ومتى.
+  issue_kind: v.optional(v.string()),
+  issue_by: v.optional(v.string()),
+  issue_year: v.optional(v.union(v.number(), v.null())),
   pages: v.union(v.number(), v.null()),
   isbn: v.string(),
   language: v.string(),
@@ -167,9 +195,21 @@ export const bookFields = {
   acquired_approx: v.boolean(),
   acquired_text: v.string(),
   margin_note: v.string(),          // طُرَّة الكتاب: ما خُطَّ عليها بيد
+  // كم نسخةً من هذا الكتاب في المكتبة. الواحدةُ هي الأصل، فلا تُعرض.
+  copies: v.optional(v.number()),
 
   // ٤. عن الكتاب
   topic: v.string(),
+  // مَتْنٌ دَرْسيّ يُقرأ على الشيوخ ويُحفَظ، كالرَّوض المُربِع والآجُرُّومية
+  is_matn: v.optional(v.boolean()),
+  // الكتابُ الذي هذا نشرةٌ أخرى منه: النشرتان لكتابٍ واحد سجلَّان اثنان —
+  // لكلٍّ محقِّقُه ودارُه ومجلَّداتُه — وليستا عنوانَين اثنين، فتُنسَب الدُّونى
+  // إلى الأجود ولا تُعدّ معها في عناوين المكتبة.
+  edition_of: v.optional(v.union(v.id('books'), v.null())),
+  // الكتابُ الذي طُبِع هذا ضمنه، كالأربعين النووية في «برنامج مهمّات العلم»،
+  // وموضعُه منه. وهو كتابٌ مستقلٌّ بعنوانه ومؤلِّفه لا مجلَّدٌ من ذاك.
+  within_book_id: v.optional(v.union(v.id('books'), v.null())),
+  within_pages: v.optional(v.string()),
   tags: v.array(v.string()),
   // كلماتٌ يُهتدى بها إلى الكتاب في البحث، ولا تُعرض وسومًا على بطاقته
   keywords: v.optional(v.array(v.string())),

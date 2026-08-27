@@ -13,6 +13,7 @@ import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { BOOKS_COUNT, countLabel, formatNumber } from '../lib/types'
+import { pressesOf } from '../lib/editions'
 import ImageSlot from '../components/ImageSlot'
 import Roster, { RosterToggle, useRosterView } from '../components/Roster'
 import {
@@ -27,7 +28,10 @@ function useCounts() {
   return useMemo(() => {
     const map = new Map<string, number>()
     books.forEach((b) => {
-      if (b.publisher_id) map.set(b.publisher_id, (map.get(b.publisher_id) ?? 0) + 1)
+      // الدارُ المشارِكة كالأولى: لها من الكتاب نصيبٌ فيُعدّ لها
+      for (const id of new Set(pressesOf(b).map((p) => p.id).filter(Boolean))) {
+        map.set(id!, (map.get(id!) ?? 0) + 1)
+      }
     })
     return map
   }, [books])
@@ -194,9 +198,11 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
   // الصفحة عرضٌ حتى يُطلب التعديل، كصفحة الكتاب وصفحة المؤلِّف
   const [editing, setEditing] = useState(false)
 
+  // كتبُ الدار: ما نُشر باسمها أوّلًا، وما شارَكت في إخراجه — فغلافٌ يحمل
+  // شعارَها خبرٌ عنها كما يخبر عن شريكتها
   const houseBooks = useMemo(
     () => books
-      .filter((b) => b.publisher_id === publisherId)
+      .filter((b) => pressesOf(b).some((p) => p.id === publisherId))
       .sort((a, b) => a.title.localeCompare(b.title, 'ar')),
     [books, publisherId],
   )

@@ -14,9 +14,10 @@ import {
   BOOKS_COUNT, VOLUMES_COUNT, countLabel, formatNumber, missingVolumesHeadline,
   roleGroupLabel, type Book,
 } from '../lib/types'
+import { matnBooks, titleCount } from '../lib/editions'
 import { navigate } from '../lib/router'
 import {
-  CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon, OpenBookIcon,
+  BooksIcon, CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon, OpenBookIcon,
   OwnerIcon, PagesIcon, PressIcon, RiyalGlyph, ScrollIcon, TagIcon, VerifyIcon,
   VolumesIcon, cardStyle,
 } from '../components/ui'
@@ -132,12 +133,24 @@ export default function Stats() {
     const missingVolumeCount = incomplete
       .reduce((sum, b) => sum + (b.missing_volumes ?? []).length, 0)
 
+    // عناوينُ المكتبة: كتبُها ناقصةً ما كان نشرةً أخرى من كتابٍ فيها.
+    // فالنشرتان لكتابٍ واحد عنوانٌ واحد وإن كان لكلٍّ سجلُّها.
+    const titles = titleCount(books)
+    const otherEditions = books.length - titles
+    // مَتْنٌ درسيٌّ في المكتبة، وبابُه صفحةُ المتون
+    const matns = matnBooks(books).length
+    // النُّسَخُ المكرَّرة: ما زاد على نسخةٍ واحدة من كل كتاب
+    const spareCopies = books.reduce((n, b) => n + Math.max(0, (b.copies ?? 1) - 1), 0)
+
     const read = books.filter((b) => b.status === 'مقروء').length
     const reading = books.filter((b) => b.status === 'قيد القراءة').length
     const unread = books.filter((b) => b.status === 'لم يُقرأ').length
 
     return {
-      titles: books.length,
+      titles,
+      otherEditions,
+      matns,
+      spareCopies,
       volumes,
       parts,
       pages,
@@ -169,6 +182,10 @@ export default function Stats() {
   const num = (n: number) => (n > 0 ? formatNumber(n) : '')
 
   push({ key: 'titles', label: 'عناوين الكتب', value: num(s.titles), icon: OpenBookIcon })
+  // نشراتٌ أخرى لعناوينَ عندنا: سجلَّاتٌ لا تُعدّ في العناوين، وهي مع ذلك
+  // كتبٌ على الرفّ — فتُذكر ههنا على حِدَة
+  push({ key: 'editions', label: 'نشراتٌ أخرى لكتبها', value: num(s.otherEditions), icon: PressIcon })
+  push({ key: 'copies', label: 'نُسَخٌ مكرَّرة', value: num(s.spareCopies), icon: BooksIcon })
   push({ key: 'volumes', label: 'المُجلَّدات', value: num(s.volumes), icon: VolumesIcon })
   push({ key: 'parts', label: 'الأَجْزاء أو الأَسْفار', value: num(s.parts), icon: ScrollIcon })
 
@@ -184,6 +201,7 @@ export default function Stats() {
 
   push({ key: 'publishers', label: 'دُوْر النَّشْر', value: num(s.publisherCount), icon: PressIcon })
   push({ key: 'categories', label: 'التصنيفات', value: num(s.categoryCount), icon: TagIcon })
+  push({ key: 'matns', label: 'المُتُون الدَّرْسيَّة', value: num(s.matns), icon: ScrollIcon })
   push({
     key: 'avg',
     label: 'متوسّط صفحات المُجلَّد',

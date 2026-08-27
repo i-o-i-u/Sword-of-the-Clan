@@ -17,20 +17,21 @@
 // شبكةٍ ضيّقة. وكانت تُركَّب كلُّها دفعةً واحدة، فتتقاسم خمسُ صورٍ عرضَ
 // الشبكة وتبطؤ أُولاها — وهي وحدها المعروضة.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { makkahMoment } from '../lib/hijri'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import {
-  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, PRESSES_COUNT,
-  countLabel,
-} from '../lib/types'
+import { LIBRARY_NAME, LIBRARY_PLACE } from '../lib/types'
 import Footer from '../components/Footer'
 import OwnerTools from '../components/OwnerTools'
 import {
   BookPlusIcon, BooksIcon, ClockIcon, PinIcon,
-  PressIcon, QuillIcon, SearchIcon, SuggestIcon, resolveAsset,
+  SearchIcon, SuggestIcon, resolveAsset,
 } from '../components/ui'
+
+// بطاقةُ القرعة لا تُفتح في كل زيارة، فلا تُثقَّل بها حزمةُ الهبوط — وهي
+// الحزمةُ التي تُنتظر قبل أوّل رسم
+const SuggestedBook = lazy(() => import('../components/SuggestedBook'))
 
 interface Props {
   onOpenSearch: (query?: string) => void
@@ -45,8 +46,7 @@ const QUOTE_FADE_MS = 320
 
 export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
   const {
-    settings, landingImages, landingQuotes, books, authors, publishers, loading,
-    isOwner, canEdit,
+    settings, landingImages, landingQuotes, books, loading, isOwner, canEdit,
   } = useLibrary()
 
   const images = useMemo(
@@ -153,12 +153,11 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
     }
   }
 
-  /** كتابٌ يُنتقى بالقرعة، والانتقال إلى صفحته مباشرة */
-  function suggestBook() {
-    if (!books.length) return
-    const pick = books[Math.floor(Math.random() * books.length)]
-    navigate({ name: 'book', id: pick.id })
-  }
+  /**
+   * القرعة تفتح بطاقةً مختصرة لا تنقل إلى صفحة الكتاب: من ردَّ الاقتراحَ
+   * بقي في الهبوط وطلب غيره، ولم يخرج منه وهو لم يُرِد الخروج.
+   */
+  const [suggesting, setSuggesting] = useState(false)
 
   return (
     <div className="landing">
@@ -224,35 +223,6 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
               )}
             </div>
 
-            {/*
-              أعدادُ المكتبة شريطًا في ذيل اللوحة، داخل الإطار لا تحته.
-              وموضعُها هذا مقصود: اللوحةُ صندوقٌ ارتفاعُه مضبوط، فما وُضع
-              فيه لا يكلّف الصدرَ ارتفاعًا — فتبقى صفحةُ الهبوط شاشةً واحدة
-              بلا تمرير كما هي. وكانت صفًّا تحت الأزرار فزادت في طوله فلم
-              يعد يسع الشاشةَ القصيرة، فوقع بعضُه على بطاقة الاقتباس.
-
-              وما كان صفرًا لا يُعرض: لوحٌ يقول «لا كتاب في المكتبة» ليس خبرًا.
-            */}
-            {settings.show_landing_stats && books.length > 0 && (
-              <div className="frame-tally">
-                <span className="frame-tally-item">
-                  <BooksIcon size={14} />
-                  {countLabel(books.length, BOOKS_COUNT)}
-                </span>
-                {authors.length > 0 && (
-                  <span className="frame-tally-item">
-                    <QuillIcon size={14} />
-                    {countLabel(authors.length, AUTHORS_COUNT)}
-                  </span>
-                )}
-                {publishers.length > 0 && (
-                  <span className="frame-tally-item">
-                    <PressIcon size={14} />
-                    {countLabel(publishers.length, PRESSES_COUNT)}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           {/* كل زرٍّ أيقونةٌ وحدها، واسمه ينزلق من تحتها عند التمرير */}
@@ -295,7 +265,7 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
             <button
               type="button"
               className="hero-btn"
-              onClick={suggestBook}
+              onClick={() => setSuggesting(true)}
               disabled={books.length === 0}
               title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
               aria-label="اقترح لي كتابًا"
@@ -376,7 +346,11 @@ export default function Landing({ onOpenSearch, onOpenLogin }: Props) {
         </section>
       )}
 
-      <Footer />
+      <Footer tally />
+
+      <Suspense fallback={null}>
+        {suggesting && <SuggestedBook onClose={() => setSuggesting(false)} />}
+      </Suspense>
     </div>
   )
 }

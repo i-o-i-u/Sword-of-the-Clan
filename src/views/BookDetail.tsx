@@ -18,11 +18,14 @@ import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import { formatIsbn, isbnInfo } from '../lib/isbn'
 import {
-  LANGUAGES, STATUSES, STATUS_UNKNOWN,
-  WORK_PHRASES, contributorLabel, formatNumber,
+  BOOKS_COUNT, COPIES_COUNT, LANGUAGES, STATUSES, STATUS_UNKNOWN,
+  WORK_PHRASES, contributorLabel, countLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
   type Author, type Book, type Perk, type ReadingStatus,
 } from '../lib/types'
+import {
+  editionGroup, issueBadge, issueLine, pressesOf, printedWithin, volumeYearSpan,
+} from '../lib/editions'
 import ImageSlot from '../components/ImageSlot'
 import PerkCard from '../components/PerkCard'
 import PerkEditor from '../components/PerkEditor'
@@ -86,11 +89,27 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   const author = authorById(book.author_id)
   // صفحةُ الدار لا تُعرض إلا لدارٍ بقي لها كتابٌ ظاهر، فالرابطُ إليها لا
   // يُكتب إلا إذا كانت في القائمة التي جاءت من الخادم
-  const publisherShown = publishers.some((p) => p.id === book.publisher_id)
+  const presses = pressesOf(book)
+  const shownPresses = new Set(publishers.map((p) => p.id))
+  const yearSpan = volumeYearSpan(book)
+  // ما طُبع هذا ضمنه، وما طُبع ضمنه من الكتب. وكلاهما بابٌ إلى كتابٍ في
+  // الفهرس، فلا يُكتب إلا إذا كان المُشارُ إليه ظاهرًا — والخادمُ يفكّ
+  // الصلةَ عن الزائر إذا حُجب طرفُها، فما بقي ههنا فهو ظاهر.
+  const within = book.within_book_id ? bookById(book.within_book_id) : undefined
+  const inside = printedWithin(books, book)
+  const editions = editionGroup(books, book)
+  const issue = issueBadge(book)
   const volumePages = (book.volume_pages ?? []).map((v) => parseNumber(v) ?? 0)
   const indexVolumes = book.index_volumes ?? []
   const volumeParts = book.volume_parts ?? []
+  const volumeYears = book.volume_years ?? []
   const manyVolumes = volumePages.filter(Boolean).length > 1
+  // وتفصيلُ المجلَّدات يُعرض لأيّ تفصيلٍ أُدخل، لا للصفحات وحدها: قد تُعرف
+  // سنةُ كل مجلَّدٍ من الكتاب الذي امتدّ إخراجُه سنين ولا تُعرف صفحاتُه بعد،
+  // فلو عُلِّق العرضُ على الصفحات لسقط ما أُدخل من السنين صامتًا.
+  const volumeDetail = manyVolumes
+    || volumeYears.filter(Boolean).length > 1
+    || volumeParts.filter((p) => p.trim()).length > 0
   const missing = [...(book.missing_volumes ?? [])].sort((a, b) => a.no - b.no)
 
   // ------------------------------------------------------- ١. بيانات الكتاب
@@ -107,26 +126,20 @@ export default function BookDetail({ bookId }: { bookId: string }) {
       // شعارُها وبلدُها وسائرُ كتبها. ولا يكون رابطًا إلا إذا كانت لها صفحةٌ
       // تُعرض — أي إذا بقي لها في المكتبة كتابٌ ظاهر.
       key: 'publisher',
-      label: 'دار النَّشْر',
-      value: book.publisher && (
-        book.publisher_id && publisherShown
-          ? (
-            <a
-              className="row-link"
-              href={hashFor({ name: 'publisher', id: book.publisher_id })}
-              onClick={(e) => {
-                e.preventDefault()
-                navigate({ name: 'publisher', id: book.publisher_id! })
-              }}
-            >
-              {book.publisher}
-            </a>
-          )
-          : book.publisher
-      ),
+      // الدارُ الواحدة والدُّورُ المتعدِّدة صفٌّ واحد، وإنما يتبدّل لفظُه
+      label: presses.length > 1 ? 'دُور النَّشْر' : 'دار النَّشْر',
+      wide: presses.length > 1,
+      value: presses.length > 0 && <Presses presses={presses} shown={shownPresses} />,
     },
     { key: 'place', label: 'بلد النَّشْر', value: book.place },
-    { key: 'yearLabel', label: 'سنة النَّشْر', value: publishYear(book) },
+    {
+      // سنةُ النشر نقطةٌ في أكثر الكتب، ومَدًى في الذي يمتدّ إخراجُه سنين:
+      // صدر أوّلُ التذييل والتكميل ثم توالت مجلَّداتُه ستًّا وعشرين سنة،
+      // فسنةٌ واحدة لا تُخبر عنه.
+      key: 'yearLabel',
+      label: yearSpan ? 'سنوات النَّشْر' : 'سنة النَّشْر',
+      value: yearSpan || publishYear(book),
+    },
     {
       key: 'edition',
       label: 'الطبعة',
@@ -165,6 +178,36 @@ export default function BookDetail({ bookId }: { bookId: string }) {
         )
         : '',
     },
+    {
+      // هيئةُ النشرة: الأصلُ لا يُقال، فالنُّسَخُ أصولٌ عند الناس كلِّهم —
+      // وإنما الخبرُ فيما فارقه، وهو ما تردُّه `issueLine` فارغًا للأصل.
+      key: 'issueKind',
+      label: 'هيئة النشرة',
+      wide: true,
+      value: issueLine(book),
+    },
+    {
+      // كتابٌ طُبع ضمن كتاب: بابٌ إلى ضامِّه، وموضعُه منه إن كُتب
+      key: 'within',
+      label: 'مطبوعٌ ضمن',
+      wide: true,
+      value: within && (
+        <span>
+          <a
+            className="row-link"
+            href={hashFor({ name: 'book', id: within.id })}
+            onClick={(e) => { e.preventDefault(); navigate({ name: 'book', id: within.id }) }}
+          >
+            {within.title}
+          </a>
+          {book.within_pages.trim() && (
+            <span style={{ color: 'var(--muted)', fontWeight: 400 }}>
+              {' — '}{toArabicDigits(book.within_pages.trim())}
+            </span>
+          )}
+        </span>
+      ),
+    },
     { key: 'size', label: 'حجْم الكتاب', value: book.size },
     {
       // الردمك يُعرض مُشرَّطًا كما يُطبَع على ظهر الكتاب، ومعه بلدُ مجموعته
@@ -195,6 +238,12 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   const copyRows: Row[] = [
     { key: 'cabinet', label: 'رقم الدولاب', value: book.cabinet_no },
     { key: 'shelfNo', label: 'رقم الرَّفّ', value: book.shelf_no },
+    {
+      // النسخةُ الواحدة هي الأصل فلا تُعرض: صفٌّ يقول «نسخةٌ واحدة» ليس خبرًا
+      key: 'copies',
+      label: 'نُسَخُه في المكتبة',
+      value: (book.copies ?? 1) > 1 ? countLabel(book.copies, COPIES_COUNT) : '',
+    },
     { key: 'binding', label: 'نوع التَّغْليف', value: book.binding },
     { key: 'condition', label: 'الحالة المادِّيَّة', value: book.condition },
     {
@@ -328,6 +377,24 @@ export default function BookDetail({ bookId }: { bookId: string }) {
                 دولاب {book.cabinet_no}{book.shelf_no ? ` — رفّ ${book.shelf_no}` : ''}
               </span>
             )}
+            {/* المتنُ الدرسيّ خبرٌ عن الكتاب يُعرف بنظرة، وبابٌ إلى إخوته */}
+            {book.is_matn && !hidden('category') && (
+              <a
+                className="book-flag book-flag-matn"
+                href={hashFor({ name: 'matns' })}
+                onClick={(e) => { e.preventDefault(); navigate({ name: 'matns' }) }}
+                title="من المتون الدرسية في المكتبة"
+              >
+                مَتْنٌ دَرْسيّ
+              </a>
+            )}
+            {/* والمصوَّرةُ وإعادةُ الصفّ خبرٌ عن النسخة لا عن الكتاب: هي أقلُّ
+                قيمةً أثريّةً من الأصل، وذلك ممّا يُعرف بنظرةٍ لا بقراءة صفّ */}
+            {issue && !hidden('issueKind') && (
+              <span className="book-flag book-flag-issue" title={issueLine(book)}>
+                {issue}
+              </span>
+            )}
           </div>
 
           <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 32, fontWeight: 700, margin: '0 0 14px' }}>
@@ -365,11 +432,13 @@ export default function BookDetail({ bookId }: { bookId: string }) {
             icon={<PressIcon size={17} />}
             title="بيانات الطبعة"
             rows={keep(editionRows)}
-            after={manyVolumes && !hidden('volumePagesText') && (
+            after={volumeDetail && !hidden('volumePagesText') && (
               <VolumeBreakdown
                 pages={volumePages}
                 parts={volumeParts}
                 indexVolumes={indexVolumes}
+                years={volumeYears}
+                era={book.year_era}
                 open={showVolumes}
                 onToggle={() => setShowVolumes((v) => !v)}
               />
@@ -387,6 +456,10 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           {worksAbout.length > 0 && (
             <WorksAbout rows={worksAbout.map((w) => ({ type: w.type, target: bookById(w.book_id) }))} />
           )}
+
+          {/* نشراتُ الكتاب الأخرى في المكتبة، ثم ما طُبع ضمنه من الكتب */}
+          {!hidden('otherEditions') && <OtherEditions group={editions} />}
+          {!hidden('within') && inside.length > 0 && <PrintedWithin books={inside} />}
 
           {showTo('perks') && <PerksPanel bookId={book.id} perks={bookPerks} />}
 
@@ -786,10 +859,18 @@ function PersonName(
  * الفهارس تُعلَّم ولا تُحسب في الإجمالي — فهرسٌ لا متن.
  */
 function VolumeBreakdown(
-  { pages, parts, indexVolumes, open, onToggle }:
-  { pages: number[]; parts: string[]; indexVolumes: number[]; open: boolean; onToggle: () => void },
+  { pages, parts, indexVolumes, years, era, open, onToggle }:
+  {
+    pages: number[]; parts: string[]; indexVolumes: number[]
+    /** سنةُ صدور كلِّ مجلَّد، حين تتفاوت. والصفرُ: لم تُعرف. */
+    years: number[]
+    era: string
+    open: boolean; onToggle: () => void
+  },
 ) {
   const total = sumVolumePages(pages, indexVolumes)
+  // «تفصيل صفحات كلّ مجلَّد» لا يصحّ عنوانًا لتفصيلٍ لا صفحاتَ فيه
+  const label = total > 0 ? 'تفصيل صفحات كلّ مُجلّد' : 'تفصيل المُجلَّدات'
 
   return (
     <div style={{ marginTop: 14, paddingTop: 13, borderTop: '1px dashed var(--border)' }}>
@@ -808,7 +889,7 @@ function VolumeBreakdown(
         }}>
           <ChevronIcon size={14} />
         </span>
-        تفصيل صفحات كلّ مُجلّد
+        {label}
       </button>
 
       {open && (
@@ -816,7 +897,11 @@ function VolumeBreakdown(
           display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))',
           gap: '8px 16px', marginTop: 12,
         }}>
-          {pages.map((count, i) => {
+          {Array.from(
+            { length: Math.max(pages.length, years.length, parts.length) },
+            (_, i) => i,
+          ).map((i) => {
+            const count = pages[i] ?? 0
             const volume = i + 1
             const isIndex = indexVolumes.includes(volume)
             return (
@@ -826,6 +911,12 @@ function VolumeBreakdown(
                 <span style={{ fontWeight: 600 }}>{count > 0 ? formatNumber(count) : '—'}</span>
                 {parts[i]?.trim() && (
                   <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>({parts[i].trim()})</span>
+                )}
+                {/* سنةُ المجلَّد لا تُعرض إلا لمن عُرفت سنتُه */}
+                {(years[i] ?? 0) > 0 && (
+                  <span style={{ fontSize: 11.5, color: 'var(--accent-soft)' }}>
+                    {toArabicDigits(yearLabel(years[i], era))}
+                  </span>
                 )}
                 {isIndex && (
                   <span style={{
@@ -838,20 +929,164 @@ function VolumeBreakdown(
               </div>
             )
           })}
-          <div style={{
-            gridColumn: '1 / -1', fontSize: 12.5, color: 'var(--muted)',
-            borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2,
-          }}>
-            الإجمالي: <strong style={{ color: 'var(--text)' }}>{formatNumber(total)}</strong>
-            {indexVolumes.length > 0 && ' — بلا صفحات مجلَّدات الفهارس'}
-          </div>
+          {total > 0 && (
+            <div style={{
+              gridColumn: '1 / -1', fontSize: 12.5, color: 'var(--muted)',
+              borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2,
+            }}>
+              الإجمالي: <strong style={{ color: 'var(--text)' }}>{formatNumber(total)}</strong>
+              {indexVolumes.length > 0 && ' — بلا صفحات مجلَّدات الفهارس'}
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
 
+/**
+ * دُورُ النشرة في صفٍّ واحد، لكلٍّ بابُها إلى صفحتها ونطاقُها من الكتاب.
+ *
+ * والعطفُ يتبع النطاقَ كما يتبعه في المشاركين: الشريكتان في النشرة كلِّها
+ * تُعطف إحداهما على الأخرى بالواو — فغلافٌ يحمل شعارَ دارَين خبرٌ عن عملٍ
+ * واحد — وأمّا اللتان اقتسمتا مجلَّداتِه فلكلٍّ عملُها، فيُفصل بينهما
+ * بفاصلةٍ تُبيِّن ولا تجمع.
+ *
+ * ولا يُكتب الرابطُ إلا لدارٍ لها صفحةٌ تُعرض فعلًا، فلا يُوهَم القارئُ
+ * ببابٍ لا يفتح.
+ */
+function Presses(
+  { presses, shown }: { presses: ReturnType<typeof pressesOf>; shown: Set<string> },
+) {
+  const split = presses.some((p) => p.scope)
+  return (
+    <span className="attrib-people">
+      {presses.map((press, i) => (
+        <span key={`${press.name}-${i}`} className="attrib-person">
+          {i > 0 && <span className="attrib-join">{split ? '،' : 'و'}</span>}
+          {press.id && shown.has(press.id) ? (
+            <a
+              className="row-link"
+              href={hashFor({ name: 'publisher', id: press.id })}
+              onClick={(e) => { e.preventDefault(); navigate({ name: 'publisher', id: press.id! }) }}
+            >
+              {press.name}
+            </a>
+          ) : (
+            <span>{press.name}</span>
+          )}
+          {press.scope && <span className="attrib-scope">{toArabicDigits(press.scope)}</span>}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 // -------------------------------------------------------------- صلات الكتب
+/**
+ * نشراتُ الكتاب الأخرى في المكتبة.
+ *
+ * والنشرتان لكتابٍ واحد عنوانٌ واحد لا عنوانان، وإن كان لكلٍّ محقِّقُها
+ * ودارُها ومجلَّداتُها. فمن وقف على الدُّونى وجد سبيلَه إلى الأجود، ومن وقف
+ * على الأجود رأى ما معها في المكتبة.
+ */
+function OtherEditions({ group }: { group: ReturnType<typeof editionGroup> }) {
+  const { of, others } = group
+  if (!of && others.length === 0) return null
+
+  return (
+    <section style={{ ...cardStyle, borderRadius: 12, padding: '15px 18px 17px', marginBottom: 16 }}>
+      <SectionHead
+        icon={<PressIcon size={16} />}
+        title={of ? 'نشرةٌ أخرى من كتابٍ في المكتبة' : 'نشراتُ هذا الكتاب الأخرى'}
+      />
+
+      {of && (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 9, lineHeight: 1.9 }}>
+          والنشرةُ المُعتمَدة من هذا الكتاب عندنا هي:
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {[...(of ? [of] : []), ...others].map((target) => (
+          <EditionLine key={target.id} book={target} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** سطرُ نشرةٍ: عنوانُها ثم ما تُعرف به — محقِّقُها ودارُها وسنتُها */
+function EditionLine({ book }: { book: Book }) {
+  const presses = pressesOf(book)
+  const marks = [
+    (book.contributors ?? [])
+      .filter((c) => c.name.trim())
+      .slice(0, 2)
+      .map((c) => `${c.role} ${c.name.trim()}`)
+      .join('، '),
+    presses.map((p) => p.name).join(' و'),
+    publishYear(book),
+    !book.single_volume && (book.volumes ?? 0) > 1
+      ? `${formatNumber(book.volumes)} مجلَّدًا`
+      : '',
+  ].filter(Boolean)
+
+  return (
+    <div
+      onClick={() => navigate({ name: 'book', id: book.id })}
+      style={{
+        display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer', flexWrap: 'wrap',
+        background: 'var(--header)', border: '1px solid var(--border)',
+        borderRadius: 9, padding: '10px 13px',
+      }}
+    >
+      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{book.title}</span>
+      {marks.length > 0 && (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{marks.join(' — ')}</span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * ما طُبع ضمن هذا الكتاب من الكتب: كالمتون في «برنامج مهمّات العلم». وكلُّ
+ * واحدٍ منها كتابٌ مستقلٌّ بعنوانه ومؤلِّفه، لا مجلَّدٌ منه ولا فصلٌ فيه.
+ */
+function PrintedWithin({ books }: { books: Book[] }) {
+  return (
+    <section style={{ ...cardStyle, borderRadius: 12, padding: '15px 18px 17px', marginBottom: 16 }}>
+      <SectionHead icon={<ArchiveIcon size={16} />} title="طُبِع ضمنه من الكتب" />
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 11, lineHeight: 1.9 }}>
+        {countLabel(books.length, BOOKS_COUNT)}، لكلٍّ منها في الفهرس صفحتُه —
+        فهي كتبٌ مستقلَّة وإن جمعها مجلَّدٌ واحد.
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {books.map((b) => (
+          <div
+            key={b.id}
+            onClick={() => navigate({ name: 'book', id: b.id })}
+            style={{
+              display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer', flexWrap: 'wrap',
+              background: 'var(--header)', border: '1px solid var(--border)',
+              borderRadius: 9, padding: '9px 12px',
+            }}
+          >
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{b.title}</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{b.author_name}</span>
+            {b.within_pages.trim() && (
+              <span style={{ fontSize: 11.5, color: 'var(--accent-soft)' }}>
+                {toArabicDigits(b.within_pages.trim())}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 /** ترويسة قسمٍ: أيقونةٌ في مربَّعٍ لطيف، ثم عنوانه */
 function SectionHead({ icon, title }: { icon: ReactNode; title: string }) {
   return (

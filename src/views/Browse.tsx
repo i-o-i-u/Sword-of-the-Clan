@@ -32,6 +32,8 @@ import {
 
 // الحاسبة خدمةٌ تُفتح عند طلبها، فلا تُحمَّل مع الصفحة
 const ReadingCalculator = lazy(() => import('../components/ReadingCalculator'))
+// بطاقةُ القرعة لا تُفتح في كل زيارة، فلا تُحمَّل مع الصفحة
+const SuggestedBook = lazy(() => import('../components/SuggestedBook'))
 
 const ALL = 'الكل'
 /** قيمةٌ فارقة لوجه «الحالة غير معروفة»، فالفراغ نفسه لا يصلح قيمةً لخيار */
@@ -198,12 +200,12 @@ export default function Browse() {
       filterCentury, filterLetter, query, searchOpts, searchKeys],
   )
 
-  /** كتابٌ يُنتقى بالقرعة، والانتقال إلى صفحته مباشرة */
-  function suggestBook() {
-    if (!books.length) return
-    const pick = books[Math.floor(Math.random() * books.length)]
-    navigate({ name: 'book', id: pick.id })
-  }
+  /**
+   * القرعة تفتح بطاقةً مختصرة لا تنقل إلى صفحة الكتاب: الاقتراحُ عرضٌ
+   * يُقبَل ويُردّ، ومن ردَّه بقي حيث كان وطلب غيره. والقطعةُ في
+   * `SuggestedBook`، وهي نفسُها في الهبوط.
+   */
+  const [suggesting, setSuggesting] = useState(false)
 
   const activeFilters = (filterPlace !== ALL ? 1 : 0) + (filterRating ? 1 : 0)
     + (filterCentury ? 1 : 0) + (filterCategory !== ALL ? 1 : 0) + (filterSub !== ALL ? 1 : 0)
@@ -354,7 +356,7 @@ export default function Browse() {
             {/* القرعة خدمةٌ كالحاسبة، فموضعُها معها لا في شريط أدوات العرض */}
             <button
               type="button"
-              onClick={suggestBook}
+              onClick={() => setSuggesting(true)}
               disabled={books.length === 0}
               className="side-tool"
               title={books.length === 0 ? 'لا كتب في الفهرس بعد' : 'اقترح لي كتابًا — بالقرعة'}
@@ -566,6 +568,7 @@ export default function Browse() {
         {showCalculator && canUseCalculator && (
           <ReadingCalculator onClose={() => setShowCalculator(false)} />
         )}
+        {suggesting && <SuggestedBook onClose={() => setSuggesting(false)} />}
       </Suspense>
     </main>
   )

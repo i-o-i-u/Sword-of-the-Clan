@@ -18,11 +18,13 @@ import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
-  BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, LANGUAGES,
+  BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, ISSUE_BY_LABEL,
+  ISSUE_HINTS, ISSUE_KINDS, LANGUAGES,
   MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS,
   WORK_PHRASES, WORK_TYPES,
   editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
-  sumVolumePages, type Category, type Contributor, type MissingVolume,
+  sumVolumePages, type Category, type Contributor, type CoPublisher,
+  type MissingVolume,
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
@@ -50,6 +52,7 @@ const checkStyle = {
 const row2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 14 } as const
 const row3 = { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 14 } as const
 const row21 = { display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 14 } as const
+const row4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 14 } as const
 
 /** مؤلِّفٌ في النموذج: اسمُه ووفاتُه كما تُدخَل قبل أن تُحفظ في صفحته */
 interface AuthorRow {
@@ -127,6 +130,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
   // --------------------------------------------------------- ٢. بيانات الطبعة
   const [publisherName, setPublisherName] = useState(() => editing?.publisher ?? '')
+  // نطاقُ الدار الأولى من الكتاب، ومن شارَكها. والفراغُ في النطاق: أخرجت
+  // النشرةَ كلَّها — وهو حالُ أكثر الكتب، فلا يُسأل عنه إلا إذا كثُرت الدُّور.
+  const [publisherScope, setPublisherScope] = useState(() => editing?.publisher_scope ?? '')
+  const [coPresses, setCoPresses] = useState<CoPublisher[]>(
+    () => (editing?.co_publishers ?? []).map((c) => ({ ...c })),
+  )
   const [place, setPlace] = useState(() => editing?.place ?? '')
   const [year, setYear] = useState<HijriYear>(() => (editing
     ? { year: editing.year, month: editing.year_month, approx: editing.year_approx, text: editing.year_text }
@@ -158,6 +167,18 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [missingVolumes, setMissingVolumes] = useState<MissingVolume[]>(
     () => (editing?.missing_volumes ?? []).map((m) => ({ ...m })),
   )
+  // سنةُ صدور كل مجلَّد، حين يمتدّ إخراجُ الكتاب سنين — كالتذييل والتكميل:
+  // مجلَّدُه الأول سنةً، وآخرُه بعده بستٍّ وعشرين
+  const [volumeYears, setVolumeYears] = useState<string[]>(
+    () => (editing?.volume_years ?? []).map((y) => (y > 0 ? String(y) : '')),
+  )
+  // هيئةُ النشرة: الفراغُ هو الأصل ولا يُعلَّم به كتاب
+  const [issueKind, setIssueKind] = useState(() => editing?.issue_kind ?? '')
+  const [issueBy, setIssueBy] = useState(() => editing?.issue_by ?? '')
+  const [issueYear, setIssueYear] = useState(() => str(editing?.issue_year))
+  // الكتابُ الذي طُبع هذا ضمنه، وموضعُه منه
+  const [withinId, setWithinId] = useState(() => editing?.within_book_id ?? '')
+  const [withinPages, setWithinPages] = useState(() => editing?.within_pages ?? '')
   const [pages, setPages] = useState(() => str(editing?.pages))
   const [isbn, setIsbn] = useState(() => editing?.isbn ?? '')
   const [language, setLanguage] = useState(() => editing?.language || LANGUAGES[0])
@@ -172,6 +193,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [condition, setCondition] = useState(() => editing?.condition || DEFAULT_CONDITION)
   const [conditionNotes, setConditionNotes] = useState(() => editing?.condition_notes ?? '')
   const [value, setValue] = useState(() => (editing?.value ? String(editing.value) : ''))
+  // عددُ نسخ الكتاب في المكتبة. الواحدةُ هي الأصل، فلا تُعرض على البطاقة.
+  const [copies, setCopies] = useState(() => String(editing?.copies ?? 1))
   // الفارغ صفةُ ورودٍ «غير مُحدَّدة»، وهو الأصل: لا يُلزَم أحدٌ بما لا يعرف
   const [source, setSource] = useState(() => editing?.source ?? '')
   const [sourceDetail, setSourceDetail] = useState(() => editing?.source_detail ?? '')
@@ -187,6 +210,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [marginNote, setMarginNote] = useState(() => editing?.margin_note ?? '')
 
   // ----------------------------------------------------------- ٤. عن الكتاب
+  // مَتْنٌ دَرْسيّ يُقرأ على الشيوخ ويُحفَظ. وهو وصفٌ للكتاب كتصنيفه، فموضعُه
+  // معه — وبه يُجمَع في صفحة «المتون الدرسية».
+  const [isMatn, setIsMatn] = useState(() => editing?.is_matn ?? false)
   const [tags, setTags] = useState(() => (editing?.tags ?? []).join('، '))
   const [keywords, setKeywords] = useState(() => (editing?.keywords ?? []).join('، '))
   const [topic, setTopic] = useState(() => editing?.topic ?? '')
@@ -194,6 +220,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [notes, setNotes] = useState(() => editing?.notes ?? '')
 
   // ------------------------------------------------- ٥. ارتباطه بكتبٍ أخرى
+  // النشرةُ الأجود أصلٌ، وما دونها يُنسَب إليها فلا يُعدّان عنوانَين
+  const [editionOf, setEditionOf] = useState(() => editing?.edition_of ?? '')
   const [workTargetId, setWorkTargetId] = useState('')
   const [workType, setWorkType] = useState(WORK_TYPES[0])
   const [newWorks, setNewWorks] = useState<{ target_book_id: string; type: string }[]>([])
@@ -212,6 +240,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
   /** صلاتُ هذا الكتاب المحفوظة، تُعرض في التعديل ويمكن فكُّها */
   const savedWorks = editing ? works.filter((w) => w.book_id === editing.id) : []
+
+  /** نشراتٌ نُسبت إلى هذا الكتاب، فهو المُعتمَد منها ولا يُنسَب هو إلى ثالثة */
+  const ownEditions = editing ? books.filter((b) => b.edition_of === editing.id) : []
 
   // الدار المعروفة يأتي مكانُها معها، ولا يُعدَّل من هنا بل من صفحة دُور النشر
   const knownPublisher = useMemo(
@@ -340,6 +371,20 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         publisherPlace = row.place
       }
 
+      // والدُّورُ المشارِكة لكلٍّ سجلُّها كالأولى: يحمل الغلافُ شعارَ الدارَين
+      // معًا، فلكلٍّ صفحتُها وكتبُها. ولا يُكتب لها مكانٌ من هنا — مكانُ الدار
+      // في سجلّها لا في الكتاب، ويُعدَّل من صفحتها وحدها.
+      const filledPresses = coPresses.filter((c) => c.name.trim())
+      const savedPresses: CoPublisher[] = []
+      for (const row of filledPresses) {
+        const press = await api.findOrCreatePublisher(row.name, '')
+        savedPresses.push({
+          publisher_id: press.id,
+          name: press.name,
+          scope: (row.scope ?? '').trim(),
+        })
+      }
+
       const trimmedCategory = category.trim()
       // الفرعُ لا يُحفظ بغير رئيسه: من رفع الرئيسَ رُفع فرعُه معه
       const trimmedSub = trimmedCategory ? subCategory.trim() : ''
@@ -358,6 +403,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         : []
       const volParts = manyVolumes
         ? Array.from({ length: volumeCount }, (_, i) => (volumeParts[i] ?? '').trim())
+        : []
+      const volYears = manyVolumes
+        ? Array.from({ length: volumeCount }, (_, i) => parseNumber(volumeYears[i]) ?? 0)
         : []
       const indexVols = manyVolumes
         ? indexVolumes.filter((n) => n >= 1 && n <= volumeCount).sort((a, b) => a - b)
@@ -384,6 +432,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
         publisher_id: publisherId,
         publisher: publisherName.trim(),
+        // نطاقُ الدار الأولى لا معنى له إن لم تشارِكها دارٌ أخرى
+        publisher_scope: savedPresses.length > 0 ? publisherScope.trim() : '',
+        co_publishers: savedPresses,
         place: publisherPlace,
         year: year.approx ? null : year.year,
         year_month: year.approx ? null : year.month,
@@ -401,7 +452,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         volume_pages: volPages,
         volume_parts: volParts,
         index_volumes: indexVols,
+        volume_years: volYears,
         missing_volumes: missingVols,
+        // هيئةُ النشرة، وما تعلّق بها يسقط متى رُدَّت إلى الأصل
+        issue_kind: issueKind,
+        issue_by: issueKind ? issueBy.trim() : '',
+        issue_year: issueKind ? parseNumber(issueYear) : null,
         // مجموع صفحات المجلَّدات يُحسب، ولا يُكتب باليد إلا في المجلَّد الواحد
         pages: manyVolumes ? (volumeSum > 0 ? volumeSum : null) : parseNumber(pages),
         isbn: isbn.trim(),
@@ -422,8 +478,15 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         acquired_approx: acquired.approx,
         acquired_text: acquired.approx ? acquired.text.trim() : '',
         margin_note: marginNote.trim(),
+        // النسخةُ الواحدة هي الأصل، فالفراغُ والصفرُ يرجعان إليها
+        copies: Math.max(1, parseNumber(copies) ?? 1),
 
         topic: topic.trim(),
+        is_matn: isMatn,
+        // ولا يُنسَب الكتابُ إلى نفسه: في التعديل قد يقع الاختيارُ عليه
+        edition_of: editionOf && editionOf !== editing?.id ? editionOf : null,
+        within_book_id: withinId && withinId !== editing?.id ? withinId : null,
+        within_pages: withinId && withinId !== editing?.id ? withinPages.trim() : '',
         tags: tags.split(/[,،]/).map((t) => t.trim()).filter(Boolean),
         keywords: keywords.split(/[,،]/).map((t) => t.trim()).filter(Boolean),
         blurb: blurb.trim(),
@@ -745,6 +808,22 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             ))}
           />
 
+          {/* المتنُ الدرسيّ وصفٌ للكتاب كتصنيفه، فموضعُه معه. وهو بابٌ قائم
+              في المكتبة كالسلاسل: تُجمع به المتونُ في صفحةٍ واحدة. */}
+          <label style={{ ...checkStyle, fontSize: 13, color: 'var(--text)', marginTop: -4 }}>
+            <input
+              type="checkbox"
+              checked={isMatn}
+              onChange={(e) => setIsMatn(e.target.checked)}
+            />
+            <span>
+              مَتْنٌ دَرْسيّ
+              <span style={{ color: 'var(--muted)', fontSize: 11.5 }}>
+                {' '}— يُقرأ على الشيوخ ويُحفَظ، كالرَّوْض المُربِع والآجُرُّومية
+              </span>
+            </span>
+          </label>
+
           {/* ----------------------------------------------- ٢. بيانات الطبعة */}
           <SectionHeading>٢. بيانات الطبعة</SectionHeading>
 
@@ -781,6 +860,112 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               )}
             </label>
           </div>
+
+          {/* دُورٌ شارَكت في إخراج النشرة. وهي على وجهين: دارانِ يجتمع
+              شعارُهما على غلافٍ واحد فتُترك نطاقاتُهما فارغةً، ودارٌ تُخرج
+              أوَّلَ المجلَّدات وأخرى تُتمّها فيُكتب لكلٍّ نطاقُها. والزرُّ
+              وحدَه أوّلَ الأمر: أكثرُ الكتب دارٌ واحدة، فلا يُشغَل بحقلٍ
+              دائمٍ لا يُملأ. */}
+          {coPresses.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setCoPresses([{ publisher_id: null, name: '', scope: '' }])}
+              style={{
+                alignSelf: 'flex-start', border: '1px dashed var(--border)', background: 'none',
+                color: 'var(--accent)', borderRadius: 8, padding: '7px 14px', fontSize: 12.5,
+              }}
+            >
+              + شارَكت في إخراجه دارٌ أخرى
+            </button>
+          ) : (
+            <>
+              {coPresses.map((row, i) => (
+                <div
+                  key={i}
+                  className="form-row"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0,2fr) minmax(0,1.1fr) auto',
+                    gap: 10, alignItems: 'end',
+                  }}
+                >
+                  <label style={labelStyle}>
+                    {i === 0 ? 'دارٌ شارَكت في إخراجه' : ''}
+                    <Combobox
+                      value={row.name}
+                      onChange={(name) => setCoPresses((prev) => prev.map(
+                        (c, idx) => (idx === i ? { ...c, name } : c),
+                      ))}
+                      options={publisherNames}
+                      placeholder="اكتب اسم الدار أو اخترها"
+                    />
+                  </label>
+                  <label style={labelStyle}>
+                    {i === 0 ? 'ما أخرجَته منه' : ''}
+                    <input
+                      value={row.scope ?? ''}
+                      onChange={(e) => setCoPresses((prev) => prev.map(
+                        (c, idx) => (idx === i ? { ...c, scope: e.target.value } : c),
+                      ))}
+                      placeholder="النشرة كلُّها"
+                      aria-label="ما أخرجَته هذه الدار من الكتاب"
+                      style={inputStyle}
+                    />
+                  </label>
+                  {i === coPresses.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setCoPresses((prev) => [
+                        ...prev, { publisher_id: null, name: '', scope: '' },
+                      ])}
+                      title="إضافة دارٍ أخرى"
+                      aria-label="إضافة دارٍ أخرى"
+                      style={plusStyle}
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCoPresses((prev) => prev.filter((_, idx) => idx !== i))}
+                      title="حذف هذه الدار"
+                      aria-label="حذف هذه الدار"
+                      style={{ ...plusStyle, color: 'var(--muted)', borderColor: 'var(--border)' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* نطاقُ الدار الأولى لا يُسأل عنه إلا إذا شارَكتها غيرُها */}
+              <label style={{ ...labelStyle, maxWidth: 420 }}>
+                ما أخرجَته «{publisherName.trim() || 'الدار الأولى'}» منه
+                <input
+                  value={publisherScope}
+                  onChange={(e) => setPublisherScope(e.target.value)}
+                  placeholder="النشرة كلُّها"
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                  اتركِ النطاقات فارغةً إذا اشتركت الدُّور في النشرة كلِّها —
+                  كغلافٍ يحمل شعارَ دارَين. واكتبها إذا اقتسمت المجلَّدات:
+                  «١-٣» لهذه، و«٤-٢٠» لتلك.
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => { setCoPresses([]); setPublisherScope('') }}
+                style={{
+                  alignSelf: 'flex-start', border: 'none', background: 'none',
+                  color: 'var(--muted)', fontSize: 12, textDecoration: 'underline', padding: 0,
+                }}
+              >
+                بل أخرجَته دارٌ واحدة
+              </button>
+            </>
+          )}
 
           <div className="form-row" style={row2}>
             <HijriYearPicker label="سنة النَّشْر" value={year} onChange={setYear} />
@@ -833,6 +1018,61 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               </select>
             </label>
           </div>
+
+          {/* هيئةُ النشرة. والأصلُ هو الأصل عند الناس كلِّهم فلا يُعلَّم به،
+              وإنما الخبرُ فيما فارقه: نشرةٌ صُوِّرت عن أخرى كما هي، أو نصٌّ
+              أُعيد صفُّه في قالبٍ جديد. وكلتاهما ليست نشرةً مستقلَّة عن
+              أصلها — وبياناتُ الأصل هي المكتوبةُ أعلاه، فهي التي يُعزى
+              إليها. */}
+          <div className="form-row" style={row3}>
+            <label style={labelStyle}>
+              هيئة هذه النشرة
+              <select
+                value={issueKind}
+                onChange={(e) => { setIssueKind(e.target.value); setIssueBy(''); setIssueYear('') }}
+                style={inputStyle}
+              >
+                <option value="">نشرةٌ أصل</option>
+                {ISSUE_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                {ISSUE_HINTS[issueKind] ?? 'الأصلُ أن نُسَخ المكتبة أصولٌ، فلا تُعلَّم بشيء'}
+              </span>
+            </label>
+
+            {issueKind && (
+              <>
+                <label style={labelStyle}>
+                  {ISSUE_BY_LABEL[issueKind] ?? 'من فعل ذلك'}
+                  <Combobox
+                    value={issueBy}
+                    onChange={setIssueBy}
+                    options={publisherNames}
+                    placeholder="اسم الدار أو المكتبة"
+                  />
+                </label>
+                <label style={labelStyle}>
+                  سنةُ ذلك
+                  <input
+                    value={issueYear}
+                    onChange={(e) => setIssueYear(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="مثال: ١٤٠٥"
+                    style={inputStyle}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          {/* بياناتُ الطبعة أعلاه هي بياناتُ النشرة الأصل لا المصوَّرة: هي
+              التي يُعزى إليها ويُقال «طبعة فلان سنة كذا»، وهذه صورةٌ منها */}
+          {issueKind && (
+            <div style={{ fontSize: 11.5, color: 'var(--accent-soft)', marginTop: -6, lineHeight: 1.9 }}>
+              واكتب في «دار النَّشْر» و«سنة النَّشْر» أعلاه بياناتِ النشرة الأصل
+              — فهي التي يُعزى إليها في جريدة المراجع، وهذه صورةٌ منها.
+            </div>
+          )}
 
           <div className="form-row" style={row2}>
             <div style={{ ...labelStyle, gap: 6 }}>
@@ -892,6 +1132,10 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 صفحاتُ كلِّ مجلَّد، وما اشتمل عليه من أسفار المؤلِّف وأجزائه
                 (مثل: ٥-٧، أو: الثامن). ومجلَّدات الفهارس تُعلَّم فلا تُحسب
                 صفحاتُها في الإجمالي.
+                <br />
+                وسنةُ المجلَّد لا تُكتب إلا إذا تفاوتت السنون — كالتذييل
+                والتكميل، صدر مجلَّدُه الأول وتوالت مجلَّداتُه أكثرَ من عشرين
+                سنة. وإن صدرت النشرةُ جملةً واحدة فسنةُ النشر أعلاه تكفي.
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
@@ -904,7 +1148,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                       <div
                         className="form-row"
                         style={{
-                          display: 'grid', gridTemplateColumns: '74px 110px minmax(0,1fr) auto auto',
+                          display: 'grid',
+                          gridTemplateColumns: '74px 96px 92px minmax(0,1fr) auto auto',
                           gap: 10, alignItems: 'center',
                         }}
                       >
@@ -919,6 +1164,19 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                           placeholder="صفحات"
                           inputMode="numeric"
                           aria-label={`صفحات المجلَّد ${volume}`}
+                          style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
+                        />
+                        <input
+                          value={volumeYears[i] ?? ''}
+                          onChange={(e) => setVolumeYears((prev) => {
+                            const next = prev.slice()
+                            next[i] = e.target.value
+                            return next
+                          })}
+                          placeholder="سنته"
+                          inputMode="numeric"
+                          title="سنةُ صدور هذا المجلَّد، إن تفاوتت سنون المجلَّدات"
+                          aria-label={`سنة صدور المجلَّد ${volume}`}
                           style={{ ...inputStyle, padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
                         />
                         <input
@@ -1044,10 +1302,45 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
           )}
 
+          {/* كتابٌ طُبع ضمن كتاب: كالأربعين النووية والآجُرُّومية في «برنامج
+              مهمّات العلم». وهو كتابٌ مستقلٌّ بعنوانه ومؤلِّفه — لا مجلَّدٌ من
+              ذاك ولا فصلٌ فيه — غير أنّ له من الورق ما لذاك، فلا موضعَ له
+              على الرفّ غيرُ موضعه. */}
+          <div className="form-row" style={row21}>
+            <label style={labelStyle}>
+              مطبوعٌ ضمن كتابٍ آخر
+              <select
+                value={withinId}
+                onChange={(e) => setWithinId(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">لا، كتابٌ مطبوعٌ وحده</option>
+                {books
+                  .filter((b) => b.id !== editing?.id)
+                  .map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+              </select>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                لِما طُبع ضمن مجموعٍ أو برنامج، فيبقى كتابًا مستقلًّا في الفهرس
+                ويُعلَّم بأنه مطبوعٌ ضمن غيره.
+              </span>
+            </label>
+            {withinId && (
+              <label style={labelStyle}>
+                موضعُه منه
+                <input
+                  value={withinPages}
+                  onChange={(e) => setWithinPages(e.target.value)}
+                  placeholder="مثال: ج١، ص٣٠-٦٠"
+                  style={inputStyle}
+                />
+              </label>
+            )}
+          </div>
+
           {/* ----------------------------------------------- ٣. بيانات النسخة */}
           <SectionHeading>٣. بيانات النسخة</SectionHeading>
 
-          <div className="form-row" style={row3}>
+          <div className="form-row" style={row4}>
             <label style={labelStyle}>
               رقم الدولاب
               <input
@@ -1063,6 +1356,19 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 value={shelfNo}
                 onChange={(e) => setShelfNo(e.target.value)}
                 placeholder="مثال: ٢"
+                style={inputStyle}
+              />
+            </label>
+            {/* عددُ نسخه في المكتبة: الواحدةُ هي الأصل فلا تُعرض على بطاقته،
+                وإنما الخبرُ في تكرارها */}
+            <label style={labelStyle}>
+              عدد النُّسَخ
+              <input
+                value={copies}
+                onChange={(e) => setCopies(e.target.value)}
+                inputMode="numeric"
+                placeholder="١"
+                title="كم نسخةً من هذا الكتاب في المكتبة"
                 style={inputStyle}
               />
             </label>
@@ -1187,8 +1493,47 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
           {/* -------------------------------------- ٥. ارتباطه بكُتُبٍ أخرى */}
           <SectionHeading>٥. ارتباطه بكُتُبٍ أخرى</SectionHeading>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6 }}>
-            إن كان هذا الكتاب شرحًا أو حاشيةً أو اختصارًا لكتابٍ عندنا فاربطه به، ويمكن ربطه بأكثر من كتاب.
+
+          {/* نشرتان لكتابٍ واحد: لكلٍّ محقِّقُها ودارُها ومجلَّداتُها، فهما
+              سجلَّان اثنان لا محالة — ولكنهما عنوانٌ واحد لا عنوانان. فتُختار
+              الأجودُ أصلًا وتُنسَب إليها ما دونها، فلا تُعدّ معها في عناوين
+              المكتبة، ويجد الواقفُ على إحداهما سبيلَه إلى أختها. */}
+          {ownEditions.length > 0 ? (
+            /* هذه نشرةٌ مُعتمَدة نُسبت إليها غيرُها، فلا تُنسَب هي إلى ثالثة:
+               النسبةُ درجةٌ واحدة لا سلسلة، وإلّا ضلّ الواقفُ على آخرها. */
+            <div style={{
+              fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9,
+              border: '1px solid var(--border)', borderRadius: 10, padding: '11px 14px',
+            }}>
+              هذه هي النشرةُ المُعتمَدة من هذا الكتاب، ونُسب إليها{' '}
+              <strong style={{ color: 'var(--text)' }}>
+                {ownEditions.map((b) => b.title).join('، و')}
+              </strong>
+              . ولتُنسَب هي إلى غيرها فُكَّ عنها ما نُسب إليها أوّلًا.
+            </div>
+          ) : (
+            <label style={{ ...labelStyle, maxWidth: 520 }}>
+              هذه نشرةٌ أخرى من كتابٍ في المكتبة
+              <select
+                value={editionOf}
+                onChange={(e) => setEditionOf(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">لا، بل هي نشرتُه المُعتمَدة عندنا</option>
+                {books
+                  .filter((b) => b.id !== editing?.id && !b.edition_of)
+                  .map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+              </select>
+              <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+                للكتاب الواحد نشرتان أو أكثر، تختلفان في المحقِّق أو رقم الطبعة
+                أو عدد المجلَّدات. فاجعل الأجودَ منها هي الأصل، وانسب إليها ما
+                دونها من هنا — فلا تُحسَبان عنوانَين اثنين في المكتبة.
+              </span>
+            </label>
+          )}
+
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+            وإن كان هذا الكتاب شرحًا أو حاشيةً أو اختصارًا لكتابٍ عندنا فاربطه به، ويمكن ربطه بأكثر من كتاب.
           </div>
           <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto', gap: 10, alignItems: 'end' }}>
             <label style={labelStyle}>
