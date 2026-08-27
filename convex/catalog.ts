@@ -99,11 +99,25 @@ export const updateAuthor = mutation({
     await ctx.db.patch(id, patch)
 
     if (patch.name !== undefined && patch.name !== before.name) {
+      const name = patch.name
       const books = await ctx.db
         .query('books')
         .withIndex('by_author', (q) => q.eq('author_id', id))
         .collect()
-      for (const b of books) await ctx.db.patch(b._id, { author_name: patch.name })
+      for (const b of books) await ctx.db.patch(b._id, { author_name: name })
+
+      // ومؤلِّفُ العنوان المضموم مؤلِّفٌ كصاحب السجلّ، واسمُه مُكرَّرٌ في
+      // ضامِّه — فلو أُغفل بقي على الكتاب اسمٌ قديم، كما يبقى على كتب الدار
+      // إن أُغفلت مزامنتُها. ولا فهرسَ يبلغه، فالمرورُ على الكتب كلِّها.
+      for (const b of await ctx.db.query('books').collect()) {
+        const titles = b.within_titles ?? []
+        if (!titles.some((t) => t.author_id === id && t.author_name !== name)) continue
+        await ctx.db.patch(b._id, {
+          within_titles: titles.map(
+            (t) => (t.author_id === id ? { ...t, author_name: name } : t),
+          ),
+        })
+      }
     }
   },
 })

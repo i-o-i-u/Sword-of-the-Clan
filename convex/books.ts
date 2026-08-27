@@ -9,7 +9,9 @@
 
 import { v } from 'convex/values'
 import { mutation } from './_generated/server'
-import { coAuthor, coPublisher, contributor, era, missingVolume, readingStatus } from './schema'
+import {
+  coAuthor, coPublisher, contributor, era, missingVolume, readingStatus, withinTitle,
+} from './schema'
 import { requireOwner, toClient } from './privacy'
 import type { Doc } from './_generated/dataModel'
 
@@ -73,6 +75,8 @@ const bookInput = {
   topic: v.optional(v.string()),
   is_matn: v.optional(v.boolean()),
   edition_of: v.optional(v.union(v.id('books'), v.null())),
+  is_collection: v.optional(v.boolean()),
+  within_titles: v.optional(v.array(withinTitle)),
   within_book_id: v.optional(v.union(v.id('books'), v.null())),
   within_pages: v.optional(v.string()),
   tags: v.optional(v.array(v.string())),
@@ -150,6 +154,8 @@ function withDefaults(input: BookInput) {
     topic: input.topic ?? '',
     is_matn: input.is_matn ?? false,
     edition_of: input.edition_of ?? null,
+    is_collection: input.is_collection ?? false,
+    within_titles: input.within_titles ?? [],
     within_book_id: input.within_book_id ?? null,
     within_pages: input.within_pages ?? '',
     tags: input.tags ?? [],
@@ -173,11 +179,33 @@ export const insert = mutation({
   },
 })
 
+/**
+ * التعديل. ومعه مزامنةُ العنوان واسم المؤلِّف على النشرات المنسوبة إلى هذا
+ * الكتاب: النشرتان لكتابٍ واحد تشتركان بالضرورة فيهما وتختلفان فيما سواهما،
+ * فلو غُيِّر عنوانُ الأصل وبقيت أختُه على القديم صارتا عنوانَين لا عنوانًا.
+ * وهذا ممّا كانت Postgres تفعله بمُشغِّلٍ ونكتبه ههنا صراحةً، كما يُزامَن
+ * اسمُ المؤلِّف على كتبه واسمُ الدار على كتبها.
+ */
 export const update = mutation({
   args: { id: v.id('books'), patch: v.object(bookInput) },
   handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
+    const before = await ctx.db.get(id)
     await ctx.db.patch(id, patch as BookInput)
+
+    if (!before) return
+    const after = (await ctx.db.get(id))!
+    const shared: Partial<Doc<'books'>> = {}
+    if (after.title !== before.title) shared.title = after.title
+    if (after.author_name !== before.author_name || after.author_id !== before.author_id) {
+      shared.author_name = after.author_name
+      shared.author_id = after.author_id
+    }
+    if (Object.keys(shared).length === 0) return
+
+    for (const b of await ctx.db.query('books').collect()) {
+      if (b.edition_of === id) await ctx.db.patch(b._id, shared)
+    }
   },
 })
 

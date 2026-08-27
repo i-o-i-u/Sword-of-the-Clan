@@ -283,6 +283,32 @@ export interface Contributor {
   person_id?: string | null
 }
 
+/**
+ * عنوانٌ طُبِع مع الكتاب أو فيه: كتابٌ تامٌّ بعنوانه ومؤلِّفه، غير أنه لا
+ * يستقلّ ماديًّا — يشترك مع الضامِّ في الدار والسنة والطبعة والمجلَّدات
+ * والموضع من الرفّ. فلا يُكتب ههنا إلا ما ينفرد به.
+ */
+export interface WithinTitle {
+  title: string
+  author_id?: string | null
+  author_name: string
+  contributors: Contributor[]
+  category?: string
+  sub_category?: string
+  is_matn?: boolean
+  /** موضعُه من الكتاب الضامّ: «ص٣٠-٦٠» */
+  at?: string
+}
+
+/**
+ * لفظُ الصلة بين الضامِّ وما ضمَّه، وهو تابعٌ لهيئة الضامّ:
+ *   • كتابٌ رئيسٌ أُلحق به غيرُه تكملةً ⟵ «مطبوعٌ معه».
+ *   • مجموعةٌ عنوانُها اسمُ المجموعة لا اسمُ كتاب ⟵ «مطبوعٌ فيه».
+ * ولا يُقال «مطبوعٌ ضمن» بعدُ: اللفظُ الواحد لا يؤدّي الخبرَين.
+ */
+export const WITH_LABEL = 'مطبوعٌ معه'
+export const WITHIN_LABEL = 'مطبوعٌ فيه'
+
 /** مجلَّدٌ ناقص من الطبعة: رقمُه وسببُ فقده، والسببُ يجوز أن يُترك */
 export interface MissingVolume {
   no: number
@@ -440,6 +466,15 @@ export interface Book {
    * الكتابُ الذي طُبِع هذا ضمنه، كالأربعين النووية في «برنامج مهمّات العلم».
    * وهو كتابٌ مستقلٌّ بعنوانه ومؤلِّفه، لا مجلَّدٌ من ذاك ولا فصلٌ فيه.
    */
+  /**
+   * هذا السجلُّ مجموعةٌ لا كتاب: عنوانُه اسمُ المجموعة — «برنامج مهمّات
+   * العلم» — فلا مؤلِّف له وإنما مَن أشرف عليه، ولا يُعدّ هو كتابًا:
+   * المعدودُ ما طُبع فيه.
+   */
+  is_collection: boolean
+  /** ما طُبع مع هذا الكتاب أو فيه من العناوين */
+  within_titles: WithinTitle[]
+  /** من عهدٍ كان المضمومُ فيه سجلًّا قائمًا يشير إلى ضامِّه. يطويه الترحيل. */
   within_book_id: string | null
   /** موضعُه من الكتاب الذي ضمَّه: «ج١، ص٣٠-٦٠» */
   within_pages: string
@@ -658,7 +693,7 @@ export const META_DEFS: { label: string; key: string }[] = [
   { label: 'سنة النشر',        key: 'yearLabel' },
   { label: 'الطبعة',           key: 'edition' },
   { label: 'هيئة النشرة',      key: 'issueKind' },
-  { label: 'مطبوعٌ ضمن',       key: 'within' },
+  { label: 'ما طُبع معه أو فيه', key: 'within' },
   { label: 'الأجزاء',          key: 'parts' },
   { label: 'المجلدات',         key: 'volumes' },
   { label: 'عدد الصفحات',      key: 'pages' },
@@ -860,6 +895,10 @@ export const FIELDS_COUNT: CountForms = {
 
 export const COPIES_COUNT: CountForms = {
   none: 'لا نسخة', one: 'نسخةٌ واحدة', two: 'نسختان', few: 'نُسَخٍ', many: 'نسخةً',
+}
+
+export const TITLES_COUNT: CountForms = {
+  none: 'لا عنوان', one: 'عنوانٌ واحد', two: 'عنوانان', few: 'عناوينَ', many: 'عنوانًا',
 }
 
 export const MATNS_COUNT: CountForms = {

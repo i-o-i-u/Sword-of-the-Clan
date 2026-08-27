@@ -9,7 +9,10 @@
 // يُطبَع ضمن كتاب. وكلُّ ذلك خبرٌ عن نشرةٍ واحدة، لا عن كتبٍ متعدِّدة.
 
 import { toArabicDigits, yearLabel } from './hijri'
-import { ISSUE_KINDS, type Book, type CoPublisher } from './types'
+import {
+  ISSUE_KINDS, WITHIN_LABEL, WITH_LABEL,
+  type Book, type CoPublisher, type WithinTitle,
+} from './types'
 
 /** دارٌ من دُور النشرة كما تُعرض: اسمُها، ونطاقُها منها، وسجلُّها إن كان */
 export interface PressRef {
@@ -124,21 +127,117 @@ export function editionGroup(books: Book[], book: Book): EditionGroup {
   return { of, others }
 }
 
+// -------------------------------------------------- ما طُبع معه أو فيه
 /**
- * عناوينُ المكتبة: كتبُها ناقصةً ما كان نشرةً أخرى من كتابٍ فيها.
+ * الكتبُ تُطبع مجتمعةً على وجهين، وبينهما فرقٌ في العين لا في اللفظ وحده:
  *
- * فالنشرتان لكتابٍ واحد سجلَّان اثنان، ولكلٍّ محقِّقُه ودارُه ومجلَّداتُه —
- * ولكنهما عنوانٌ واحد، فلا يُعدّان عنوانَين.
+ *   • **مطبوعٌ معه**: للنشرة كتابٌ رئيسٌ هو المقصود بالطبع، ثم أُلحق به
+ *     غيرُه تكملةً وتتميمًا. فالسجلُّ سجلُّ ذلك الرئيس، وبياناتُه بياناتُه.
+ *   • **مطبوعٌ فيه**: العنوانُ اسمُ مجموعةٍ لا اسمُ كتاب — «برنامج مهمّات
+ *     العلم» — طُبع فيها كتابُ التوحيد والأربعون النووية وغيرُهما. فليس
+ *     للمجموعة مؤلِّفٌ وإنما مَن أشرف عليها، ولا تُعدّ هي كتابًا.
+ *
+ * وفي الوجهين جميعًا: العنوانُ المضموم كتابٌ يُعدّ في المكتبة، وليس له من
+ * الورق شيءٌ على حِدَة — فلا مجلَّدَ له ولا صفحاتِ ولا موضعَ من الرفّ غيرُ
+ * موضع ضامِّه. ولذلك لم يُجعل سجلًّا برأسه، بل خبرًا في ضامِّه.
  */
-export function titleCount(books: Book[]): number {
-  return books.filter((b) => !b.edition_of).length
+
+/** هل السجلُّ مجموعةٌ لا كتاب؟ */
+export function isCollection(book: Book): boolean {
+  return !!book.is_collection
 }
 
-// -------------------------------------------------- ما طُبع ضمن غيره
+/** ما ضمَّه الكتابُ من العناوين، وما لا عنوان له يسقط */
+export function withinTitlesOf(book: Book): WithinTitle[] {
+  return (book.within_titles ?? []).filter((t) => t.title.trim())
+}
+
+/** لفظُ الصلة، تابعًا لهيئة الضامّ: «مطبوعٌ معه» أو «مطبوعٌ فيه» */
+export function withinLabelOf(book: Book): string {
+  return isCollection(book) ? WITHIN_LABEL : WITH_LABEL
+}
+
 /**
- * ما طُبِع ضمن هذا الكتاب من الكتب: كالأربعين النووية والآجُرُّومية في
- * «برنامج مهمّات العلم». وكلُّ واحدٍ منها كتابٌ مستقلٌّ بعنوانه ومؤلِّفه، لا
- * مجلَّدٌ منه ولا فصلٌ فيه.
+ * وحدةُ العدّ في المكتبة: عنوانٌ قائمٌ بسجلّه، أو عنوانٌ مضمومٌ إلى سجلّ.
+ *
+ * وبها تُعَدّ الكتبُ والمؤلِّفون والتصنيفاتُ جميعًا، فلا يختلف رقمانِ في
+ * صفحتين عن شيءٍ واحد.
+ */
+export interface CountedTitle {
+  /** السجلُّ الذي يحمله: هو نفسُه إن كان قائمًا، أو ضامُّه إن كان مضمومًا */
+  book: Book
+  /** خبرُ العنوان المضموم، وفارغٌ للقائم بسجلّه */
+  within: WithinTitle | null
+  title: string
+  author_id: string | null
+  author_name: string
+  category: string
+  sub_category: string
+  is_matn: boolean
+}
+
+/**
+ * عناوينُ المكتبة كلُّها، ولا يُعدّ فيها:
+ *   • نشرةٌ أخرى لكتابٍ عندنا — النشرتان عنوانٌ واحد لا عنوانان، وإن كان
+ *     لكلٍّ محقِّقُها ودارُها ومجلَّداتُها.
+ *   • مجموعةٌ طُبع فيها غيرُها — عنوانُها اسمُ المجموعة لا اسمُ كتاب،
+ *     والمعدودُ ما طُبع فيها.
+ */
+export function countedTitles(books: Book[]): CountedTitle[] {
+  const out: CountedTitle[] = []
+  for (const book of books) {
+    if (!book.edition_of && !isCollection(book)) {
+      out.push({
+        book,
+        within: null,
+        title: book.title,
+        author_id: book.author_id,
+        author_name: book.author_name,
+        category: book.category,
+        sub_category: book.sub_category ?? '',
+        is_matn: book.is_matn,
+      })
+    }
+    for (const t of withinTitlesOf(book)) {
+      out.push({
+        book,
+        within: t,
+        title: t.title,
+        author_id: t.author_id ?? null,
+        author_name: t.author_name,
+        category: t.category ?? '',
+        sub_category: t.sub_category ?? '',
+        is_matn: t.is_matn ?? false,
+      })
+    }
+  }
+  return out
+}
+
+/** عددُ كتب المكتبة. وهو عددُ عناوينها: لا فرقَ بين الرقمين في هذه المكتبة. */
+export function bookCount(books: Book[]): number {
+  return countedTitles(books).length
+}
+
+/** ما ضُمَّ إلى الكتاب من عناوين، معروضًا كوحدات عدّ */
+export function withinOf(book: Book): CountedTitle[] {
+  return withinTitlesOf(book).map((t) => ({
+    book,
+    within: t,
+    title: t.title,
+    author_id: t.author_id ?? null,
+    author_name: t.author_name,
+    category: t.category ?? '',
+    sub_category: t.sub_category ?? '',
+    is_matn: t.is_matn ?? false,
+  }))
+}
+
+/**
+ * ما طُبِع ضمن هذا الكتاب من سجلّات قائمة برأسها.
+ *
+ * وهذا من عهدٍ كان المضمومُ فيه سجلًّا يشير إلى ضامِّه، وبقي لِما فُهرس قبل
+ * التحويل حتى يُشغَّل `maintenance.foldWithinBooks` — فلا يسقط خبرٌ صامتًا.
  */
 export function printedWithin(books: Book[], book: Book): Book[] {
   return books
@@ -146,7 +245,7 @@ export function printedWithin(books: Book[], book: Book): Book[] {
     .sort((a, b) => a.title.localeCompare(b.title, 'ar'))
 }
 
-/** المتون الدرسية في المكتبة */
-export function matnBooks(books: Book[]): Book[] {
-  return books.filter((b) => b.is_matn)
+/** المتون الدرسية في المكتبة: سجلًّا كانت أو عنوانًا مضمومًا إلى سجلّ */
+export function matnTitles(books: Book[]): CountedTitle[] {
+  return countedTitles(books).filter((t) => t.is_matn)
 }

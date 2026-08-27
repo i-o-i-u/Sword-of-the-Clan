@@ -260,6 +260,12 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     // والصلتان تُفكَّان أيضًا إذا كان طرفُهما الآخر محجوبًا، ويتكفّل بذلك
     // `library.books` — فليس ههنا علمٌ بسائر الكتب.
     edition_of:   hidden('otherEditions') ? null : (book.edition_of ?? null),
+    // المجموعةُ ليست خبرًا يُخفى، وإنما هي هيئةُ السجلّ نفسِه: لولا أنها
+    // مجموعةٌ لعُدَّت كتابًا وطُلب لها مؤلِّف.
+    is_collection: book.is_collection ?? false,
+    // وما طُبع معه أو فيه يُخفى جملةً بمفتاحٍ واحد: هو خبرٌ واحدٌ في بابه،
+    // ولا معنى لعرض عنوانٍ مضمومٍ بلا صاحبه.
+    within_titles: hidden('within')      ? [] : (book.within_titles ?? []),
     within_book_id: hidden('within')     ? null : (book.within_book_id ?? null),
     within_pages: hidden('within')       ? '' : (book.within_pages ?? ''),
     // الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث، لا خبرٌ عنه، فتمرّ كما هي

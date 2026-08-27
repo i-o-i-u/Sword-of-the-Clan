@@ -5,6 +5,7 @@
 //
 // وهذه الدوالُّ تقرأ الصفاتِ من الكتب نفسها: أين ذُكر الرجلُ وبأيّ صفة.
 
+import { withinTitlesOf } from './editions'
 import { AUTHOR_ROLE, CONTRIBUTOR_ROLES, ROLE_RANK, type Book } from './types'
 
 /** كتبُ الرجل مقسومةً بصفته فيها، على ترتيب الصفات المعتمَد */
@@ -36,6 +37,9 @@ export function authorIds(books: Book[]): Set<string> {
   for (const b of books) {
     if (b.author_id) ids.add(b.author_id)
     for (const c of b.co_authors ?? []) if (c.author_id) ids.add(c.author_id)
+    // ومؤلِّفُ العنوان المضموم مؤلِّفٌ في المكتبة كصاحب السجلّ: النوويُّ
+    // مؤلِّفٌ وإن لم تكن أربعونه إلا عنوانًا في مجموع.
+    for (const t of withinTitlesOf(b)) if (t.author_id) ids.add(t.author_id)
   }
   return ids
 }
@@ -52,6 +56,30 @@ export function authoredBooks(books: Book[], personId: string): Book[] {
     (b) => b.author_id === personId
       || (b.co_authors ?? []).some((c) => c.author_id === personId),
   )
+}
+
+/**
+ * ما ألَّفه الرجل ممّا لا سجلَّ له: عنوانٌ مضمومٌ إلى كتابٍ أو مجموعة.
+ *
+ * وهو من مؤلَّفاته لا محالة، غير أنه لا يستقلّ بصفحةٍ لأنه لا يستقلّ
+ * بورق — فبابُه صفحةُ ضامِّه.
+ */
+export interface WithinWork {
+  /** الكتابُ الضامّ: هو الباب إلى العنوان المضموم */
+  book: Book
+  title: string
+  at: string
+}
+
+export function authoredWithin(books: Book[], personId: string): WithinWork[] {
+  const out: WithinWork[] = []
+  for (const book of books) {
+    for (const t of withinTitlesOf(book)) {
+      if (t.author_id !== personId) continue
+      out.push({ book, title: t.title, at: (t.at ?? '').trim() })
+    }
+  }
+  return out
 }
 
 /** ما عمل فيه الرجل بصفةٍ غير التأليف، مقسومًا بصفاته */
@@ -83,7 +111,8 @@ export function contributedBooks(books: Book[], personId: string): RoleWorks[] {
  * وترجع فارغةً لمن لا عمل له في المكتبة أصلًا.
  */
 export function topRole(books: Book[], personId: string): string | null {
-  if (authoredBooks(books, personId).length > 0) return AUTHOR_ROLE
+  if (authoredBooks(books, personId).length > 0
+    || authoredWithin(books, personId).length > 0) return AUTHOR_ROLE
 
   const has = new Set(
     books.flatMap((b) => (b.contributors ?? [])

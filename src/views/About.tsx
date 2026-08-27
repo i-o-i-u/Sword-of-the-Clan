@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
+import { bookCount } from '../lib/editions'
 import { countAuthors } from '../lib/people'
 import { navigate } from '../lib/router'
 import {
@@ -129,7 +130,7 @@ export default function About() {
         {/* العدد جملةٌ تامّة لا رقمٌ يليه اسم: «كتابٌ واحد» لا «١ كتابًا» */}
         <div className="about-figures">
           {([
-            [countLabel(books.length, BOOKS_COUNT), 'في الفهرس'],
+            [countLabel(bookCount(books), BOOKS_COUNT), 'في الفهرس'],
             [countLabel(authorCount, AUTHORS_COUNT), 'لهم فيه كتاب'],
           ] as const).map(([value, caption]) => (
             <div key={caption} className="about-figure">

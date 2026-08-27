@@ -1060,7 +1060,6 @@ body::after {
   justify-content: center;
   align-items: center;
   gap: 6px 18px;
-  margin-bottom: 13px;
 }
 
 .footer-tally-item {
@@ -1355,6 +1354,24 @@ body::after {
   flex-wrap: wrap;
 }
 
+/*
+ * وأعدادُ المكتبة في هذا السطر نفسِه، بين الحقوق وسبيل التواصل: كانت سطرًا
+ * فوقه فطال الذيلُ سطرًا كاملًا، وصفحةُ الهبوط شاشةٌ واحدة بلا تمرير — فما
+ * زِيد في ذيلها اقتُطع من صدرها.
+ *
+ * والقسمةُ ثلاثةُ أعمدةٍ لا صفٌّ متباعدُ الأطراف: العمودُ الأوسط يقع في وسط
+ * الصفحة على الحقيقة، وأمّا `space-between` فيضعه في وسط ما بين طرفين
+ * مختلفَي الطول — فيُرى مائلًا.
+ */
+.footer-row-tally {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.footer-row-tally .footer-copy { justify-self: start; }
+.footer-row-tally .footer-tally { justify-self: center; }
+.footer-row-tally .footer-contact { justify-self: end; }
+
 .footer-copy {
   display: flex;
   align-items: center;
@@ -1569,6 +1586,114 @@ body::after {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+
+/* --------------------------------------- ما طُبع مع الكتاب أو فيه */
+/*
+ * بطاقةُ العنوان المضموم في الشبكة: تلي بطاقةَ ضامِّها فيُعرف أنها منه.
+ *
+ * وهي أصغرُ منها عن قصد، وحدُّها منقوطٌ لا مصمت: العنوانُ المضموم كتابٌ
+ * يُعدّ في المكتبة، غير أنه لا غلاف له ولا موضعَ من الرفّ ولا حسبةَ ورقٍ
+ * على حِدَة — فبطاقةٌ بحجم أختها تُوهم أنّ على الرفّ كتابًا ثانيًا.
+ *
+ * و`align-self: start` لازمٌ: من غيره تمتدّ البطاقةُ القصيرة إلى قامة
+ * أطولِ ما في صفِّها من بطاقات الأغلفة، فيُرى في جوفها فراغٌ طويل.
+ */
+.within-card {
+  align-self: start;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 13px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--header) 55%, var(--surface));
+  transition: border-color 0.16s, transform 0.2s var(--ease), box-shadow 0.16s;
+}
+.within-card:hover {
+  border-color: var(--accent-soft);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-1);
+}
+
+.within-card-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.within-card-head svg { flex: none; }
+
+.within-card-title {
+  font-family: var(--heading-font);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+/* واسمُ الضامّ في الذيل: هو الباب الذي منه يُبلَغ هذا العنوان */
+.within-card-foot {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/*
+ * وفي الجدول: صفٌّ يُبيِّن بأيّ وجهٍ ضُمَّت، ثم صفوفُها تحت صفّ ضامِّها —
+ * بلا رقمٍ مسلسل، ولونُها غيرُ لون الصفوف المتناوبة فلا تختلط بها. ولا
+ * يُكتب في أعمدة الورق منها شيء: لا مجلَّد لها ولا صفحات ولا موضعَ رفّ.
+ */
+.lib-table-row.lib-table-within-head {
+  cursor: default;
+  background: color-mix(in oklch, var(--accent) 9%, transparent);
+  border-bottom: none;
+}
+.lib-table-row.lib-table-within-head:hover {
+  background: color-mix(in oklch, var(--accent) 9%, transparent);
+  box-shadow: none;
+}
+.lib-table-within-head .lib-cell {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-soft);
+  border-inline-start: none;
+}
+.lib-table-within-head .lib-cell svg { vertical-align: -2px; }
+
+.lib-table-row.lib-table-within {
+  background: color-mix(in oklch, var(--accent) 4%, transparent);
+}
+.lib-table-within .lib-cell { padding-top: 8px; padding-bottom: 8px; }
+.lib-table-within .lib-cell-title { font-size: 13.5px; font-weight: 600; }
+
+/*
+ * وعلى الرفّ: شارةٌ صغيرة على كعب الضامّ بعدد ما ضمَّه — العناوينُ المضمومة
+ * لا كعبَ لها، هي في جوف هذا الكعب.
+ */
+.spine-within {
+  position: absolute;
+  top: 4px;
+  inset-inline-start: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1.5px 4px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  background: oklch(0.98 0.01 75 / 0.94);
+  color: oklch(0.28 0.03 45);
+  box-shadow: 0 1px 3px oklch(0.2 0.02 50 / 0.35);
+}
+.spine-within svg { flex: none; }
 
 /* ========================================================= الإحصائيات */
 .stats-main { max-width: 1060px; margin: 0 auto; padding: 32px; }
@@ -2363,6 +2488,157 @@ body::after {
   white-space: nowrap;
 }
 
+
+/* ------------------------------- النشرة الأخرى في بطاقة الكتاب */
+/*
+ * لوحُ نشرةٍ أخرى: غلافُها إلى جانب ما تنفرد به. والغلافُ صغيرٌ ههنا لا
+ * كغلاف الصفحة — هو للتمييز بين النشرتين بالنظر، وذاك أسرعُ ما يُفرَّق به
+ * بينهما — وما وراءه بياناتُها التي تخالف أختَها فيها.
+ */
+.edition-panel {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--header);
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.edition-panel:hover { border-color: var(--accent-soft); box-shadow: var(--shadow-1); }
+
+.edition-panel-cover {
+  width: 100%;
+  aspect-ratio: 3/4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--cover-bg);
+  box-shadow: 0 4px 12px oklch(0.24 0.02 50 / 0.14);
+}
+
+.edition-panel-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 16px;
+}
+
+/* لوحُ النسبة داخل لوحٍ آخر: حاشيتُه تضيق ولا خلفيّة له، وإلّا صار صندوقًا
+   في صندوق. */
+.attrib.attrib-tight {
+  margin-bottom: 0;
+  padding: 0 12px 0 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+.attrib-tight::before { display: none; }
+.attrib-tight .attrib-row { padding: 5px 0; border-bottom: none; }
+.attrib-tight .attrib-role { font-size: 11.5px; }
+
+@media (max-width: 620px) {
+  .edition-panel { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
+}
+
+/* --------------------------- ما طُبع معه أو فيه في بطاقة الكتاب */
+.within-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--header);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.16s, color 0.16s;
+}
+.within-toggle:hover { border-color: var(--accent-soft); color: var(--accent); }
+.within-toggle svg {
+  flex: none;
+  color: var(--accent-soft);
+  transition: transform 0.22s var(--ease);
+}
+.within-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }
+
+.within-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.within-list li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.within-list li:nth-child(even) {
+  background: color-mix(in oklch, var(--header) 55%, transparent);
+}
+
+.within-list-no {
+  font-family: var(--heading-font);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-soft);
+  text-align: center;
+}
+
+.within-list-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.within-list-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.within-list-matn {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+/* أخبارُ العنوان في سطرٍ واحد، يفصل بينها نقطة: مؤلِّفُه فذوو صفاته ففنُّه */
+.within-list-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.within-list-marks > span + span::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-inline-end: 9px;
+  vertical-align: 3px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  opacity: 0.5;
+}
+
+.within-list-at {
+  font-size: 11.5px;
+  color: var(--accent-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* شاراتُ الكتاب في صدر بطاقته، إلى جانب تصنيفه وموضعه من الرفّ.
    وهي أخبارٌ تُعرف بنظرةٍ لا بقراءة صفّ: أنّ الكتاب متنٌ دَرْسيّ، وأنّ
    هذه النشرة مصوَّرةٌ أو إعادةُ صفٍّ لا أصل. */
@@ -2522,6 +2798,9 @@ body::after {
   .footer-copy { justify-content: center; }
   .footer-contact { justify-content: center; width: 100%; }
   .footer-row { justify-content: center; text-align: center; }
+  /* والشاشةُ الضيّقة لا تسع ثلاثةً في سطر، فيعود كلٌّ إلى سطره */
+  .footer-row-tally { display: flex; }
+  .footer-row-tally .footer-tally { width: 100%; }
   .about-figures { gap: 26px; }
 
   /* النوافذ تكاد تملأ الشاشة الضيّقة، فحاشيتُها تضيق */

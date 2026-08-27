@@ -8,17 +8,21 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { deathLabel, toHijriYear } from '../lib/hijri'
+import { deathLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
 import {
   ALL_SEARCH_KEYS, DEFAULT_SEARCH_KEYS, QUICK_OPTS, SEARCH_FIELDS,
-  matchBook, type SearchOptions,
+  matchBook, matchWithin, type SearchOptions,
 } from '../lib/search'
+import {
+  bookCount, withinLabelOf, withinTitlesOf,
+} from '../lib/editions'
 import {
   ARABIC_LETTERS, CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT, VIEW_OPTIONS,
   STATUS_UNKNOWN, VOLUMES_COUNT,
+  BOOKS_COUNT,
   booksLabel, catalogScore, centuryName, contributorLabel, countLabel, formatNumber,
   parseNumber,
-  titleInitial, type Book, type SortKey, type ViewMode, volumesOf,
+  titleInitial, type Book, type SortKey, type ViewMode, type WithinTitle, volumesOf,
 } from '../lib/types'
 import ImageSlot from '../components/ImageSlot'
 import SideDoors from '../components/SideDoors'
@@ -26,7 +30,7 @@ import {
   CabinetIcon, CalculatorIcon, ChartIcon, EmptyState, FilterIcon, GridIcon,
   HashIcon, HourglassIcon, OpenBookIcon, OwnerIcon, PagesIcon, PressIcon,
   SearchIcon, ShelfIcon, Stars, SuggestIcon, TableIcon, TagIcon,
-  ToggleRow, VerifyIcon, VolumesIcon,
+  ToggleRow, VerifyIcon, VolumesIcon, WithinIcon,
   cardStyle, chipStyle, countPillStyle, facetStyle, viewToggleStyle,
 } from '../components/ui'
 
@@ -95,8 +99,10 @@ export default function Browse() {
 
   const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no === filterCabinet
   // التصنيف يُصفّى برئيسه، ثم بفرعه إن اختير — والاثنان محفوظان في الكتاب
-  const passCategory = (b: Book) => (filterCategory === ALL || b.category === filterCategory)
-    && (filterSub === ALL || b.sub_category === filterSub)
+  const passCategoryOf = (category: string, sub: string) =>
+    (filterCategory === ALL || category === filterCategory)
+    && (filterSub === ALL || sub === filterSub)
+  const passCategory = (b: Book) => passCategoryOf(b.category, b.sub_category)
   const passStatus = (b: Book) => filterStatus === ALL
     || (filterStatus === UNKNOWN_STATUS ? !b.status : b.status === filterStatus)
   const passPlace = (b: Book) => filterPlace === ALL || b.place.trim() === filterPlace
@@ -105,12 +111,30 @@ export default function Browse() {
   const passLetter = (b: Book) => !filterLetter || titleInitial(b.title) === filterLetter
   const passSearch = (b: Book) => matchBook(b, query.trim(), searchOpts, searchKeys)
 
-  /** كل المرشِّحات، ويجوز استثناء واحدٍ منها لحساب عدّاد وجهه */
-  const passes = (b: Book, except?: 'cabinet' | 'category') =>
-    (except === 'cabinet' || passCabinet(b))
-    && (except === 'category' || passCategory(b))
-    && passStatus(b) && passPlace(b) && passRating(b) && passCentury(b)
-    && passLetter(b) && passSearch(b)
+  /**
+   * العنوانُ المضموم يُصفَّى بما ينفرد به: تصنيفُه وحرفُه ونصُّ البحث فيه.
+   * وأمّا الدولابُ والحالةُ والبلد فبيانات ضامِّه، لا يُسأل عنها مرَّتين.
+   */
+  const passWithin = (t: WithinTitle, except?: 'cabinet' | 'category') =>
+    (except === 'category' || passCategoryOf(t.category ?? '', t.sub_category ?? ''))
+    && (!filterLetter || titleInitial(t.title) === filterLetter)
+    && matchWithin(t, query.trim(), searchOpts)
+
+  /** ما يُعرض من عناوين الكتاب المضمومة على المرشِّحات القائمة */
+  const shownWithin = (b: Book) => withinTitlesOf(b).filter((t) => passWithin(t))
+
+  /**
+   * كل المرشِّحات، ويجوز استثناء واحدٍ منها لحساب عدّاد وجهه.
+   *
+   * والضامُّ يظهر بما ضُمَّ إليه: من رشَّح بالفقه فوجد في مجموعةٍ متنًا فقهيًّا
+   * فالمجموعةُ بابُه إليه — ولو أُسقطت لسقط في الفهرس كتابٌ لا سبيل إليه.
+   */
+  const passes = (b: Book, except?: 'cabinet' | 'category') => {
+    if (!(except === 'cabinet' || passCabinet(b))) return false
+    if (!(passStatus(b) && passPlace(b) && passRating(b) && passCentury(b))) return false
+    const own = (except === 'category' || passCategory(b)) && passLetter(b) && passSearch(b)
+    return own || withinTitlesOf(b).some((t) => passWithin(t, except))
+  }
 
   const sorter = useMemo(() => {
     const deathKey = (b: Book) => {
@@ -137,6 +161,17 @@ export default function Browse() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, filterCabinet, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
       filterCentury, filterLetter, query, searchOpts, searchKeys, sorter],
+  )
+
+  /**
+   * ما يُعرض فعلًا. والنشرةُ الأخرى تسقط من الشبكة والجدول: هي والمُعتمَدةُ
+   * عنوانٌ واحد لا عنوانان، فتُعرض المُعتمَدةُ وحدها ويجدها القارئُ في
+   * بطاقتها بتمامها. وأمّا الأرففُ فتعرضها: هي كتابٌ على الرفّ له كعبُه
+   * وموضعُه، والرفُّ يُري ما فيه لا ما عُدّ.
+   */
+  const listed = useMemo(
+    () => (viewMode === 'shelf' ? filtered : filtered.filter((b) => !b.edition_of)),
+    [filtered, viewMode],
   )
 
   /** فروعُ التصنيف المختار، ولا تُعرض إلا إذا اختير رئيسُها */
@@ -332,7 +367,7 @@ export default function Browse() {
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, flexWrap: 'wrap' }}>
             <div className="total-box">
               <span className="total-box-label">إجْماليّ الكُتُب</span>
-              <strong className="total-box-value">{formatNumber(books.length)}</strong>
+              <strong className="total-box-value">{formatNumber(bookCount(books))}</strong>
               {readingCount > 0 && (
                 <span className="total-box-sub">{formatNumber(readingCount)} قيد القراءة</span>
               )}
@@ -553,14 +588,14 @@ export default function Browse() {
           )}
         </section>
 
-        {filtered.length === 0 ? (
+        {listed.length === 0 ? (
           <EmptyState title="لا توجد كتب مطابقة" hint="جرّب تعديل الفلاتر أو كلمة البحث" />
         ) : viewMode === 'grid' ? (
-          <GridView books={filtered} />
+          <GridView books={listed} within={shownWithin} />
         ) : viewMode === 'table' ? (
-          <TableView books={filtered} />
+          <TableView books={listed} within={shownWithin} />
         ) : (
-          <ShelfView books={filtered} cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]} />
+          <ShelfView books={listed} cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]} />
         )}
       </div>
 
@@ -724,7 +759,17 @@ const letterStyle = (on: boolean, live: boolean) => ({
 } as const)
 
 // ------------------------------------------------------------------ شبكة
-function GridView({ books }: { books: Book[] }) {
+/**
+ * الشبكة: بطاقةُ كل كتاب، وبإزائها بطاقاتٌ صغيرة لِما طُبع معه أو فيه.
+ *
+ * والصغيرةُ صغيرةٌ عن قصد: العنوانُ المضموم كتابٌ يُعدّ، غير أنه لا غلاف له
+ * ولا موضعَ من الرفّ ولا حسبةَ ورقٍ على حِدَة — فبطاقةٌ بحجم أختها تُوهم
+ * أنّ هناك كتابًا ثانيًا على الرفّ. وهي تلي بطاقةَ ضامِّها فيُعرف أنها منه،
+ * والنقرُ عليها يفتح صفحته إذ لا صفحةَ لها.
+ */
+function GridView(
+  { books, within }: { books: Book[]; within: (book: Book) => WithinTitle[] },
+) {
   const { settings, authorById, isOwner } = useLibrary()
   return (
     <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: 20 }}>
@@ -734,7 +779,7 @@ function GridView({ books }: { books: Book[] }) {
         // أوّل من عمل في الكتاب غير مؤلِّفه، بصفته — والبقيّة في بطاقته
         const first = (book.contributors ?? []).find((c) => c.name.trim())
 
-        return (
+        return [
           <div
             key={book.id}
             className="book-card"
@@ -763,7 +808,9 @@ function GridView({ books }: { books: Book[] }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 9 }}>
-                <CardLine icon={<OwnerIcon size={13} />} text={book.author_name} strong />
+                {book.author_name.trim() && (
+                  <CardLine icon={<OwnerIcon size={13} />} text={book.author_name} strong />
+                )}
                 {death && <CardLine icon={<HourglassIcon size={12} />} text={death} />}
                 {first && (
                   <CardLine
@@ -799,10 +846,55 @@ function GridView({ books }: { books: Book[] }) {
                 )}
               </div>
             </div>
-          </div>
-        )
+          </div>,
+
+          ...within(book).map((t, i) => (
+            <WithinCard
+              key={`${book.id}-w${i}`}
+              book={book}
+              title={t}
+              death={deathLabel(authorById(t.author_id ?? null))}
+            />
+          )),
+        ]
       })}
     </section>
+  )
+}
+
+/** بطاقةُ عنوانٍ مضموم: خبرُه، ثم عنوانُه ومؤلِّفُه وأوّلُ ذوي صفاته */
+function WithinCard(
+  { book, title, death }: { book: Book; title: WithinTitle; death: string },
+) {
+  const first = (title.contributors ?? []).find((c) => c.name.trim())
+  return (
+    <div
+      className="within-card"
+      onClick={() => navigate({ name: 'book', id: book.id })}
+      title={`${withinLabelOf(book)} ${book.title}`}
+    >
+      <span className="within-card-head">
+        <WithinIcon size={13} />
+        {withinLabelOf(book)}
+      </span>
+      <div className="within-card-title">{title.title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {title.author_name.trim() && (
+          <CardLine icon={<OwnerIcon size={12} />} text={title.author_name} strong />
+        )}
+        {death && <CardLine icon={<HourglassIcon size={11} />} text={death} />}
+        {first && (
+          <CardLine
+            icon={<VerifyIcon size={11} />}
+            text={`${contributorLabel(first.role, 1)}: ${first.name.trim()}`}
+          />
+        )}
+        {(title.at ?? '').trim() && (
+          <CardLine icon={<PagesIcon size={11} />} text={toArabicDigits(title.at!.trim())} />
+        )}
+      </div>
+      <span className="within-card-foot" style={clipped}>{book.title}</span>
+    </div>
   )
 }
 
@@ -880,7 +972,9 @@ const TABLE_COLUMNS = '58px minmax(0,2.4fr) minmax(0,1.7fr) 104px minmax(0,1.4fr
  * والفاصلُ حدٌّ على بداية كل خليّةٍ إلا الأولى (`:first-child`)، فيقوم من
  * تلقائه على أيّ عددٍ من الأعمدة، ولا يبقى خطٌّ معلَّقٌ على حرف الجدول.
  */
-function TableView({ books }: { books: Book[] }) {
+function TableView(
+  { books, within }: { books: Book[]; within: (book: Book) => WithinTitle[] },
+) {
   const { authorById } = useLibrary()
 
   return (
@@ -897,7 +991,8 @@ function TableView({ books }: { books: Book[] }) {
 
         {books.map((book, i) => {
           const author = authorById(book.author_id)
-          return (
+          const inside = within(book)
+          return [
             <div
               key={book.id}
               className="lib-table-row"
@@ -916,8 +1011,47 @@ function TableView({ books }: { books: Book[] }) {
                   ? `${book.cabinet_no}${book.shelf_no ? ` / ${book.shelf_no}` : ''}`
                   : '—'}
               </div>
-            </div>
-          )
+            </div>,
+
+            /* وما طُبع معه أو فيه تحته، بلا رقمٍ مسلسل ولا لونِ صفٍّ مثله:
+               هي عناوينُ تُعدّ كتبًا ولا ورقَ لها على حِدَة، فلا يُكتب في
+               أعمدة الورق منها شيء. وفوقها سطرٌ يُبيِّن بأيّ وجهٍ ضُمَّت. */
+            ...(inside.length === 0 ? [] : [
+              <div
+                key={`${book.id}-wh`}
+                className="lib-table-row lib-table-within-head"
+                style={{ gridTemplateColumns: TABLE_COLUMNS }}
+              >
+                <div className="lib-cell lib-cell-no"><WithinIcon size={13} /></div>
+                <div className="lib-cell" style={{ gridColumn: 'span 7' }}>
+                  {withinLabelOf(book)} — {countLabel(inside.length, BOOKS_COUNT)}
+                </div>
+              </div>,
+              ...inside.map((t, wi) => (
+                <div
+                  key={`${book.id}-w${wi}`}
+                  className="lib-table-row lib-table-within"
+                  style={{ gridTemplateColumns: TABLE_COLUMNS }}
+                  onClick={() => navigate({ name: 'book', id: book.id })}
+                >
+                  <div className="lib-cell lib-cell-no" />
+                  <div className="lib-cell lib-cell-title" style={clipped}>{t.title}</div>
+                  <div className="lib-cell lib-cell-strong" style={clipped}>
+                    {t.author_name || '—'}
+                  </div>
+                  <div className="lib-cell" style={clipped}>
+                    {deathLabel(authorById(t.author_id ?? null)) || '—'}
+                  </div>
+                  <div className="lib-cell" />
+                  <div className="lib-cell" />
+                  <div className="lib-cell lib-cell-num">
+                    {(t.at ?? '').trim() ? toArabicDigits(t.at!.trim()) : ''}
+                  </div>
+                  <div className="lib-cell" />
+                </div>
+              )),
+            ]),
+          ]
         })}
       </div>
     </section>
@@ -1013,6 +1147,20 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
                           boxShadow: '0 1px 3px oklch(0.2 0.02 50 / 0.35)',
                         }}>
                           {volume}
+                        </span>
+                      )}
+
+                      {/* شارةُ ما طُبع معه أو فيه: العناوينُ المضمومة لا كعبَ
+                          لها — هي في جوف هذا الكعب — فيُعلَّم بعددها ههنا.
+                          وعلى المجلَّد الأول وحده: الخبرُ عن الكتاب لا عن كل
+                          مجلَّدٍ منه. */}
+                      {volume === 1 && withinTitlesOf(book).length > 0 && (
+                        <span
+                          className="spine-within"
+                          title={`${withinLabelOf(book)} ${countLabel(withinTitlesOf(book).length, BOOKS_COUNT)}`}
+                        >
+                          <WithinIcon size={9} />
+                          {formatNumber(withinTitlesOf(book).length)}
                         </span>
                       )}
 

@@ -69,3 +69,83 @@ export const linkContributors = internalMutation({
     return { linked, created, books }
   },
 })
+
+/**
+ * يطوي الكتبَ المضمومة في ضامِّها.
+ *
+ * كان الكتابُ المطبوع ضمن غيره سجلًّا قائمًا برأسه يشير إلى ضامِّه
+ * بـ`within_book_id`، فيُطالَب فاهرسُه ببيانات طبعةٍ ونسخةٍ هي بيانات
+ * الضامّ نفسِها، ويُعرَض في الشبكة والأرفف كأنه كتابٌ على الرفّ مستقلّ —
+ * وليس كذلك: هو عنوانٌ في كتابٍ واحد. فصار خبرًا في الضامّ نفسِه
+ * (`within_titles`)، لا يُكتب فيه إلا ما ينفرد به.
+ *
+ * فهذا ينقل كلَّ سجلٍّ مضمومٍ إلى قائمة ضامِّه ثم **يحذف السجلّ**، وينقل
+ * معه ما تعلَّق به من فوائدَ وإعاراتٍ وصلاتٍ إلى الضامّ — لا تضيع فائدةٌ
+ * قُيِّدت على كتابٍ مضموم.
+ *
+ * ويُعاد تشغيلُه بلا ضرر: ما لا `within_book_id` له لا يُمَسّ.
+ */
+export const foldWithinBooks = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query('books').collect()
+    const children = all.filter((b) => b.within_book_id)
+
+    let folded = 0      // سجلٌّ طُوي في ضامِّه ثم حُذف
+    let orphans = 0     // سجلٌّ يشير إلى ضامٍّ لا وجود له، فتُرك على حاله
+    let moved = 0       // فائدةٌ أو إعارةٌ أو صلةٌ نُقلت إلى الضامّ
+
+    for (const child of children) {
+      const parentId = child.within_book_id!
+      const parent = await ctx.db.get(parentId)
+      if (!parent) { orphans++; continue }
+
+      const titles = parent.within_titles ?? []
+      if (!titles.some((t) => t.title.trim() === child.title.trim())) {
+        titles.push({
+          title: child.title,
+          author_id: child.author_id,
+          author_name: child.author_name,
+          contributors: child.contributors ?? [],
+          category: child.category ?? '',
+          sub_category: child.sub_category ?? '',
+          is_matn: child.is_matn ?? false,
+          at: child.within_pages ?? '',
+        })
+        await ctx.db.patch(parentId, { within_titles: titles })
+      }
+
+      // ما تعلَّق بالسجلّ المضموم يُنقل إلى ضامِّه لا يُحذف معه
+      for (const perk of await ctx.db.query('perks')
+        .withIndex('by_book', (q) => q.eq('book_id', child._id)).collect()) {
+        await ctx.db.patch(perk._id, { book_id: parentId })
+        moved++
+      }
+      for (const loan of await ctx.db.query('loans')
+        .withIndex('by_book', (q) => q.eq('book_id', child._id)).collect()) {
+        await ctx.db.patch(loan._id, { book_id: parentId })
+        moved++
+      }
+      for (const w of await ctx.db.query('book_works')
+        .withIndex('by_book', (q) => q.eq('book_id', child._id)).collect()) {
+        await ctx.db.patch(w._id, { book_id: parentId })
+        moved++
+      }
+      for (const w of await ctx.db.query('book_works')
+        .withIndex('by_target', (q) => q.eq('target_book_id', child._id)).collect()) {
+        await ctx.db.patch(w._id, { target_book_id: parentId })
+        moved++
+      }
+
+      // ونشرةٌ نُسبت إلى المضموم تُنسَب إلى ضامِّه، فلا تبقى معلَّقةً بمحذوف
+      for (const b of all) {
+        if (b.edition_of === child._id) await ctx.db.patch(b._id, { edition_of: parentId })
+      }
+
+      await ctx.db.delete(child._id)
+      folded++
+    }
+
+    return { folded, orphans, moved }
+  },
+})

@@ -18,7 +18,8 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { QUICK_OPTS, ALL_SEARCH_KEYS, matchBook, matchPerk } from '../lib/search'
+import { QUICK_OPTS, ALL_SEARCH_KEYS, matchBook, matchPerk, matchWithin } from '../lib/search'
+import { withinTitlesOf } from '../lib/editions'
 import { sourceAuthor, sourceTitle } from '../lib/perks'
 import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import { BOOKS_COUNT, PERKS_COUNT, countLabel, formatNumber } from '../lib/types'
@@ -46,8 +47,14 @@ export default function SearchOverlay(
   const trimmed = query.trim()
   const canSeePerks = isOwner || settings.visibility.perks
 
+  // والعنوانُ المضموم يُصاب كما يُصاب صاحبُ السجلّ: هو كتابٌ في المكتبة،
+  // فمن بحث عن «الأربعون النووية» وهي في «مهمّات العلم» وجب أن يجدها —
+  // وبابُه إليها صفحةُ ضامِّها، إذ لا صفحةَ لها.
   const bookHits = useMemo(
-    () => (trimmed ? books.filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)) : []),
+    () => (trimmed
+      ? books.filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)
+        || withinTitlesOf(b).some((t) => matchWithin(t, trimmed, QUICK_OPTS)))
+      : []),
     [books, trimmed],
   )
 

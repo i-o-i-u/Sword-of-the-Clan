@@ -491,6 +491,23 @@ export function ArchiveIcon({ size = 18 }: IconProps) {
   )
 }
 
+/**
+ * مجلَّدٌ في جوفه عناوين — «مطبوعٌ معه» و«مطبوعٌ فيه».
+ *
+ * ودلالتُه: غلافٌ واحد وفيه عناوينُ مسطورة، فهي كتبٌ تُعدّ ولا يُعدّ لها ورق.
+ */
+export function WithinIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <rect x="3.4" y="4.2" width="17.2" height="15.6" rx="1.8" />
+      <path d="M8.2 4.2v15.6" />
+      <path d="M11.6 9.2h5.6" />
+      <path d="M11.6 12.6h5.6" />
+      <path d="M11.6 16h3.4" />
+    </svg>
+  )
+}
+
 /** حرف المعلومة في دائرة — قسم عن الكتاب */
 export function InfoIcon({ size = 18 }: IconProps) {
   return (

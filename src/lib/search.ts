@@ -1,7 +1,7 @@
 // خوارزمية البحث العربي (§٥-٢). هي قلب البحث في هذا الفهرس:
 // تُسقِط التشكيل والتطويل، وتوحّد الهمزات والتاء المربوطة ما لم يُطلب خلاف ذلك.
 
-import type { Book, Perk } from './types'
+import type { Book, Perk, WithinTitle } from './types'
 
 export interface SearchOptions {
   caseSensitive: boolean
@@ -87,6 +87,26 @@ export function matchBook(b: Book, query: string, o: SearchOptions, keys: string
     return needle.split(' ').filter(Boolean).every((w) => all.includes(w))
   }
   return texts.some((t) => t.includes(needle))
+}
+
+/**
+ * العنوانُ المضموم يُطابَق بما ينفرد به: عنوانُه ومؤلِّفُه وذوو صفاته
+ * وتصنيفُه — وما سواه بيانات ضامِّه، تُطابَق فيه لا ههنا.
+ *
+ * وهذا لازمٌ: العنوانُ المضموم كتابٌ في المكتبة، فمن بحث عن «الأربعون
+ * النووية» وهي في «برنامج مهمّات العلم» وجب أن يجدها — وإلّا كان في الفهرس
+ * كتابٌ لا سبيل إليه.
+ */
+export function matchWithin(t: WithinTitle, query: string, o: SearchOptions): boolean {
+  const needle = normalizeText(query, o)
+  if (!needle) return true
+  const hay = normalizeText([
+    t.title, t.author_name,
+    (t.contributors ?? []).map((c) => c.name).join(' '),
+    t.category ?? '', t.sub_category ?? '',
+  ].join(' '), o)
+  if (o.anyOrder) return needle.split(' ').filter(Boolean).every((w) => hay.includes(w))
+  return hay.includes(needle)
 }
 
 /**

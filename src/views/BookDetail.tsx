@@ -21,10 +21,11 @@ import {
   BOOKS_COUNT, COPIES_COUNT, LANGUAGES, STATUSES, STATUS_UNKNOWN,
   WORK_PHRASES, contributorLabel, countLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
-  type Author, type Book, type Perk, type ReadingStatus,
+  type Author, type Book, type Perk, type ReadingStatus, type WithinTitle,
 } from '../lib/types'
 import {
-  editionGroup, issueBadge, issueLine, pressesOf, printedWithin, volumeYearSpan,
+  editionGroup, isCollection, issueBadge, issueLine, pressesLine, pressesOf,
+  printedWithin, volumeYearSpan, withinLabelOf, withinTitlesOf,
 } from '../lib/editions'
 import ImageSlot from '../components/ImageSlot'
 import PerkCard from '../components/PerkCard'
@@ -33,7 +34,7 @@ import { PerkIcon } from '../components/ui'
 import {
   ArchiveIcon, BackButton, ChevronIcon, ClearIcon, CopyButton, CopyIcon,
   EmptyState, HourglassIcon, InfoIcon, LinkIcon, Money, OpenBookIcon, OwnerIcon,
-  PencilIcon, PressIcon, PrinterIcon, QuoteIcon, VerifyIcon,
+  PencilIcon, PressIcon, PrinterIcon, QuoteIcon, VerifyIcon, WithinIcon,
   cardStyle, ghostButtonStyle, outlineTabStyle, resolveAsset,
 } from '../components/ui'
 
@@ -66,6 +67,8 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   const hidden = (key: string) => settings.hidden_fields.includes(key)
 
   const [showVolumes, setShowVolumes] = useState(false)
+  // وقسمُ ما طُبع معه مطويٌّ حتى يُفتح: المجموعةُ تضمّ عشرين عنوانًا وأكثر
+  const [showWithin, setShowWithin] = useState(false)
   const [zoomCover, setZoomCover] = useState(false)
 
   // ما تعلَّق بالكتاب يُطلب بمعرّفه التامّ لا بما جاء في الرابط، فقد يكون
@@ -87,6 +90,11 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   }
 
   const author = authorById(book.author_id)
+  const hasAttrib = !!(
+    book.author_name.trim()
+    || (book.co_authors ?? []).some((c) => c.name.trim())
+    || (!hidden('contributors') && (book.contributors ?? []).some((c) => c.name.trim()))
+  )
   // صفحةُ الدار لا تُعرض إلا لدارٍ بقي لها كتابٌ ظاهر، فالرابطُ إليها لا
   // يُكتب إلا إذا كانت في القائمة التي جاءت من الخادم
   const presses = pressesOf(book)
@@ -96,6 +104,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   // الفهرس، فلا يُكتب إلا إذا كان المُشارُ إليه ظاهرًا — والخادمُ يفكّ
   // الصلةَ عن الزائر إذا حُجب طرفُها، فما بقي ههنا فهو ظاهر.
   const within = book.within_book_id ? bookById(book.within_book_id) : undefined
+  const insideTitles = withinTitlesOf(book)
   const inside = printedWithin(books, book)
   const editions = editionGroup(books, book)
   const issue = issueBadge(book)
@@ -388,6 +397,16 @@ export default function BookDetail({ bookId }: { bookId: string }) {
                 مَتْنٌ دَرْسيّ
               </a>
             )}
+            {/* والمجموعةُ عنوانُها اسمُ مجموعةٍ لا اسمُ كتاب، فيُعلَّم بذلك:
+                من رأى «برنامج مهمّات العلم» في الفهرس لا يظنّه كتابًا */}
+            {isCollection(book) && (
+              <span
+                className="book-flag book-flag-issue"
+                title="عنوانُ هذا السجلّ اسمُ مجموعةٍ طُبع فيها كتب، لكلٍّ مؤلِّفُه"
+              >
+                مجموعةٌ مطبوعة
+              </span>
+            )}
             {/* والمصوَّرةُ وإعادةُ الصفّ خبرٌ عن النسخة لا عن الكتاب: هي أقلُّ
                 قيمةً أثريّةً من الأصل، وذلك ممّا يُعرف بنظرةٍ لا بقراءة صفّ */}
             {issue && !hidden('issueKind') && (
@@ -405,6 +424,10 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               والأرفف. البطاقة موضع التفصيل، وما دونها موضع الاختصار.
               وهو لوحُ نسبةٍ لا صندوق: شريطٌ لوّنه لون المكتبة عن يمينه،
               وصفوفٌ يفصلها خطٌّ خفيف، ولكلّ صفٍّ صفتُه في عمودٍ ثابت. */}
+          {/* ولا يُعرض لوحُ النسبة فارغًا: المجموعةُ لا مؤلِّف لها، فإن لم
+              يكن لها من أشرف عليها لم يبقَ في اللوح شيء — ولوحٌ لا نسبةَ فيه
+              ليس خبرًا. */}
+          {(hasAttrib) && (
           <section className="attrib">
             <AuthorLine
               author={author}
@@ -424,6 +447,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               <Contributors book={book} linked={isOwner || vis.authors} />
             )}
           </section>
+          )}
 
           {/* ------------------------------------------------- أقسام البيانات */}
           <Section icon={<OpenBookIcon size={17} />} title="بيانات الكتاب" rows={keep(bookRows)} />
@@ -457,8 +481,16 @@ export default function BookDetail({ bookId }: { bookId: string }) {
             <WorksAbout rows={worksAbout.map((w) => ({ type: w.type, target: bookById(w.book_id) }))} />
           )}
 
-          {/* نشراتُ الكتاب الأخرى في المكتبة، ثم ما طُبع ضمنه من الكتب */}
+          {/* نشراتُ الكتاب الأخرى في المكتبة، ثم ما طُبع معه أو فيه */}
           {!hidden('otherEditions') && <OtherEditions group={editions} />}
+          {!hidden('within') && insideTitles.length > 0 && (
+            <WithinTitlesPanel
+              book={book}
+              titles={insideTitles}
+              open={showWithin}
+              onToggle={() => setShowWithin((v) => !v)}
+            />
+          )}
           {!hidden('within') && inside.length > 0 && <PrintedWithin books={inside} />}
 
           {showTo('perks') && <PerksPanel bookId={book.id} perks={bookPerks} />}
@@ -986,9 +1018,11 @@ function Presses(
 /**
  * نشراتُ الكتاب الأخرى في المكتبة.
  *
- * والنشرتان لكتابٍ واحد عنوانٌ واحد لا عنوانان، وإن كان لكلٍّ محقِّقُها
- * ودارُها ومجلَّداتُها. فمن وقف على الدُّونى وجد سبيلَه إلى الأجود، ومن وقف
- * على الأجود رأى ما معها في المكتبة.
+ * والنشرتان لكتابٍ واحد عنوانٌ واحد لا عنوانان، فتشتركان بالضرورة في العنوان
+ * واسم المؤلِّف — ولذلك لا يُعرض ههنا عنوانٌ ولا مؤلِّف، هما فوقُ في صدر
+ * البطاقة. وتختلفان فيما سواهما: لكلٍّ محقِّقُها ودارُها ومجلَّداتُها وصفحاتُها
+ * وغلافُها وموضعُها من الرفّ وسطرُ ملاحظاتها. فتُعرض كلُّ نشرةٍ بتمام ما
+ * تنفرد به، لا سطرًا يُنقَر: من وقف على إحداهما فإنما يريد المقابلة بينهما.
  */
 function OtherEditions({ group }: { group: ReturnType<typeof editionGroup> }) {
   const { of, others } = group
@@ -998,54 +1032,202 @@ function OtherEditions({ group }: { group: ReturnType<typeof editionGroup> }) {
     <section style={{ ...cardStyle, borderRadius: 12, padding: '15px 18px 17px', marginBottom: 16 }}>
       <SectionHead
         icon={<PressIcon size={16} />}
-        title={of ? 'نشرةٌ أخرى من كتابٍ في المكتبة' : 'نشراتُ هذا الكتاب الأخرى'}
+        title={of ? 'نشرةٌ أخرى من كتابٍ في المكتبة' : 'نشراتٌ أخرى للكتاب'}
       />
 
-      {of && (
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 9, lineHeight: 1.9 }}>
-          والنشرةُ المُعتمَدة من هذا الكتاب عندنا هي:
-        </div>
-      )}
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 11, lineHeight: 1.9 }}>
+        {of
+          ? 'والنشرةُ المُعتمَدة من هذا الكتاب عندنا هي:'
+          : 'الكتابُ واحد وعنوانُه واحد، والنشرةُ غيرُ النشرة: لكلٍّ محقِّقُها ودارُها ومجلَّداتُها.'}
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {[...(of ? [of] : []), ...others].map((target) => (
-          <EditionLine key={target.id} book={target} />
+          <EditionPanel key={target.id} book={target} main={!!of} />
         ))}
       </div>
     </section>
   )
 }
 
-/** سطرُ نشرةٍ: عنوانُها ثم ما تُعرف به — محقِّقُها ودارُها وسنتُها */
-function EditionLine({ book }: { book: Book }) {
+/**
+ * لوحُ نشرةٍ أخرى: غلافُها إلى جانب ما تنفرد به من بيانات، ثم سطرُ ملاحظاتها.
+ *
+ * والغلافُ صغيرٌ ههنا لا كغلاف الصفحة: هو للتمييز بين النشرتين بالنظر، فذاك
+ * أسرعُ ما يُفرَّق به بينهما.
+ */
+function EditionPanel({ book, main }: { book: Book; main: boolean }) {
+  const { authorById, settings, isOwner } = useLibrary()
+  const vis = settings.visibility
+  const hidden = (key: string) => settings.hidden_fields.includes(key)
+
   const presses = pressesOf(book)
-  const marks = [
-    (book.contributors ?? [])
-      .filter((c) => c.name.trim())
-      .slice(0, 2)
-      .map((c) => `${c.role} ${c.name.trim()}`)
-      .join('، '),
-    presses.map((p) => p.name).join(' و'),
-    publishYear(book),
-    !book.single_volume && (book.volumes ?? 0) > 1
-      ? `${formatNumber(book.volumes)} مجلَّدًا`
-      : '',
-  ].filter(Boolean)
+  const span = volumeYearSpan(book)
+  const issue = issueBadge(book)
+
+  const facts: { label: string; value: ReactNode; key: string }[] = [
+    { key: 'publisher', label: presses.length > 1 ? 'دُور النَّشْر' : 'دار النَّشْر', value: pressesLine(book) },
+    { key: 'yearLabel', label: span ? 'سنوات النَّشْر' : 'سنة النَّشْر', value: span || publishYear(book) },
+    {
+      key: 'edition',
+      label: 'الطبعة',
+      value: book.edition + (book.edition_notes ? ` (${book.edition_notes})` : ''),
+    },
+    {
+      key: 'volumes',
+      label: 'المُجلَّدات',
+      value: book.single_volume ? 'مُجلَّدٌ واحد' : formatNumber(book.volumes),
+    },
+    { key: 'pages', label: 'عدد الصفحات', value: formatNumber(book.pages) },
+    { key: 'size', label: 'حجْم الكتاب', value: book.size },
+    { key: 'binding', label: 'نوع التَّغْليف', value: book.binding },
+    { key: 'condition', label: 'الحالة المادِّيَّة', value: book.condition },
+    {
+      key: 'cabinet',
+      label: 'موضعُها من المكتبة',
+      value: book.cabinet_no
+        ? `دولاب ${book.cabinet_no}${book.shelf_no ? ` / رفّ ${book.shelf_no}` : ''}`
+        : '',
+    },
+  ].filter((f) => !hidden(f.key) && filled(f.value))
 
   return (
     <div
-      onClick={() => navigate({ name: 'book', id: book.id })}
-      style={{
-        display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer', flexWrap: 'wrap',
-        background: 'var(--header)', border: '1px solid var(--border)',
-        borderRadius: 9, padding: '10px 13px',
+      // واللوحُ كلُّه بابٌ إلى صفحة النشرة، إلا ما كان في جوفه بابًا إلى
+      // غيرها: اسمُ المحقِّق يذهب إلى صفحته، فلا يُخطَف النقرُ منه
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('a')) return
+        navigate({ name: 'book', id: book.id })
       }}
+      className="edition-panel"
+      title="افتح صفحة هذه النشرة"
     >
-      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{book.title}</span>
-      {marks.length > 0 && (
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{marks.join(' — ')}</span>
-      )}
+      <div className="edition-panel-cover">
+        <ImageSlot url={book.cover_url} folder="covers" canEdit={false} placeholder="غلاف النشرة" />
+      </div>
+
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--accent-soft)' }}>
+            {main ? 'النشرةُ المُعتمَدة' : 'نشرةٌ أخرى'}
+          </span>
+          {issue && !hidden('issueKind') && (
+            <span className="book-flag book-flag-issue" title={issueLine(book)}>{issue}</span>
+          )}
+        </div>
+
+        {/* ذوو الصفات أوّلُ ما يُفرَّق به بين النشرتين: هي نشرةُ فلانٍ وتلك
+            نشرةُ فلان. ولا يُعرض ههنا مؤلِّفٌ: هو مؤلِّفُ الكتاب نفسِه. */}
+        {!hidden('contributors') && (book.contributors ?? []).length > 0 && (
+          <section className="attrib attrib-tight">
+            <Contributors book={book} linked={isOwner || vis.authors} />
+          </section>
+        )}
+
+        {facts.length > 0 && (
+          <div className="edition-panel-facts">
+            {facts.map((f) => (
+              <div key={f.key} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{f.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere' }}>{f.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ولكلّ نشرةٍ ملاحظاتُها: هي فيها لا في أختها */}
+        {(isOwner || vis.notes) && book.notes.trim() && (
+          <div className="prose" style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.95 }}>
+            {book.notes}
+          </div>
+        )}
+
+        {/* والوفاةُ تُقرأ من سجلّ المؤلِّف نفسِه، فلا تُعاد ههنا */}
+        {authorById(book.author_id) === null && book.author_name.trim() && (
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{book.author_name}</div>
+        )}
+      </div>
     </div>
+  )
+}
+
+/**
+ * ما طُبع مع الكتاب أو فيه من العناوين، قسمًا مطويًّا.
+ *
+ * ومطويٌّ عن قصد: المجموعةُ تضمّ عشرين عنوانًا وأكثر، فلو بُسطت كلُّها لطالت
+ * البطاقةُ حتى يضيع ما بعدها. ويُذكر عددُها في ترويسته، فيُعلم ما وراءه قبل
+ * أن يُفتح.
+ */
+function WithinTitlesPanel(
+  { book, titles, open, onToggle }: {
+    book: Book
+    titles: WithinTitle[]
+    open: boolean
+    onToggle: () => void
+  },
+) {
+  const { authorById, settings, isOwner } = useLibrary()
+  const linked = isOwner || settings.visibility.authors
+
+  return (
+    <section style={{ ...cardStyle, borderRadius: 12, padding: '15px 18px 17px', marginBottom: 16 }}>
+      <SectionHead icon={<WithinIcon size={16} />} title={`${withinLabelOf(book)} من الكتب`} />
+
+      <button type="button" onClick={onToggle} className="within-toggle" aria-expanded={open}>
+        <ChevronIcon size={13} />
+        <span>
+          {countLabel(titles.length, BOOKS_COUNT)}
+          {isCollection(book)
+            ? ' طُبعت في هذه المجموعة، لكلٍّ منها مؤلِّفُه'
+            : ' طُبعت مع هذا الكتاب في نشرةٍ واحدة'}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <div style={{ fontSize: 12, color: 'var(--muted)', margin: '11px 0 9px', lineHeight: 1.9 }}>
+            وهي كتبٌ تُعدّ في المكتبة كلُّ واحدٍ منها كتابًا، وليس لها من الورق
+            شيءٌ على حِدَة — فبياناتُ الطبعة والنسخة أعلاه هي بياناتُها.
+          </div>
+
+          <ol className="within-list">
+            {titles.map((t, i) => (
+              <li key={`${t.title}-${i}`}>
+                <span className="within-list-no">{formatNumber(i + 1)}</span>
+                <span className="within-list-body">
+                  <span className="within-list-title">
+                    {t.title}
+                    {t.is_matn && <span className="within-list-matn">مَتْنٌ دَرْسيّ</span>}
+                  </span>
+                  <span className="within-list-marks">
+                    {t.author_name.trim() && (
+                      <span>
+                        <PersonName
+                          name={t.author_name}
+                          id={t.author_id ?? null}
+                          linked={linked}
+                        />
+                        {deathLabel(authorById(t.author_id ?? null))
+                          && ` (${deathLabel(authorById(t.author_id ?? null))})`}
+                      </span>
+                    )}
+                    {(t.contributors ?? []).filter((c) => c.name.trim()).map((c, ci) => (
+                      <span key={`${c.name}-${ci}`}>
+                        {contributorLabel(c.role, 1)}: {c.name.trim()}
+                      </span>
+                    ))}
+                    {t.category && <span>{t.category}</span>}
+                  </span>
+                </span>
+                {(t.at ?? '').trim() && (
+                  <span className="within-list-at">{toArabicDigits(t.at!.trim())}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
   )
 }
 

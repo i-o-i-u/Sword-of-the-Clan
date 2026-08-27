@@ -21,10 +21,10 @@ import {
   BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, ISSUE_BY_LABEL,
   ISSUE_HINTS, ISSUE_KINDS, LANGUAGES,
   MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS,
-  WORK_PHRASES, WORK_TYPES,
+  WITHIN_LABEL, WITH_LABEL, WORK_PHRASES, WORK_TYPES,
   editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
   sumVolumePages, type Category, type Contributor, type CoPublisher,
-  type MissingVolume,
+  type MissingVolume, type WithinTitle,
 } from '../lib/types'
 import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
@@ -63,6 +63,33 @@ interface AuthorRow {
   text: string
 }
 
+/**
+ * عنوانٌ مضمومٌ في النموذج: ما ينفرد به عن ضامِّه لا غير.
+ *
+ * فالكتبُ المطبوعة في نشرةٍ واحدة تشترك في الدار والسنة والطبعة والمجلَّدات
+ * والموضع من الرفّ، فلا يُسأل الفاهرسُ عنها مرَّتين. وإنما يُكتب لكلّ عنوانٍ
+ * منها: عنوانُه ومؤلِّفُه وذوو صفاته وتصنيفُه وموضعُه من الكتاب.
+ */
+interface WithinRow {
+  title: string
+  author: AuthorRow
+  contributors: Contributor[]
+  category: string
+  sub_category: string
+  is_matn: boolean
+  at: string
+}
+
+const EMPTY_WITHIN: WithinRow = {
+  title: '',
+  author: { name: '', alive: false, approx: false, death: '', text: '' },
+  contributors: [],
+  category: '',
+  sub_category: '',
+  is_matn: false,
+  at: '',
+}
+
 const EMPTY_AUTHOR: AuthorRow = { name: '', alive: false, approx: false, death: '', text: '' }
 const EMPTY_YEAR: HijriYear = { year: null, month: null, day: null, approx: false, text: '' }
 
@@ -75,6 +102,71 @@ const str = (v: number | null | undefined) => (v === null || v === undefined ? '
 function editionNumberOf(text: string): string {
   for (let n = 1; n <= 99; n++) if (editionInWords(n) === text) return String(n)
   return text
+}
+
+/**
+ * حقولُ وفاة المؤلِّف: مُعاصِرٌ حيّ، أو سنةٌ محقَّقة، أو تقريبٌ يُكتب نصًّا.
+ *
+ * وهي في موضعين — صفُّ مؤلِّف الكتاب وصفُّ مؤلِّف العنوان المضموم — والقطعةُ
+ * واحدة كي لا يفترق سؤالُ الوفاة بين الموضعين.
+ */
+function DeathFields(
+  { row, onPatch, label = 'تاريخ وفاة المُؤلِّف' }: {
+    row: AuthorRow
+    onPatch: (patch: Partial<AuthorRow>) => void
+    label?: string
+  },
+) {
+  return (
+    <div style={{ ...labelStyle, gap: 6 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {label}
+        <label style={checkStyle}>
+          <input
+            type="checkbox"
+            checked={row.alive}
+            onChange={(e) => onPatch({ alive: e.target.checked })}
+          />
+          مُعاصِر
+        </label>
+        {!row.alive && (
+          <label style={checkStyle}>
+            <input
+              type="checkbox"
+              checked={row.approx}
+              onChange={(e) => onPatch({ approx: e.target.checked })}
+            />
+            تاريخٌ تقريبي
+          </label>
+        )}
+      </span>
+
+      {/* المعاصِر لا وفاة له، والمجهولةُ وفاتُه تُكتب نصًّا */}
+      {row.alive ? (
+        <span style={{ fontSize: 12, color: 'var(--accent-soft)', padding: '9px 0' }}>
+          مؤلِّفٌ معاصِرٌ حيّ
+        </span>
+      ) : row.approx ? (
+        <input
+          value={row.text}
+          onChange={(e) => onPatch({ text: e.target.value })}
+          placeholder="مثال: نحو ١٠٦٠ هـ، أو: القرن الرابع"
+          style={inputStyle}
+        />
+      ) : (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            value={row.death}
+            onChange={(e) => onPatch({ death: e.target.value })}
+            inputMode="numeric"
+            placeholder="السنة"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <span style={{ fontSize: 13 }}>هـ</span>
+        </span>
+      )}
+    </div>
+  )
 }
 
 export default function AddBook({ bookId }: { bookId?: string }) {
@@ -222,6 +314,29 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   // ------------------------------------------------- ٥. ارتباطه بكتبٍ أخرى
   // النشرةُ الأجود أصلٌ، وما دونها يُنسَب إليها فلا يُعدّان عنوانَين
   const [editionOf, setEditionOf] = useState(() => editing?.edition_of ?? '')
+
+  /**
+   * هل هذا السجلُّ مجموعةٌ لا كتاب؟ فالضامُّ على وجهين:
+   *   • كتابٌ رئيسٌ هو المقصود بالطبع، أُلحق به غيرُه تكملةً — «مطبوعٌ معه».
+   *   • مجموعةٌ عنوانُها اسمُ المجموعة لا اسمُ كتاب — «مطبوعٌ فيه» — فلا
+   *     مؤلِّف لها وإنما مَن أشرف عليها، ولا تُعدّ هي كتابًا.
+   */
+  const [collection, setCollection] = useState(() => editing?.is_collection ?? false)
+  const [withinRows, setWithinRows] = useState<WithinRow[]>(
+    () => (editing?.within_titles ?? []).map((t) => ({
+      title: t.title,
+      author: rowFor(t.author_name),
+      contributors: (t.contributors ?? []).map((c) => ({ ...c })),
+      category: t.category ?? '',
+      sub_category: t.sub_category ?? '',
+      is_matn: t.is_matn ?? false,
+      at: t.at ?? '',
+    })),
+  )
+  /** فُتح بابُ العناوين المضمومة: إمّا لأن فيه عناوينَ، وإمّا لأنه طُلب */
+  const [withinOpen, setWithinOpen] = useState(
+    () => (editing?.within_titles ?? []).length > 0,
+  )
   const [workTargetId, setWorkTargetId] = useState('')
   const [workType, setWorkType] = useState(WORK_TYPES[0])
   const [newWorks, setNewWorks] = useState<{ target_book_id: string; type: string }[]>([])
@@ -302,7 +417,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
       : 'مؤلِّفٌ جديد، ستُنشأ له صفحة خاصة'
   }, [authorRows, authors, editing])
 
-  const ready = !!(title.trim() && authorRows[0]?.name.trim())
+  // والمجموعةُ لا مؤلِّف لها، فلا يُحبَس حفظُها على اسمٍ لا وجود له
+  const ready = !!(title.trim() && (collection || authorRows[0]?.name.trim()))
 
   function patchAuthorRow(i: number, patch: Partial<AuthorRow>) {
     setAuthorRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -321,6 +437,21 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     })
   }
 
+  /**
+   * اختيارُ النشرة الأصل يملأ العنوان واسمَ المؤلِّف منها.
+   *
+   * فالنشرتان لكتابٍ واحد تشتركان فيهما بالضرورة وتختلفان فيما سواهما، ولو
+   * اختلف العنوانان لصارا عنوانَين اثنين في المكتبة لا عنوانًا. والخادمُ
+   * يزامنهما بعدُ في `books.update` متى غُيِّر عنوانُ الأصل.
+   */
+  function pickEditionOf(id: string) {
+    setEditionOf(id)
+    const origin = id ? books.find((b) => b.id === id) : null
+    if (!origin) return
+    setTitle(origin.title)
+    setAuthorRows(origin.author_name.trim() ? [rowFor(origin.author_name)] : [EMPTY_AUTHOR])
+  }
+
   function patchContrib(i: number, patch: Partial<Contributor>) {
     setContribRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   }
@@ -330,10 +461,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     if (!ready || saving) return
     setSaving(true)
     try {
-      // المؤلِّفون: يُنشأون أو يُلحق بهم، وتُحفظ وفاةُ كلٍّ في صفحته
-      const filled = authorRows.filter((r) => r.name.trim())
-      const saved: { author_id: string; name: string }[] = []
-      for (const row of filled) {
+      /** يُنشئ سجلَّ المؤلِّف أو يُلحق به، ويحفظ وفاتَه في صفحته */
+      const saveAuthor = async (row: AuthorRow) => {
         const author = await api.findOrCreateAuthor(row.name)
         await api.setAuthorDeath(author.id, {
           death: row.alive || row.approx ? null : parseNumber(row.death),
@@ -342,6 +471,15 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           approx: row.approx,
           text: row.text.trim(),
         })
+        return author
+      }
+
+      // المؤلِّفون: يُنشأون أو يُلحق بهم، وتُحفظ وفاةُ كلٍّ في صفحته.
+      // والمجموعةُ لا مؤلِّف لها — عنوانُها اسمُ المجموعة — فلا يُكتب لها.
+      const filled = collection ? [] : authorRows.filter((r) => r.name.trim())
+      const saved: { author_id: string; name: string }[] = []
+      for (const row of filled) {
+        const author = await saveAuthor(row)
         saved.push({ author_id: author.id, name: author.name })
       }
       const [mainAuthor, ...coAuthors] = saved
@@ -359,6 +497,38 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
           scope: (row.scope ?? '').trim(),
           person_id: person.id,
+        })
+      }
+
+      // العناوينُ المضمومة: لكلٍّ مؤلِّفُه وذوو صفاته في سجلّ الأشخاص نفسِه،
+      // فالنوويُّ مؤلِّفٌ في المكتبة وإن لم تكن أربعونه إلا عنوانًا في مجموع،
+      // وله صفحتُه كسائر المؤلِّفين. وما لا عنوانَ له يسقط.
+      const savedWithin: WithinTitle[] = []
+      for (const row of withinRows.filter((r) => r.title.trim())) {
+        let authorId: string | null = null
+        let authorName = ''
+        if (row.author.name.trim()) {
+          const person = await saveAuthor(row.author)
+          authorId = person.id
+          authorName = person.name
+        }
+
+        const rowContribs: Contributor[] = []
+        for (const c of row.contributors.filter((c) => c.name.trim())) {
+          const person = await api.findOrCreateAuthor(c.name)
+          rowContribs.push({ role: c.role, name: person.name, scope: '', person_id: person.id })
+        }
+
+        savedWithin.push({
+          title: row.title.trim(),
+          author_id: authorId,
+          author_name: authorName,
+          contributors: rowContribs,
+          category: row.category.trim(),
+          // الفرعُ لا يُحفظ بغير رئيسه، ههنا كما في الكتاب نفسه
+          sub_category: row.category.trim() ? row.sub_category.trim() : '',
+          is_matn: row.is_matn,
+          at: row.at.trim(),
         })
       }
 
@@ -483,6 +653,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
         topic: topic.trim(),
         is_matn: isMatn,
+        // المجموعةُ هيئةُ السجلّ نفسِه، وما ضُمَّ إليه من عناوين خبرٌ فيه
+        is_collection: collection,
+        within_titles: savedWithin,
         // ولا يُنسَب الكتابُ إلى نفسه: في التعديل قد يقع الاختيارُ عليه
         edition_of: editionOf && editionOf !== editing?.id ? editionOf : null,
         within_book_id: withinId && withinId !== editing?.id ? withinId : null,
@@ -586,11 +759,23 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           <SectionHeading>١. بيانات الكتاب</SectionHeading>
 
           <label style={labelStyle}>
-            عنوان الكتاب
+            {collection ? 'اسم المجموعة' : 'عنوان الكتاب'}
             <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
           </label>
 
-          {authorRows.map((row, i) => (
+          {/* المجموعةُ ليست كتابًا فلا مؤلِّف لها: «برنامج مهمّات العلم» اسمُ
+              مجموعةٍ طُبع فيها كتابُ التوحيد والأربعون النووية وغيرُهما، لكلٍّ
+              مؤلِّفُه. وإنما لها من أشرف عليها، وموضعُه صفوفُ المشاركين. */}
+          {collection ? (
+            <div style={{
+              fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9,
+              border: '1px dashed var(--border)', borderRadius: 10, padding: '10px 14px',
+            }}>
+              هذه <strong style={{ color: 'var(--text)' }}>مجموعةٌ</strong> لا كتاب،
+              فلا مؤلِّف لها — ولكلّ عنوانٍ طُبع فيها مؤلِّفُه. ومن أشرف عليها
+              يُكتب في صفوف المشاركين بصفة «الإشراف العلميّ».
+            </div>
+          ) : authorRows.map((row, i) => (
             <div
               key={i}
               style={{
@@ -612,54 +797,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 )}
               </label>
 
-              <div style={{ ...labelStyle, gap: 6 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  تاريخ وفاة المُؤلِّف
-                  <label style={checkStyle}>
-                    <input
-                      type="checkbox"
-                      checked={row.alive}
-                      onChange={(e) => patchAuthorRow(i, { alive: e.target.checked })}
-                    />
-                    مُعاصِر
-                  </label>
-                  {!row.alive && (
-                    <label style={checkStyle}>
-                      <input
-                        type="checkbox"
-                        checked={row.approx}
-                        onChange={(e) => patchAuthorRow(i, { approx: e.target.checked })}
-                      />
-                      تاريخٌ تقريبي
-                    </label>
-                  )}
-                </span>
-
-                {/* المعاصِر لا وفاة له، والمجهولةُ وفاتُه تُكتب نصًّا */}
-                {row.alive ? (
-                  <span style={{ fontSize: 12, color: 'var(--accent-soft)', padding: '9px 0' }}>
-                    مؤلِّفٌ معاصِرٌ حيّ
-                  </span>
-                ) : row.approx ? (
-                  <input
-                    value={row.text}
-                    onChange={(e) => patchAuthorRow(i, { text: e.target.value })}
-                    placeholder="مثال: نحو ١٠٦٠ هـ، أو: القرن الرابع"
-                    style={inputStyle}
-                  />
-                ) : (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      value={row.death}
-                      onChange={(e) => patchAuthorRow(i, { death: e.target.value })}
-                      inputMode="numeric"
-                      placeholder="السنة"
-                      style={{ ...inputStyle, flex: 1 }}
-                    />
-                    <span style={{ fontSize: 13 }}>هـ</span>
-                  </span>
-                )}
-              </div>
+              <DeathFields row={row} onPatch={(patch) => patchAuthorRow(i, patch)} />
 
               {/* الاشتراك في التأليف نادرٌ في القديم، فالزرّ صغيرٌ لا حقلٌ دائم */}
               {i === authorRows.length - 1 ? (
@@ -1302,29 +1440,29 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             </label>
           )}
 
-          {/* كتابٌ طُبع ضمن كتاب: كالأربعين النووية والآجُرُّومية في «برنامج
-              مهمّات العلم». وهو كتابٌ مستقلٌّ بعنوانه ومؤلِّفه — لا مجلَّدٌ من
-              ذاك ولا فصلٌ فيه — غير أنّ له من الورق ما لذاك، فلا موضعَ له
-              على الرفّ غيرُ موضعه. */}
-          <div className="form-row" style={row21}>
-            <label style={labelStyle}>
-              مطبوعٌ ضمن كتابٍ آخر
-              <select
-                value={withinId}
-                onChange={(e) => setWithinId(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">لا، كتابٌ مطبوعٌ وحده</option>
-                {books
-                  .filter((b) => b.id !== editing?.id)
-                  .map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
-              </select>
-              <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                لِما طُبع ضمن مجموعٍ أو برنامج، فيبقى كتابًا مستقلًّا في الفهرس
-                ويُعلَّم بأنه مطبوعٌ ضمن غيره.
-              </span>
-            </label>
-            {withinId && (
+          {/* حقلٌ من عهدٍ كان المضمومُ فيه سجلًّا قائمًا برأسه يشير إلى ضامِّه.
+              فصار العنوانُ المضموم خبرًا في الضامّ نفسِه — لا يُطالَب فاهرسُه
+              ببيانات طبعةٍ ونسخةٍ هي بيانات الضامّ — ولم يبقَ هذا إلا لفكّ ما
+              فُهرس قبل التحويل. ولا يُعرض لغير من فُهرس به. */}
+          {withinId && (
+            <div className="form-row" style={row21}>
+              <label style={labelStyle}>
+                مطبوعٌ ضمن كتابٍ آخر (من الفهرسة القديمة)
+                <select
+                  value={withinId}
+                  onChange={(e) => setWithinId(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">فُكَّ عنه</option>
+                  {books
+                    .filter((b) => b.id !== editing?.id)
+                    .map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+                </select>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                  الوجهُ المعتمد اليوم أن يُكتب هذا العنوان في صفحة ضامِّه تحت
+                  «ما طُبع معه أو فيه»، لا أن يكون له سجلٌّ برأسه.
+                </span>
+              </label>
               <label style={labelStyle}>
                 موضعُه منه
                 <input
@@ -1334,8 +1472,8 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                   style={inputStyle}
                 />
               </label>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* ----------------------------------------------- ٣. بيانات النسخة */}
           <SectionHeading>٣. بيانات النسخة</SectionHeading>
@@ -1516,7 +1654,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               هذه نشرةٌ أخرى من كتابٍ في المكتبة
               <select
                 value={editionOf}
-                onChange={(e) => setEditionOf(e.target.value)}
+                onChange={(e) => pickEditionOf(e.target.value)}
                 style={inputStyle}
               >
                 <option value="">لا، بل هي نشرتُه المُعتمَدة عندنا</option>
@@ -1525,12 +1663,28 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                   .map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
               </select>
               <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
-                للكتاب الواحد نشرتان أو أكثر، تختلفان في المحقِّق أو رقم الطبعة
-                أو عدد المجلَّدات. فاجعل الأجودَ منها هي الأصل، وانسب إليها ما
-                دونها من هنا — فلا تُحسَبان عنوانَين اثنين في المكتبة.
+                للكتاب الواحد نشرتان أو أكثر، تشتركان بالضرورة في العنوان واسم
+                المؤلِّف — ولذلك يُملآن من الأصل متى اختير — وتختلفان فيما سواهما:
+                في المحقِّق ودارِ النشر وعدد المجلَّدات والصفحات، ولكلٍّ غلافُها
+                وحسبتُها من الرفّ. فاجعل الأجودَ أصلًا وانسب إليها ما دونها من
+                هنا، فلا تُحسَبان عنوانَين اثنين في المكتبة.
               </span>
             </label>
           )}
+
+          {/* ما طُبع معه أو فيه: عناوينُ تشترك مع هذا السجلّ في بيانات النشرة
+              كلِّها، فلا يُسأل عنها الفاهرسُ مرَّتين */}
+          <WithinTitles
+            rows={withinRows}
+            onRows={setWithinRows}
+            collection={collection}
+            onCollection={setCollection}
+            open={withinOpen}
+            onOpen={setWithinOpen}
+            authorNames={authorNames}
+            contributorNames={contributorNames}
+            categories={categories}
+          />
 
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
             وإن كان هذا الكتاب شرحًا أو حاشيةً أو اختصارًا لكتابٍ عندنا فاربطه به، ويمكن ربطه بأكثر من كتاب.
@@ -1639,6 +1793,325 @@ const plusStyle = {
   borderRadius: 8, width: 38, height: 38, fontSize: 17, lineHeight: 1,
   flex: 'none', alignSelf: 'end', marginBottom: 1,
 } as const
+
+/**
+ * ما طُبع مع الكتاب أو فيه من العناوين.
+ *
+ * والكتبُ تُطبع مجتمعةً على وجهين، بينهما فرقٌ في العين لا في اللفظ وحده:
+ *   • **مطبوعٌ معه**: للنشرة كتابٌ رئيسٌ هو المقصود بالطبع أساسًا، ثم أُلحق
+ *     به غيرُه تكملةً وتتميمًا. فالسجلُّ سجلُّ ذلك الرئيس.
+ *   • **مطبوعٌ فيه**: العنوانُ اسمُ مجموعةٍ لا اسمُ كتاب — «برنامج مهمّات
+ *     العلم»، «متون طالب العلم» — طُبع فيها متنُ كتاب التوحيد والأربعون
+ *     النووية وغيرُهما، لكلٍّ مؤلِّفُه. فلا مؤلِّف للمجموعة وإنما مَن أشرف
+ *     عليها، ولا تُعدّ هي كتابًا: المعدودُ ما طُبع فيها.
+ *
+ * وفي الوجهين جميعًا **لا يُسأل الفاهرسُ عن شيءٍ مرَّتين**: العناوينُ تشترك
+ * مع الضامّ في الدار والسنة والطبعة والمجلَّدات والموضع من الرفّ، فلا يُكتب
+ * لكلّ عنوانٍ إلا ما ينفرد به — عنوانُه ومؤلِّفُه وذوو صفاته وتصنيفُه
+ * وموضعُه من الكتاب.
+ */
+function WithinTitles(
+  {
+    rows, onRows, collection, onCollection, open, onOpen,
+    authorNames, contributorNames, categories,
+  }: {
+    rows: WithinRow[]
+    onRows: (rows: WithinRow[]) => void
+    collection: boolean
+    onCollection: (v: boolean) => void
+    open: boolean
+    onOpen: (v: boolean) => void
+    authorNames: string[]
+    contributorNames: string[]
+    categories: Category[]
+  },
+) {
+  const mains = categories.filter((c) => !c.parent).map((c) => c.name)
+  const patch = (i: number, next: Partial<WithinRow>) => onRows(
+    rows.map((r, idx) => (idx === i ? { ...r, ...next } : r)),
+  )
+
+  const start = (asCollection: boolean) => {
+    onCollection(asCollection)
+    onOpen(true)
+    if (rows.length === 0) onRows([{ ...EMPTY_WITHIN }])
+  }
+
+  // البابُ لا يُفتح حتى يُطلب: أكثرُ الكتب يُطبع وحده، فلا يُشغَل النموذجُ
+  // بحقولٍ لا تُملأ. والزرَّان هما السؤال: أيُّ الوجهين هو؟
+  if (!open) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => start(false)} style={openerStyle}>
+            + {WITH_LABEL} كتبٌ أخرى
+          </button>
+          <button type="button" onClick={() => start(true)} style={openerStyle}>
+            + هذا سجلُّ مجموعةٍ، {WITHIN_LABEL} كتب
+          </button>
+        </div>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+          «{WITH_LABEL}» لِما كان لنشرته كتابٌ رئيسٌ هو المقصود بالطبع ثم أُلحق
+          به غيرُه تكملةً. و«{WITHIN_LABEL}» لِما كان عنوانُه اسمَ مجموعةٍ لا
+          اسمَ كتاب — كـ«برنامج مهمّات العلم» — طُبع فيها كتبٌ لكلٍّ مؤلِّفُه.
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 12, padding: '13px 15px 15px',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700 }}>
+          {collection ? WITHIN_LABEL : WITH_LABEL} من الكتب
+        </span>
+        {/* والوجهان مفتاحٌ واحد: هما خبرٌ عن هيئة السجلّ لا عن العناوين */}
+        <span style={{ display: 'flex', gap: 6 }}>
+          {[false, true].map((asCollection) => (
+            <button
+              key={String(asCollection)}
+              type="button"
+              onClick={() => onCollection(asCollection)}
+              style={pillStyle(collection === asCollection)}
+            >
+              {asCollection ? WITHIN_LABEL : WITH_LABEL}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      <span style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+        {collection
+          ? 'عنوانُ هذا السجلّ اسمُ المجموعة لا اسمُ كتاب، فلا مؤلِّف له، ولا يُعدّ هو كتابًا — وإنما تُعدّ العناوينُ المطبوعة فيه.'
+          : 'هذا السجلُّ سجلُّ الكتاب الرئيس، وما يُكتب ههنا كتبٌ أُلحقت به في النشرة نفسِها.'}
+        {' '}ولكلّ عنوانٍ منها في المكتبة حسبةُ كتابٍ تامّ، وليس له من الورق
+        شيءٌ على حِدَة — فلا مجلَّدَ ولا صفحاتِ ولا موضعَ من الرفّ غيرُ موضع
+        هذا السجلّ.
+      </span>
+
+      {rows.map((row, i) => (
+        <div
+          key={i}
+          style={{
+            border: '1px dashed var(--border)', borderRadius: 10, padding: '11px 13px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            background: 'var(--header)',
+          }}
+        >
+          <div
+            className="form-row"
+            style={{
+              display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) auto',
+              gap: 10, alignItems: 'end',
+            }}
+          >
+            <label style={labelStyle}>
+              {i === 0 ? 'عنوان الكتاب المطبوع' : ''}
+              <input
+                value={row.title}
+                onChange={(e) => patch(i, { title: e.target.value })}
+                placeholder="مثال: الأربعون النووية"
+                style={inputStyle}
+              />
+            </label>
+            <label style={labelStyle}>
+              {i === 0 ? 'موضعُه منه' : ''}
+              <input
+                value={row.at}
+                onChange={(e) => patch(i, { at: e.target.value })}
+                placeholder="مثال: ص٣٠-٦٠"
+                style={inputStyle}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => onRows(rows.filter((_, idx) => idx !== i))}
+              title="حذف هذا العنوان"
+              aria-label="حذف هذا العنوان"
+              style={{ ...plusStyle, color: 'var(--muted)', borderColor: 'var(--border)' }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div
+            className="form-row"
+            style={{
+              display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+              gap: 10, alignItems: 'start',
+            }}
+          >
+            <label style={labelStyle}>
+              مُؤلِّفه
+              <Combobox
+                value={row.author.name}
+                onChange={(name) => patch(i, { author: { ...row.author, name } })}
+                options={authorNames}
+                placeholder="اكتب اسمًا جديدًا أو اختر من مؤلِّفي المكتبة"
+              />
+            </label>
+            <DeathFields
+              row={row.author}
+              onPatch={(next) => patch(i, { author: { ...row.author, ...next } })}
+              label="تاريخ وفاته"
+            />
+          </div>
+
+          {/* ذوو الصفات: أكثرُ العناوين المضمومة لا محقِّق لها على حِدَة،
+              فلا يُشغَل الصفُّ بحقلٍ دائمٍ لا يُملأ */}
+          {row.contributors.map((c, ci) => (
+            <div
+              key={ci}
+              className="form-row"
+              style={{
+                display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,2fr) auto',
+                gap: 10, alignItems: 'end',
+              }}
+            >
+              <label style={labelStyle}>
+                {ci === 0 ? 'الصِّفة' : ''}
+                <select
+                  value={c.role}
+                  onChange={(e) => patch(i, {
+                    contributors: row.contributors.map(
+                      (x, xi) => (xi === ci ? { ...x, role: e.target.value } : x),
+                    ),
+                  })}
+                  aria-label="صفة المشارِك"
+                  style={inputStyle}
+                >
+                  {CONTRIBUTOR_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+              <label style={labelStyle}>
+                {ci === 0 ? 'الاسم' : ''}
+                <Combobox
+                  value={c.name}
+                  onChange={(name) => patch(i, {
+                    contributors: row.contributors.map(
+                      (x, xi) => (xi === ci ? { ...x, name } : x),
+                    ),
+                  })}
+                  options={contributorNames}
+                  placeholder="اكتب اسمًا جديدًا أو اختر ممّن في المكتبة"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => patch(i, {
+                  contributors: row.contributors.filter((_, xi) => xi !== ci),
+                })}
+                title="حذف هذا المشارِك"
+                aria-label="حذف هذا المشارِك"
+                style={{ ...plusStyle, color: 'var(--muted)', borderColor: 'var(--border)' }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+
+          <div
+            className="form-row"
+            style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}
+          >
+            <button
+              type="button"
+              onClick={() => patch(i, {
+                contributors: [
+                  ...row.contributors,
+                  {
+                    role: row.contributors[row.contributors.length - 1]?.role
+                      ?? CONTRIBUTOR_ROLES[0],
+                    name: '',
+                  },
+                ],
+              })}
+              style={openerStyle}
+            >
+              + مُحقِّقٌ أو ذو صفة
+            </button>
+
+            <label style={{ ...labelStyle, minWidth: 150, flex: 1 }}>
+              التصنيف
+              <select
+                value={row.category}
+                onChange={(e) => patch(i, { category: e.target.value, sub_category: '' })}
+                style={inputStyle}
+              >
+                <option value="">— بلا تصنيف —</option>
+                {mains.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+
+            {row.category && (
+              <label style={{ ...labelStyle, minWidth: 150, flex: 1 }}>
+                الفرع
+                <select
+                  value={row.sub_category}
+                  onChange={(e) => patch(i, { sub_category: e.target.value })}
+                  style={inputStyle}
+                >
+                  <option value="">— بلا فرع —</option>
+                  {categories
+                    .filter((c) => c.parent === row.category)
+                    .map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+            )}
+
+            <label style={{
+              ...checkStyle, fontSize: 12.5, color: 'var(--text)', paddingBottom: 10,
+            }}>
+              <input
+                type="checkbox"
+                checked={row.is_matn}
+                onChange={(e) => patch(i, { is_matn: e.target.checked })}
+              />
+              مَتْنٌ دَرْسيّ
+            </label>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => onRows([...rows, { ...EMPTY_WITHIN }])}
+          style={openerStyle}
+        >
+          + عنوانٌ آخر
+        </button>
+        {rows.length === 0 && (
+          <button
+            type="button"
+            onClick={() => { onOpen(false); onCollection(false) }}
+            style={{ ...openerStyle, color: 'var(--muted)', borderColor: 'var(--border)' }}
+          >
+            إغلاق الباب
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const openerStyle = {
+  alignSelf: 'flex-start', border: '1px dashed var(--border)', background: 'none',
+  color: 'var(--accent)', borderRadius: 8, padding: '7px 14px', fontSize: 12.5,
+} as const
+
+const pillStyle = (on: boolean) => ({
+  border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+  background: on ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : 'none',
+  color: on ? 'var(--accent)' : 'var(--muted)',
+  borderRadius: 999,
+  padding: '4px 13px',
+  fontSize: 12,
+  fontWeight: on ? 700 : 400,
+} as const)
 
 /**
  * التصنيف: مربَّعاتٌ تُعرض فيها تصنيفات المكتبة كلُّها، يُختار منها واحد —

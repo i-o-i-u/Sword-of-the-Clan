@@ -35,6 +35,11 @@ export const books = query({
           row.within_book_id && visible.has(row.within_book_id) ? row.within_book_id : null,
         within_pages:
           row.within_book_id && visible.has(row.within_book_id) ? row.within_pages : '',
+        // ومن أُخفي من المؤلِّفين أُخفيت كتبُه، وما طُبع له ضمن غيره من
+        // كتبه: فلو بقي العنوانُ مع اسم صاحبه لدلّ على من حُجب.
+        within_titles: (row.within_titles ?? []).filter(
+          (t) => !t.author_id || !s.hidden_author_ids.includes(t.author_id),
+        ),
       }
     })
   },

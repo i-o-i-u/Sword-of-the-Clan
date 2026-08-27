@@ -10,8 +10,8 @@
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { matnBooks } from '../lib/editions'
-import { BOOKS_COUNT, MATNS_COUNT, countLabel, type Book } from '../lib/types'
+import { matnTitles, type CountedTitle } from '../lib/editions'
+import { BOOKS_COUNT, MATNS_COUNT, countLabel } from '../lib/types'
 import {
   BackButton, EmptyState, OpenBookIcon, ScrollIcon, cardStyle,
 } from '../components/ui'
@@ -21,17 +21,19 @@ const UNFILED = 'على غير تصنيف'
 
 interface MatnGroup {
   name: string
-  books: Book[]
+  books: CountedTitle[]
 }
 
 export default function Matns() {
   const { books } = useLibrary()
 
   const groups = useMemo<MatnGroup[]>(() => {
-    const map = new Map<string, Book[]>()
-    for (const b of matnBooks(books)) {
-      const name = b.category.trim() || UNFILED
-      map.set(name, [...(map.get(name) ?? []), b])
+    // والمتنُ قد يكون سجلًّا قائمًا وقد يكون عنوانًا مضمومًا إلى مجموعة —
+    // ومتونُ «مهمّات العلم» من هذا الباب — فيُقرأ من العناوين لا من السجلّات
+    const map = new Map<string, CountedTitle[]>()
+    for (const t of matnTitles(books)) {
+      const name = t.category.trim() || UNFILED
+      map.set(name, [...(map.get(name) ?? []), t])
     }
     return [...map.entries()]
       .map(([name, list]) => ({
@@ -94,15 +96,18 @@ export default function Matns() {
               </div>
 
               <ol className="series-list series-list-filed">
-                {group.books.map((book) => (
-                  <li key={book.id} onClick={() => navigate({ name: 'book', id: book.id })}>
+                {group.books.map((matn, i) => (
+                  <li
+                    key={`${matn.book.id}-${matn.within ? matn.title : ''}-${i}`}
+                    onClick={() => navigate({ name: 'book', id: matn.book.id })}
+                  >
                     {/* الفرعُ موضعُ الرقم من السلاسل: هو أخصُّ ما يُعرف به
                         المتنُ بعد فنِّه، وشرطةٌ لمن لم يُكتب فرعُه */}
                     <span className="series-no series-no-text">
-                      {book.sub_category.trim() || '—'}
+                      {matn.sub_category.trim() || '—'}
                     </span>
-                    <span className="series-title">{book.title}</span>
-                    <span className="series-author">{book.author_name}</span>
+                    <span className="series-title">{matn.title}</span>
+                    <span className="series-author">{matn.author_name}</span>
                   </li>
                 ))}
               </ol>

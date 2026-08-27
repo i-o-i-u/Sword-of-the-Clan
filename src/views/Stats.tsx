@@ -14,10 +14,11 @@ import {
   BOOKS_COUNT, VOLUMES_COUNT, countLabel, formatNumber, missingVolumesHeadline,
   roleGroupLabel, type Book,
 } from '../lib/types'
-import { matnBooks, titleCount } from '../lib/editions'
+import { bookCount, countedTitles, isCollection, matnTitles } from '../lib/editions'
 import { navigate } from '../lib/router'
 import {
-  BooksIcon, CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon, OpenBookIcon,
+  ArchiveIcon, BooksIcon, CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon,
+  OpenBookIcon,
   OwnerIcon, PagesIcon, PressIcon, RiyalGlyph, ScrollIcon, TagIcon, VerifyIcon,
   VolumesIcon, cardStyle,
 } from '../components/ui'
@@ -52,6 +53,11 @@ export default function Stats() {
   const showAuthorPages = isOwner || settings.visibility.authors
 
   const s = useMemo(() => {
+    // عناوينُ المكتبة: سجلَّاتُها القائمة وما ضُمَّ إليها من عناوين. وبها
+    // تُعدّ الكتبُ والمؤلِّفون والتصنيفات، وأمّا المجلَّداتُ والصفحاتُ
+    // والقيمةُ فبالسجلّات — المضمومُ لا ورقَ له على حِدَة.
+    const counted = countedTitles(books)
+
     /** مجلَّدات الكتاب كما أُدخلت، بلا حدّ الأربعين الذي يخصّ عرض الرفّ */
     const volumesOfBook = (b: Book) => (b.single_volume ? 1 : Math.max(0, b.volumes ?? 0))
     const partsOfBook = (b: Book) => (b.single_part ? 1 : Math.max(0, b.parts ?? 0))
@@ -77,22 +83,26 @@ export default function Stats() {
       roleNames.get(c.role)!.add(name)
     }))
 
-    /** يعدّ الكتب على مفتاحٍ يُستخرج من كل كتاب، ويرتّبها من الأكثر */
-    const tally = (keyOf: (b: Book) => string): { name: string; count: number }[] => {
+    /** يعدّ على مفتاحٍ يُستخرج من كل عنصر، ويرتّب من الأكثر */
+    const tallyOf = <T,>(rows: T[], keyOf: (row: T) => string) => {
       const map = new Map<string, number>()
-      books.forEach((b) => {
-        const key = keyOf(b).trim()
+      rows.forEach((row) => {
+        const key = keyOf(row).trim()
         if (key) map.set(key, (map.get(key) ?? 0) + 1)
       })
       return [...map.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ar'))
     }
+    const tally = (keyOf: (b: Book) => string) => tallyOf(books, keyOf)
 
-    const byAuthor = tally((b) => b.author_name)
+    // المؤلِّفون والتصنيفات تُعدّ بالعناوين لا بالسجلّات: العنوانُ المضمومُ
+    // كتابٌ لمؤلِّفه وفي فنِّه، وإن لم يكن له من الورق شيءٌ على حِدَة. وأمّا
+    // البلدُ والدارُ فخبرٌ عن النشرة نفسِها، فمَرْجِعُهما السجلّ.
+    const byAuthor = tallyOf(counted, (t) => t.author_name)
+    const byCategory = tallyOf(counted, (t) => t.category)
     const byPlace = tally((b) => b.place)
     const byPublisher = tally((b) => b.publisher)
-    const byCategory = tally((b) => b.category)
 
     // أكثر عنوانٍ مجلَّدات، وأغلى كتاب: واحدٌ لا قائمة، فهو مَفخَرةٌ لا جدول
     const mostVolumes = books
@@ -112,8 +122,8 @@ export default function Stats() {
 
     // أقدم المؤلِّفين: من عُرفت وفاتُه وحده — والمعاصِرُ والمجهولُ يُؤخَّران
     const bookCountOf = new Map<string, number>()
-    books.forEach((b) => {
-      if (b.author_id) bookCountOf.set(b.author_id, (bookCountOf.get(b.author_id) ?? 0) + 1)
+    counted.forEach((t) => {
+      if (t.author_id) bookCountOf.set(t.author_id, (bookCountOf.get(t.author_id) ?? 0) + 1)
     })
     const oldestAuthors = authors
       .filter((a) => !a.alive && a.death != null)
@@ -133,12 +143,16 @@ export default function Stats() {
     const missingVolumeCount = incomplete
       .reduce((sum, b) => sum + (b.missing_volumes ?? []).length, 0)
 
-    // عناوينُ المكتبة: كتبُها ناقصةً ما كان نشرةً أخرى من كتابٍ فيها.
-    // فالنشرتان لكتابٍ واحد عنوانٌ واحد وإن كان لكلٍّ سجلُّها.
-    const titles = titleCount(books)
-    const otherEditions = books.length - titles
+    // عناوينُ المكتبة: ما عُدَّ كتابًا فيها. والنشرتان لكتابٍ واحد عنوانٌ
+    // واحد وإن كان لكلٍّ سجلُّها، والمجموعةُ ليست عنوانَ كتابٍ أصلًا —
+    // المعدودُ ما طُبع فيها.
+    const titles = bookCount(books)
+    const otherEditions = books.filter((b) => b.edition_of).length
+    // ما طُبع مع غيره أو فيه: كتبٌ تُعدّ ولا يُعدّ لها ورق
+    const withinTitles = counted.filter((t) => t.within).length
+    const collections = books.filter(isCollection).length
     // مَتْنٌ درسيٌّ في المكتبة، وبابُه صفحةُ المتون
-    const matns = matnBooks(books).length
+    const matns = matnTitles(books).length
     // النُّسَخُ المكرَّرة: ما زاد على نسخةٍ واحدة من كل كتاب
     const spareCopies = books.reduce((n, b) => n + Math.max(0, (b.copies ?? 1) - 1), 0)
 
@@ -149,6 +163,8 @@ export default function Stats() {
     return {
       titles,
       otherEditions,
+      withinTitles,
+      collections,
       matns,
       spareCopies,
       volumes,
@@ -185,6 +201,9 @@ export default function Stats() {
   // نشراتٌ أخرى لعناوينَ عندنا: سجلَّاتٌ لا تُعدّ في العناوين، وهي مع ذلك
   // كتبٌ على الرفّ — فتُذكر ههنا على حِدَة
   push({ key: 'editions', label: 'نشراتٌ أخرى لكتبها', value: num(s.otherEditions), icon: PressIcon })
+  // عناوينُ لا ورقَ لها على حِدَة: طُبعت مع كتابٍ أو في مجموعة
+  push({ key: 'within', label: 'عناوينُ طُبعت مع غيرها', value: num(s.withinTitles), icon: OpenBookIcon })
+  push({ key: 'collections', label: 'المجموعات المطبوعة', value: num(s.collections), icon: ArchiveIcon })
   push({ key: 'copies', label: 'نُسَخٌ مكرَّرة', value: num(s.spareCopies), icon: BooksIcon })
   push({ key: 'volumes', label: 'المُجلَّدات', value: num(s.volumes), icon: VolumesIcon })
   push({ key: 'parts', label: 'الأَجْزاء أو الأَسْفار', value: num(s.parts), icon: ScrollIcon })

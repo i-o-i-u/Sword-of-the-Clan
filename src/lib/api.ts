@@ -62,6 +62,8 @@ function toBook(row: Record<string, unknown>): Book {
     copies: (row.copies as number) ?? 1,
     is_matn: (row.is_matn as boolean) ?? false,
     edition_of: (row.edition_of as string | null) ?? null,
+    is_collection: (row.is_collection as boolean) ?? false,
+    within_titles: (row.within_titles as Book['within_titles']) ?? [],
     within_book_id: (row.within_book_id as string | null) ?? null,
     within_pages: (row.within_pages as string) ?? '',
   }

@@ -8,8 +8,9 @@
 import { useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { lifeLabel, toHijriYear } from '../lib/hijri'
-import { authoredBooks, contributedBooks, topRole } from '../lib/people'
+import { lifeLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
+import { withinLabelOf, withinTitlesOf } from '../lib/editions'
+import { authoredBooks, authoredWithin, contributedBooks, topRole } from '../lib/people'
 import {
   AUTHOR_ROLE, BOOKS_COUNT, ERAS, countLabel, formatNumber, parseNumber,
   rolePersonLabel, rolePersonRef, roleWorksLabel, type Book, type Era,
@@ -19,7 +20,7 @@ import PeopleSwitch from '../components/PeopleSwitch'
 import Roster, { RosterToggle, useRosterView, type RosterRow } from '../components/Roster'
 import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, HourglassIcon,
-  OpenBookIcon, PencilIcon, QuillIcon, VerifyIcon, cardStyle,
+  OpenBookIcon, PencilIcon, QuillIcon, VerifyIcon, WithinIcon, cardStyle,
 } from '../components/ui'
 
 export function AuthorsIndex() {
@@ -34,6 +35,11 @@ export function AuthorsIndex() {
       if (b.author_id) counts.set(b.author_id, (counts.get(b.author_id) ?? 0) + 1)
       ;(b.co_authors ?? []).forEach((c) => {
         if (c.author_id) counts.set(c.author_id, (counts.get(c.author_id) ?? 0) + 1)
+      })
+      // وما طُبع له ضمن غيره من كتبه: النوويُّ مؤلِّفٌ في المكتبة وإن لم
+      // تكن أربعونه إلا عنوانًا في مجموع
+      withinTitlesOf(b).forEach((t) => {
+        if (t.author_id) counts.set(t.author_id, (counts.get(t.author_id) ?? 0) + 1)
       })
     })
     const sortValue = (death: number | null, era: Era) => toHijriYear(death, era) ?? 1e9
@@ -111,6 +117,14 @@ export function AuthorPage({ authorId }: { authorId: string }) {
   const contributions = useMemo(
     () => contributedBooks(books, authorId)
       .map((g) => ({ ...g, books: g.books.slice().sort(byTitle) })),
+    [books, authorId],
+  )
+  // ومن مؤلَّفاته ما لا سجلَّ له: عنوانٌ طُبع مع كتابٍ أو في مجموعة. وهو
+  // كتابٌ له لا محالة، غير أنه لا يستقلّ بصفحةٍ لأنه لا يستقلّ بورق —
+  // فبابُه صفحةُ ضامِّه.
+  const withinWorks = useMemo(
+    () => authoredWithin(books, authorId)
+      .sort((a, b) => a.title.localeCompare(b.title, 'ar')),
     [books, authorId],
   )
 
@@ -292,7 +306,38 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         />
       ))}
 
-      {authorBooks.length === 0 && contributions.length === 0 && (
+      {withinWorks.length > 0 && (
+        <section style={{ marginBottom: 26 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9,
+            fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12,
+          }}>
+            <WithinIcon size={18} />
+            {`ما طُبع له ضمن غيره (${countLabel(withinWorks.length, BOOKS_COUNT)})`}
+          </div>
+
+          <ol className="within-list">
+            {withinWorks.map((w, i) => (
+              <li
+                key={`${w.book.id}-${i}`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate({ name: 'book', id: w.book.id })}
+              >
+                <span className="within-list-no">{formatNumber(i + 1)}</span>
+                <span className="within-list-body">
+                  <span className="within-list-title">{w.title}</span>
+                  <span className="within-list-marks">
+                    <span>{withinLabelOf(w.book)} {w.book.title}</span>
+                  </span>
+                </span>
+                {w.at && <span className="within-list-at">{toArabicDigits(w.at)}</span>}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {authorBooks.length === 0 && contributions.length === 0 && withinWorks.length === 0 && (
         <EmptyState title="لا كتب لهذا الاسم في الفهرس بعد" />
       )}
     </main>
