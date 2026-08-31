@@ -232,6 +232,28 @@ async function syncRename(
 }
 
 /**
+ * رفعُ اسمٍ حُذف صفُّه من كل فائدةٍ نُسبت إليه.
+ *
+ * **ولا تُحذف الفائدة**: التصنيفُ صفةٌ لها لا وعاءٌ يحويها. وإغفالُ هذا هو
+ * الذي كان يُظهر أنّ الحذف لم يقع: الاسمُ يبقى في الفوائد، فتُعيده
+ * `perkKindsOf` و`perkTopics` إلى القوائم كي لا تسقط فائدةٌ من العرض —
+ * فيُرى المحذوفُ قائمًا.
+ */
+async function syncDrop(
+  ctx: MutationCtx,
+  field: 'kinds' | 'categories' | 'sub_categories' | 'people',
+  names: string[],
+) {
+  const gone = names.filter(Boolean)
+  if (!gone.length) return
+  for (const p of await ctx.db.query('perks').collect()) {
+    const list = p[field] ?? []
+    if (!list.some((x) => gone.includes(x))) continue
+    await ctx.db.patch(p._id, { [field]: list.filter((x) => !gone.includes(x)) })
+  }
+}
+
+/**
  * حفظُ قائمةٍ من قوائم القسم دفعةً واحدة: ما زاد يُنشأ، وما نقص يُحذف، وما
  * تبدّل اسمُه يُعدَّل ويُزامَن اسمُه الجديد على فوائده.
  *
@@ -269,7 +291,9 @@ export const savePerkKinds = mutation({
         }))
       }
     }
-    for (const doc of old) if (!kept.has(doc._id)) await ctx.db.delete(doc._id)
+    const gone = old.filter((o) => !kept.has(o._id))
+    await syncDrop(ctx, 'kinds', gone.map((o) => o.name))
+    for (const doc of gone) await ctx.db.delete(doc._id)
   },
 })
 
@@ -316,10 +340,23 @@ export const savePerkCategories = mutation({
     // حذفُ الرئيس يحذف فروعَه معه: الفرعُ لا يقوم بغير رئيسه
     const gone = old.filter((o) => !kept.has(o._id))
     const goneNames = gone.map((o) => o.name)
-    for (const doc of old) {
-      if (!kept.has(doc._id)) { await ctx.db.delete(doc._id); continue }
-      if (goneNames.includes(doc.parent ?? '')) await ctx.db.delete(doc._id)
+    // والفرعُ الذي حُذف رئيسُه يُقرأ اسمُه من القاعدة لا من النسخة التي
+    // بين اليدين: قد يكون سُمّي في هذا الحفظ نفسِه، فالمحفوظُ هو الذي في
+    // الفوائد الآن
+    const orphans = []
+    for (const o of old) {
+      if (!kept.has(o._id) || !goneNames.includes(o.parent ?? '')) continue
+      const now = await ctx.db.get(o._id)
+      orphans.push({ _id: o._id, name: now?.name ?? o.name, parent: now?.parent ?? o.parent })
     }
+    const dropped = [...gone, ...orphans]
+
+    // ويُرفع المحذوفُ من الفوائد المنسوبة إليه، رئيسًا كان أو فرعًا — ولا
+    // تُحذف فائدةٌ واحدة
+    await syncDrop(ctx, 'categories', dropped.filter((o) => !(o.parent ?? '')).map((o) => o.name))
+    await syncDrop(ctx, 'sub_categories', dropped.filter((o) => !!(o.parent ?? '')).map((o) => o.name))
+
+    for (const doc of dropped) await ctx.db.delete(doc._id)
   },
 })
 
@@ -351,7 +388,9 @@ export const savePerkFigures = mutation({
         }))
       }
     }
-    for (const doc of old) if (!kept.has(doc._id)) await ctx.db.delete(doc._id)
+    const gone = old.filter((o) => !kept.has(o._id))
+    await syncDrop(ctx, 'people', gone.map((o) => o.name))
+    for (const doc of gone) await ctx.db.delete(doc._id)
   },
 })
 
