@@ -5053,3 +5053,18 @@ a { transition: color 0.15s; }
   .rich-poem-hint span { display: none; }
   .kinds-row-wide { gap: 6px; }
 }
+
+/*
+ * الخبرُ بالمنع في صدر نافذة الإعدادات: زرُّ الحفظ يُعطَّل حين يتكرّر اسمٌ،
+ * فلو كان الخبرُ في الذيل لبحث القارئُ عن العِلّة في آخر لوحٍ يُمرَّر.
+ */
+.perk-warn {
+  margin: 0;
+  padding: 9px 13px;
+  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--danger) 9%, transparent);
+  color: var(--danger);
+  font-size: 12.5px;
+  line-height: 1.8;
+}

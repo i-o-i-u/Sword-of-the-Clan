@@ -213,7 +213,7 @@ const closed = (d: string) => /z\s*$/i.test(d)
  * فلا تختلّ الصفوف، ويُعرف أنّ ثمّ رمزًا لم يُختر بعد.
  */
 export function Icon(
-  { name, size = 18, plain, style }: {
+  { name, size = 18, plain, placeholder, style }: {
     name?: string | null
     size?: number
     /**
@@ -221,10 +221,17 @@ export function Icon(
      * المصمتة — أرضُهما لونُ المكتبة، فلونٌ ثانٍ فوقه مزاحمة.
      */
     plain?: boolean
+    /**
+     * يُرسم مكانَ ما لا أيقونةَ له دائرةٌ منقوطة. وهي في المُنتقي وحده —
+     * موضعٌ شاغر يُنادي على من يملؤه — وأمّا في البطاقات فلا: بابٌ بلا رمزٍ
+     * يُعرض باسمه، ودائرةٌ فارغة إلى جانبه ضجيجٌ لا خبر.
+     */
+    placeholder?: boolean
     style?: CSSProperties
   },
 ) {
   const def = iconByKey(name)
+  if (!def && !placeholder) return null
   const color = plain || !def ? 'currentColor' : `var(--ic-${def.tone})`
   const props = {
     width: size,

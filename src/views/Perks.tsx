@@ -24,6 +24,7 @@ import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { Icon } from '../lib/icons'
+import { QUICK_OPTS, normalizeText } from '../lib/search'
 import {
   EMPTY_FILTER, PERK_SORTS, filterIsOn, filterPerks, notebookTallies, perkDate,
   perkPeople, perkSources, perkTags, perkTopics, sortPerks, sourceTitle,
@@ -155,7 +156,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
           <>
             {perks.length > 0 && (
             <div className="perks-tally">
-              <Tile value={perks.length} label="فائدة" />
+              <Tile value={perks.length} label="فائدةً" />
               <Tile value={sources.length} label="كتابًا أفاد" />
               <Tile value={topics.filter((t) => t.count > 0).length} label="تصنيفًا" />
               <Tile value={people.length} label="عَلَمًا" />
@@ -706,12 +707,17 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
     () => (notebook ? perks.filter((p) => p.notebook_ids.includes(notebook.id)) : []),
     [perks, notebook],
   )
+  /**
+   * ما ليس فيها من الفوائد، يُبحث فيه بمعيار البحث في المكتبة نفسه — بلا
+   * تشكيلٍ ولا تفريقٍ بين الهمزات — لا بمطابقة الحرف كما كان.
+   */
   const outside = useMemo(() => {
     if (!notebook) return []
-    const needle = query.trim()
+    const needle = normalizeText(query.trim(), QUICK_OPTS)
     return perks
       .filter((p) => !p.notebook_ids.includes(notebook.id))
-      .filter((p) => !needle || (p.title + ' ' + p.text).includes(needle))
+      .filter((p) => !needle
+        || normalizeText(`${p.title} ${p.text}`, QUICK_OPTS).includes(needle))
       .slice(0, 40)
   }, [perks, notebook, query])
 
@@ -803,11 +809,17 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
               <button
                 type="button"
                 className="kunnash-gear"
-                onClick={() => void run(async () => {
-                  await api.deleteNotebook(notebook.id)
-                  await reload()
-                  navigate({ name: 'perks', tab: 'notebooks' })
-                })}
+                onClick={() => {
+                  // الحذفُ لا رجعةَ فيه، فيُستأذَن — ويُقال ما يقع بفوائدها
+                  if (!window.confirm(
+                    `حذفُ كرّاسة «${notebook.name}»؟ تخرج منها فوائدُها ولا تُحذف.`,
+                  )) return
+                  void run(async () => {
+                    await api.deleteNotebook(notebook.id)
+                    await reload()
+                    navigate({ name: 'perks', tab: 'notebooks' })
+                  })
+                }}
                 title="حذف الكرّاسة — ولا تُحذف فوائدُها، وإنما تخرج منها"
                 aria-label="حذف الكرّاسة"
               >

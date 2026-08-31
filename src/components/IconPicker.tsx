@@ -27,7 +27,7 @@ export function IconChoice(
         title={`${label} — اختر أيقونة`}
         aria-label={`${label} — اختر أيقونة`}
       >
-        <Icon name={value} size={19} />
+        <Icon name={value} size={19} placeholder />
       </button>
       {open && (
         <IconPicker

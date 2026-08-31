@@ -145,9 +145,10 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       title: d.title.trim(),
       text: text.trim(),
       text_html: html,
-      // ما مُحي مِسماكُه من النصّ يسقط هامشُه، ولا يبقى في المستند نصٌّ
-      // لا موضعَ له
-      footnotes: orderedFootnotes(html, d.footnotes).filter((f) => f.text.trim()),
+      // ما مُحي مِسماكُه من النصّ يسقط هامشُه، ولا يبقى في المستند نصٌّ لا
+      // موضعَ له. وأمّا الهامشُ الذي لم يُكتب نصُّه بعدُ فيبقى: مِسماكُه في
+      // النصّ قائم، فلو أُسقط لبقي رقمٌ في المتن لا هامشَ له تحته.
+      footnotes: orderedFootnotes(html, d.footnotes),
       comment: d.comment.trim(),
       page: d.page.trim(),
       volume: d.volume.trim(),
@@ -182,6 +183,10 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
   async function remove() {
     if (!perk) return
+    // الحذفُ لا رجعةَ فيه، فيُستأذَن — كما يُستأذَن في حذف الكتاب من الفهرس
+    if (!window.confirm(
+      `حذفُ ${perk.title ? `«${perk.title}»` : 'هذه الفائدة'}؟ لا رجعة في هذا.`,
+    )) return
     await run(() => api.deletePerk(perk.id))
     await reload()
     onClose()

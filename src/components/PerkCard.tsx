@@ -20,7 +20,9 @@ import RichText from './RichText'
 import { Icon } from '../lib/icons'
 import { perkCitation, perkLocation } from '../lib/citation'
 import { perkDate, perkLink, sourceAuthor, sourceTitle } from '../lib/perks'
-import { PERK_PREVIEW_CHARS, type Perk } from '../lib/types'
+import {
+  PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, type Perk,
+} from '../lib/types'
 import {
   CopyButton, HashIcon, LinkIcon, OpenBookIcon, OwnerIcon, PencilIcon,
   PinIcon, QuoteIcon,
@@ -50,8 +52,13 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const writer = sourceAuthor(perk, book)
   const place = perkLocation(perk)
 
-  const iconOfKind = (name: string) => perkKinds.find((k) => k.name === name)?.icon ?? ''
-  const iconOfCat = (name: string) => perkCategories.find((c) => c.name === name)?.icon ?? ''
+  // والأيقونةُ تُطلب من المُحرَّر ومن المبدئيّ جميعًا: ما لم يُحرَّر بعدُ
+  // تُعرض أنواعُه وتصنيفاتُه المبدئيّة، فلو قُرئ من الجدول وحدَه لبقيت
+  // بطاقاتُ الفوائد بلا رموزٍ حتى يُفتح لوحُ الإعدادات ويُحفظ
+  const iconOfKind = (name: string) =>
+    perkKindsOf(perkKinds, perks).find((k) => k.name === name)?.icon ?? ''
+  const iconOfCat = (name: string) =>
+    perkCategoriesOf(perkCategories).find((c) => c.name === name)?.icon ?? ''
   const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
 
   const long = perk.text.length > PERK_PREVIEW_CHARS

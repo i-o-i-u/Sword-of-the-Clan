@@ -318,8 +318,10 @@ export const savePerkCategories = mutation({
       const doc = old.find((o) => o._id === row.id)
       if (doc) {
         kept.add(doc._id)
+        const wasSub = !!(doc.parent ?? '')
+        const isSub = !!parent
+
         if (doc.name !== name) {
-          const wasSub = !!(doc.parent ?? '')
           await syncRename(ctx, wasSub ? 'sub_categories' : 'categories', doc.name, name)
           // واسمُ الرئيس مكتوبٌ في فروعه أيضًا، فيُنقل إليها — وإلّا صار
           // الفرعُ يتيمًا لا رئيسَ له
@@ -329,6 +331,22 @@ export const savePerkCategories = mutation({
             }
           }
         }
+
+        // وما تبدّلت درجتُه — صار الرئيسُ فرعًا أو الفرعُ رئيسًا — يُنقل
+        // اسمُه في الفوائد من حقلٍ إلى حقل. وإغفالُه يُبقي التصنيفَ مكتوبًا
+        // في غير موضعه، فلا يُصفَّى به ولا يُعرف بابُ فائدته.
+        if (wasSub !== isSub) {
+          const from = wasSub ? 'sub_categories' : 'categories'
+          const to = wasSub ? 'categories' : 'sub_categories'
+          for (const p of await ctx.db.query('perks').collect()) {
+            if (!(p[from] ?? []).includes(name)) continue
+            await ctx.db.patch(p._id, {
+              [from]: (p[from] ?? []).filter((x) => x !== name),
+              [to]: [...new Set([...(p[to] ?? []), name])],
+            })
+          }
+        }
+
         await ctx.db.patch(doc._id, { name, parent, icon: row.icon ?? '', order: i })
       } else {
         kept.add(await ctx.db.insert('perk_categories', {

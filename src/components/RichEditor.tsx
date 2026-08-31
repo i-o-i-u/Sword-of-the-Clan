@@ -120,6 +120,17 @@ export default function RichEditor(
     const el = ref.current
     if (!el) return
     el.focus()
+    // اللوحُ قد لا يكون فيه مؤشِّرٌ بعدُ — يُضغط الزرُّ قبل أن يُكتب شيء —
+    // فيُوضع في آخره: مِسماكٌ في غير موضعٍ خيرٌ من هامشٍ بلا مِسماك يسقط
+    // عند الحفظ ولا يُدرى أين ذهب
+    const sel = window.getSelection()
+    if (!sel || !sel.rangeCount || !el.contains(sel.anchorNode)) {
+      const end = document.createRange()
+      end.selectNodeContents(el)
+      end.collapse(false)
+      sel?.removeAllRanges()
+      sel?.addRange(end)
+    }
     const id = newFootnoteId()
     insertNode(makeMarker(id))
     onFootnotes([...footnotes, { id, text: '' }])
@@ -163,12 +174,16 @@ export default function RichEditor(
   /**
    * يصفّ ما تُرك من الأسطر شعرًا. ولا يمسّ الكتلةَ التي فيها المؤشِّر: تلك
    * تُصفّ متى تُركت هي أيضًا، فلا يقفز المؤشِّرُ من تحت اليد.
+   *
+   * فإذا خرج المؤشِّرُ من اللوح (`all`) صُفَّ كلُّ شيء: لا مؤشِّرَ يُخشى عليه،
+   * ولو تُرك السطرُ الأخير لخرج بيتٌ منثورًا بين الأبيات — والاختيارُ يبقى
+   * قائمًا بعد الخروج في بعض المتصفّحات، فلا يكفي أن يُسأل عنه.
    */
-  function layoutPoetry() {
+  function layoutPoetry(all = false) {
     const el = ref.current
     if (!el) return
     const sel = window.getSelection()
-    const anchor = sel?.anchorNode ?? null
+    const anchor = all ? null : (sel?.anchorNode ?? null)
 
     for (const block of [...el.children]) {
       if (block.classList.contains('poem-wrap')) continue
@@ -286,7 +301,7 @@ export default function RichEditor(
           aria-multiline="true"
           aria-label="نصّ الفائدة"
           onInput={() => { if (maybeFootnoteFromStars()) { emit(); return } emit() }}
-          onBlur={() => layoutPoetry()}
+          onBlur={() => layoutPoetry(true)}
           onKeyDown={(e) => {
             if (e.key !== 'Enter' || e.shiftKey) return
             // التصفيفُ بعد نزول السطر: السطرُ المتروك هو الذي يُصفّ
