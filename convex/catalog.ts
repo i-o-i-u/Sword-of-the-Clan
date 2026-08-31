@@ -239,6 +239,21 @@ async function syncRename(
  * `perkKindsOf` و`perkTopics` إلى القوائم كي لا تسقط فائدةٌ من العرض —
  * فيُرى المحذوفُ قائمًا.
  */
+/**
+ * يرفع علامةَ «حُرِّرت هذه القائمة» في الإعدادات.
+ *
+ * وبها يُفرَّق بين الجدول الذي لم يُحرَّر بعدُ — فتُعرض قائمتُه المبدئيّة —
+ * والجدول الذي حُذف ما فيه عن قصد، فيبقى فارغًا كما أراد صاحبُه. وإغفالُ
+ * هذا كان يُعيد المبدئيَّ بعد حذفه، فيُرى الحذفُ لم يقع.
+ */
+async function markSet(
+  ctx: MutationCtx, field: 'perk_kinds_set' | 'perk_categories_set',
+) {
+  const row = await ctx.db.query('library_settings').first()
+  if (row) await ctx.db.patch(row._id, { [field]: true })
+  else await ctx.db.insert('library_settings', { ...DEFAULT_SETTINGS, [field]: true })
+}
+
 async function syncDrop(
   ctx: MutationCtx,
   field: 'kinds' | 'categories' | 'sub_categories' | 'people',
@@ -294,6 +309,7 @@ export const savePerkKinds = mutation({
     const gone = old.filter((o) => !kept.has(o._id))
     await syncDrop(ctx, 'kinds', gone.map((o) => o.name))
     for (const doc of gone) await ctx.db.delete(doc._id)
+    await markSet(ctx, 'perk_kinds_set')
   },
 })
 
@@ -375,6 +391,7 @@ export const savePerkCategories = mutation({
     await syncDrop(ctx, 'sub_categories', dropped.filter((o) => !!(o.parent ?? '')).map((o) => o.name))
 
     for (const doc of dropped) await ctx.db.delete(doc._id)
+    await markSet(ctx, 'perk_categories_set')
   },
 })
 

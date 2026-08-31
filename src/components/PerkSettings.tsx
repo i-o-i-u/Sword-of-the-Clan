@@ -83,7 +83,7 @@ function toRows(cats: PerkCategory[]): CatRow[] {
 
 export default function PerkSettings({ onClose }: { onClose: () => void }) {
   const {
-    perks, perkKinds, perkCategories, perkFigures, canEdit, run, reload,
+    perks, perkKinds, perkCategories, perkFigures, settings, canEdit, run, reload,
   } = useLibrary()
 
   const [tab, setTab] = useState<Tab>('kinds')
@@ -92,8 +92,12 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
   const dirty = useRef(false)
 
   // المبدئيّةُ تُعرض حتى تُحرَّر، فأوّلُ حفظٍ يُثبتها صفوفًا في الجدول
-  const [kinds, setKindsState] = useState<PerkKindDef[]>(() => perkKindsOf(perkKinds, perks))
-  const [cats, setCatsState] = useState<CatRow[]>(() => toRows(perkCategoriesOf(perkCategories)))
+  const [kinds, setKindsState] = useState<PerkKindDef[]>(
+    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
+  )
+  const [cats, setCatsState] = useState<CatRow[]>(
+    () => toRows(perkCategoriesOf(perkCategories, settings.perk_categories_set)),
+  )
   const [figures, setFiguresState] = useState<PerkFigure[]>(() => perkFigures)
 
   const setKinds = (next: PerkKindDef[]) => { dirty.current = true; setKindsState(next) }
@@ -110,10 +114,10 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
    */
   useEffect(() => {
     if (dirty.current) return
-    setKindsState(perkKindsOf(perkKinds, perks))
-    setCatsState(toRows(perkCategoriesOf(perkCategories)))
+    setKindsState(perkKindsOf(perkKinds, perks, settings.perk_kinds_set))
+    setCatsState(toRows(perkCategoriesOf(perkCategories, settings.perk_categories_set)))
     setFiguresState(perkFigures)
-  }, [perkKinds, perkCategories, perkFigures, perks])
+  }, [perkKinds, perkCategories, perkFigures, perks, settings])
 
   const kindCount = (name: string) => perks.filter((p) => p.kinds.includes(name)).length
   const catCount = (name: string) => perks.filter(

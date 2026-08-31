@@ -76,8 +76,14 @@ export default function Perks({ tab = '' }: { tab?: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ */
-  const kinds = useMemo(() => perkKindsOf(perkKinds, perks), [perkKinds, perks])
-  const cats = useMemo(() => perkCategoriesOf(perkCategories), [perkCategories])
+  const kinds = useMemo(
+    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
+    [perkKinds, perks, settings.perk_kinds_set],
+  )
+  const cats = useMemo(
+    () => perkCategoriesOf(perkCategories, settings.perk_categories_set),
+    [perkCategories, settings.perk_categories_set],
+  )
 
   /**
    * ينتقل إلى باب «الفوائد» ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان: عَلَمًا في

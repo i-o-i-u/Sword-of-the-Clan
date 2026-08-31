@@ -64,13 +64,19 @@ interface Draft {
 
 export default function PerkEditor({ perk, bookId, onClose }: Props) {
   const {
-    books, bookById, perks, perkKinds, perkCategories, perkFigures,
+    books, bookById, perks, perkKinds, perkCategories, perkFigures, settings,
     canEdit, run, reload,
   } = useLibrary()
 
   /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ */
-  const kinds = useMemo(() => perkKindsOf(perkKinds, perks), [perkKinds, perks])
-  const cats = useMemo(() => perkCategoriesOf(perkCategories), [perkCategories])
+  const kinds = useMemo(
+    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
+    [perkKinds, perks, settings.perk_kinds_set],
+  )
+  const cats = useMemo(
+    () => perkCategoriesOf(perkCategories, settings.perk_categories_set),
+    [perkCategories, settings.perk_categories_set],
+  )
 
   const startBook = perk?.book_id
     ? bookById(perk.book_id)

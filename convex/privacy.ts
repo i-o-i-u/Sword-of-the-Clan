@@ -52,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   rotate_seconds: 6,
   quote_seconds: 12,
   perk_kinds: DEFAULT_PERK_KINDS,
+  perk_kinds_set: false,
+  perk_categories_set: false,
   // نصٌّ تجريبيّ يكتب صاحب المكتبة مكانَه ما يشاء من نافذة الإعدادات
   about_text:
     'مكتبة سيف العشيرة مكتبةٌ منزليّة، نشأت كتابًا كتابًا على مهلٍ لا على عجل، '

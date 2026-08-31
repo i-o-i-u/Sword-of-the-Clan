@@ -115,16 +115,18 @@ export const DEFAULT_PERK_CATEGORIES: PerkCategory[] = [
  * بقي في الفوائد من نوعٍ رُفع من الجدول يُضاف إليها، فلا تسقط فائدةٌ من
  * العرض لأن نوعَها حُذف.
  */
-export function perkKindsOf(kinds: PerkKindDef[], perks: { kinds: string[] }[]): PerkKindDef[] {
-  const base = kinds.length > 0 ? kinds : DEFAULT_PERK_KINDS
+export function perkKindsOf(
+  kinds: PerkKindDef[], perks: { kinds: string[] }[], seeded = false,
+): PerkKindDef[] {
+  const base = kinds.length > 0 || seeded ? kinds : DEFAULT_PERK_KINDS
   const known = new Set(base.map((k) => k.name))
   const orphans = [...new Set(perks.flatMap((p) => p.kinds))].filter((k) => k && !known.has(k))
   return [...base, ...orphans.map((name) => ({ id: '', name, icon: '', hint: '' }))]
 }
 
-/** وكذلك التصنيفات: ما في الجدول، وإلّا فالمبدأ */
-export function perkCategoriesOf(rows: PerkCategory[]): PerkCategory[] {
-  return rows.length > 0 ? rows : DEFAULT_PERK_CATEGORIES
+/** وكذلك التصنيفات: ما في الجدول، وإلّا فالمبدأ حتى تُحرَّر */
+export function perkCategoriesOf(rows: PerkCategory[], seeded = false): PerkCategory[] {
+  return rows.length > 0 || seeded ? rows : DEFAULT_PERK_CATEGORIES
 }
 
 /** مراتبُ النفاسة الثلاث، وما فوقها فهو من «النفائس» */
@@ -688,6 +690,9 @@ export interface Settings {
    * نوعٍ أيقونتَه، والقائمةُ النصّية لا تحملها.
    */
   perk_kinds: string[]
+  /** أَحُرِّرت أنواعُ الفوائد وتصنيفاتُها؟ بها يُفرَّق الفارغُ من غير المُحرَّر */
+  perk_kinds_set: boolean
+  perk_categories_set: boolean
 
   /** مفتاحُه اسمُ الحقل، وقيمتُه معرّفاتُ الكتب المستثناة من إخفائه */
   field_exceptions: FieldMap
@@ -738,6 +743,8 @@ export const DEFAULT_SETTINGS_EXTRAS = {
   show_landing_place: true,
   show_calculator: true,
   perk_kinds: [] as string[],
+  perk_kinds_set: false,
+  perk_categories_set: false,
   field_exceptions: {} as FieldMap,
   book_field_overrides: {} as FieldMap,
   hidden_author_ids: [] as string[],

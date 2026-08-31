@@ -41,7 +41,7 @@ interface Props {
 
 export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Props) {
   const {
-    perks, bookById, authorById, notebooks, perkKinds, perkCategories,
+    perks, bookById, authorById, notebooks, perkKinds, perkCategories, settings,
     canEdit, setError, run, reload,
   } = useLibrary()
   const [open, setOpen] = useState(false)
@@ -56,9 +56,11 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   // تُعرض أنواعُه وتصنيفاتُه المبدئيّة، فلو قُرئ من الجدول وحدَه لبقيت
   // بطاقاتُ الفوائد بلا رموزٍ حتى يُفتح لوحُ الإعدادات ويُحفظ
   const iconOfKind = (name: string) =>
-    perkKindsOf(perkKinds, perks).find((k) => k.name === name)?.icon ?? ''
+    perkKindsOf(perkKinds, perks, settings.perk_kinds_set)
+      .find((k) => k.name === name)?.icon ?? ''
   const iconOfCat = (name: string) =>
-    perkCategoriesOf(perkCategories).find((c) => c.name === name)?.icon ?? ''
+    perkCategoriesOf(perkCategories, settings.perk_categories_set)
+      .find((c) => c.name === name)?.icon ?? ''
   const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
 
   const long = perk.text.length > PERK_PREVIEW_CHARS

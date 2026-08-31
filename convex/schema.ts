@@ -483,6 +483,18 @@ export default defineSchema({
     quote_seconds: v.optional(v.number()),   // بطاقة الاقتباس، تدور على مهلها
     /** أنواعُ القيد كما يحرّرها صاحب المكتبة من إعدادات قسم الفوائد */
     perk_kinds: v.optional(v.array(v.string())),
+
+    /**
+     * أَحُرِّرت أنواعُ الفوائد وتصنيفاتُها؟
+     *
+     * وهما علامتان لا زينةَ فيهما: القائمةُ المبدئيّة تُعرض ما لم يُحرَّر
+     * شيء، والجدولُ الفارغ لا يُفرِّق بين «لم يُحرَّر بعد» و«حُذف كلُّه» —
+     * فكان من حذف التصنيفاتِ كلَّها يراها تعود إليه كأنّ الحذف لم يقع.
+     * فمتى حُفظت القائمةُ مرّةً رُفعت العلامة، ولم تُعرض المبدئيّةُ بعدها
+     * أبدًا.
+     */
+    perk_kinds_set: v.optional(v.boolean()),
+    perk_categories_set: v.optional(v.boolean()),
     about_text: v.optional(v.string()),      // نصّ صفحة «عن المكتبة»
     x_url: v.optional(v.string()),
     telegram_url: v.optional(v.string()),
