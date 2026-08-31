@@ -1,21 +1,32 @@
-// نموذج القيد: إدخالًا وتعديلًا جميعًا، كما يخدم `AddBook` الكتابَ في
+// نموذج الفائدة: إدخالًا وتعديلًا جميعًا، كما يخدم `AddBook` الكتابَ في
 // الحالين. فسلوكُ كل حقلٍ مكتوبٌ مرّةً واحدة.
 //
-// وهو نافذةٌ لا صفحة: القيدُ يُكتب وأنت في موضعك من السيل أو من صفحة الكتاب،
-// فلا يُخرجك عن مكانك ثم يُعيدك إليه.
+// وهو نافذةٌ لا صفحة: الفائدةُ تُكتب وأنت في موضعك من «الفوائد» أو من صفحة
+// الكتاب، فلا يُخرجك عن مكانك ثم يُعيدك إليه.
 //
-// وقسمُ المصدر شطران لا شطرٌ واحد: القيدُ إمّا من كتابٍ في الفهرس فيكفي
+// وأقسامُه ثلاثة لا أكثر: **الفائدة** — أنواعُها وعنوانُها ونصُّها والتعليقُ
+// عليها —، ثم **تصنيفُها**، ثم **مصدرُها**. وما سوى ذلك ليس من النموذج:
+//   • **النفاسة** تُعلَّم من صفحة الفائدة بعد قيدها — الحكمُ عليها إنما يكون
+//     بعد النظر في المقيَّد، فلا يُسأل عنه ساعةَ الكتابة.
+//   • **الكرّاسة** تُضاف من صفحة الكرّاسة نفسها — الكرّاسةُ تقوم بعد أن
+//     يجتمع لها شيء، فتُجمع إليها الفوائدُ مما قُيِّد لا مما يُقيَّد.
+//
+// وقسمُ المصدر شطران لا شطرٌ واحد: الفائدةُ إمّا من كتابٍ في الفهرس فيكفي
 // اختيارُه — بياناتُه كلُّها مسجَّلة —، وإمّا من كتابٍ ليس فيه فيُكتب عزوُه
 // نصًّا. وهذا الشطرُ الثاني هو الذي يُبقي في الكنّاش ما قُرئ في مكتبةٍ عامّة
 // أو في نسخةٍ إلكترونيّة أو في كتابٍ مستعار.
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { perkNotebooks, perkTags } from '../lib/perks'
-import PoetryComposer from './PoetryComposer'
+import { perkTags } from '../lib/perks'
+import { Icon } from '../lib/icons'
 import {
-  PERK_KIND_HINTS, PERK_RATINGS, perkKindsOf, type Perk, type PerkKind,
+  htmlToText, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
+} from '../lib/richtext'
+import RichEditor from './RichEditor'
+import {
+  perkCategoriesOf, perkKindsOf, type Perk,
 } from '../lib/types'
 import {
   ClearIcon, CloseButton, Combobox, Overlay, chipStyle, ghostButtonStyle,
@@ -23,91 +34,94 @@ import {
 } from './ui'
 
 interface Props {
-  /** القيدُ المُعدَّل، أو فراغٌ إن كان جديدًا */
+  /** الفائدةُ المُعدَّلة، أو فراغٌ إن كانت جديدة */
   perk?: Perk | null
-  /** كتابٌ يُبتدأ به: القيدُ يُكتب من صفحة كتابه فلا يُسأل عن مصدره */
+  /** كتابٌ يُبتدأ به: الفائدةُ تُكتب من صفحة كتابها فلا تُسأل عن مصدرها */
   bookId?: string | null
   onClose: () => void
 }
 
-/** حالُ النموذج، وهي حقولُ القيد كما تُكتب قبل أن تُحفظ */
+/** حالُ النموذج، وهي حقولُ الفائدة كما تُكتب قبل أن تُحفظ */
 interface Draft {
-  kind: PerkKind
+  kinds: string[]
   title: string
-  text: string
+  html: string
+  footnotes: Footnote[]
   comment: string
   fromLibrary: boolean
   bookName: string
   sourceTitle: string
   sourceAuthor: string
+  sourceDeath: string
   sourceEdition: string
   volume: string
   page: string
-  category: string
-  subCategory: string
-  rating: number
-  notebook: string
+  categories: string[]
+  subCategories: string[]
   people: string[]
   tags: string[]
 }
 
 export default function PerkEditor({ perk, bookId, onClose }: Props) {
   const {
-    books, bookById, categories, perks, settings, canEdit, run, reload,
+    books, bookById, perks, perkKinds, perkCategories, perkFigures,
+    canEdit, run, reload,
   } = useLibrary()
 
-  /** الأنواع كما حرّرها صاحب المكتبة من إعدادات الكنّاش */
-  const kinds = useMemo(() => perkKindsOf(settings, perks), [settings, perks])
+  /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ */
+  const kinds = useMemo(() => perkKindsOf(perkKinds, perks), [perkKinds, perks])
+  const cats = useMemo(() => perkCategoriesOf(perkCategories), [perkCategories])
 
-  const startBook = perk?.book_id ? bookById(perk.book_id) : (bookId ? bookById(bookId) : undefined)
+  const startBook = perk?.book_id
+    ? bookById(perk.book_id)
+    : (bookId ? bookById(bookId) : undefined)
 
   const [d, setD] = useState<Draft>(() => ({
-    kind: perk?.kind ?? 'فائدة',
+    kinds: perk?.kinds ?? [],
     title: perk?.title ?? '',
-    text: perk?.text ?? '',
+    // ما قُيِّد قبل المُحرِّر المنسَّق يُرفع إليه فقراتٍ، فلا يُطالَب صاحبُه
+    // بإعادة كتابته
+    html: perk ? (perk.text_html || textToHtml(perk.text)) : '',
+    footnotes: perk?.footnotes ?? [],
     comment: perk?.comment ?? '',
-    // الجديدُ من الفهرس افتراضًا: أكثرُ ما يُقيَّد إنما يُقيَّد من كتب البيت
+    // الجديدةُ من الفهرس افتراضًا: أكثرُ ما يُقيَّد إنما يُقيَّد من كتب البيت
     fromLibrary: perk ? perk.book_id !== null : true,
     bookName: startBook?.title ?? '',
     sourceTitle: perk?.source?.title ?? '',
     sourceAuthor: perk?.source?.author ?? '',
+    sourceDeath: perk?.source?.death ?? '',
     sourceEdition: perk?.source?.edition ?? '',
     volume: perk?.volume ?? '',
     page: perk?.page ?? '',
-    category: perk?.category ?? '',
-    subCategory: perk?.sub_category ?? '',
-    rating: perk?.rating ?? 0,
-    notebook: perk?.notebook ?? '',
+    categories: perk?.categories ?? [],
+    subCategories: perk?.sub_categories ?? [],
     people: perk?.people ?? [],
     tags: perk?.tags ?? [],
   }))
   const [saving, setSaving] = useState(false)
 
-  // مرجعا الحقلين: بهما يُعرف موضعُ مؤشِّر الكتابة فيُدرَج الشعرُ فيه
-  const textRef = useRef<HTMLTextAreaElement>(null)
-  const commentRef = useRef<HTMLTextAreaElement>(null)
-
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setD((prev) => ({ ...prev, [key]: value }))
 
+  /** يضيف الاسمَ إلى قائمةٍ أو يرفعه منها. والفائدةُ تتبع أكثرَ من واحد. */
+  const toggle = (key: 'kinds' | 'categories' | 'subCategories', name: string) =>
+    setD((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(name)
+        ? prev[key].filter((x) => x !== name)
+        : [...prev[key], name],
+    }))
+
   // ------------------------------------------------------- ما يُختار منه
   const bookTitles = useMemo(() => books.map((b) => b.title), [books])
-  const mainCats = useMemo(
-    () => categories.filter((c) => !c.parent).map((c) => c.name),
-    [categories],
+  const mains = useMemo(() => cats.filter((c) => !c.parent), [cats])
+  /** الفروعُ المعروضة فروعُ ما اختِير من الرئيس: فرعٌ بلا رئيسه لا يدلّ */
+  const subs = useMemo(
+    () => cats.filter((c) => c.parent && d.categories.includes(c.parent)),
+    [cats, d.categories],
   )
-  const subCats = useMemo(
-    () => categories.filter((c) => c.parent === d.category).map((c) => c.name),
-    [categories, d.category],
-  )
-  const notebooks = useMemo(() => perkNotebooks(perks).map((t) => t.name), [perks])
   const knownTags = useMemo(() => perkTags(perks).map((t) => t.name), [perks])
-  // الأعلامُ يُقترحون ممّن سبق ذكرُه في القيود، وممّن في سجلّ الأشخاص
-  const knownPeople = useMemo(() => {
-    const seen = new Set<string>()
-    for (const p of perks) for (const name of p.people) seen.add(name)
-    return [...seen]
-  }, [perks])
+  const figureNames = useMemo(() => perkFigures.map((f) => f.name), [perkFigures])
 
   /** الكتابُ المختار من الفهرس، يُطابَق بعنوانه كما يُطابَق في نموذج الكتاب */
   const chosen = useMemo(
@@ -115,25 +129,33 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     [books, d.bookName],
   )
 
-  // النصُّ وحده هو اللازم: عنوانُ القيد قد لا يخطر لصاحبه ساعةَ يقيّده،
+  const text = useMemo(() => htmlToText(d.html), [d.html])
+
+  // النصُّ وحده هو اللازم: عنوانُ الفائدة قد لا يخطر لصاحبها ساعةَ يقيّدها،
   // وليس للنموذج أن يحبس فائدةً عن الكنّاش من أجل عنوان
-  const ready = !!d.text.trim() && (d.fromLibrary ? !!chosen : !!d.sourceTitle.trim())
+  const ready = !!text.trim() && (d.fromLibrary ? !!chosen : !!d.sourceTitle.trim())
 
   async function save() {
     if (!ready || saving) return
     setSaving(true)
+    const html = sanitizeHtml(d.html)
     const input: api.PerkInput = {
       book_id: d.fromLibrary ? (chosen?.id ?? null) : null,
-      kind: d.kind,
+      kinds: d.kinds,
       title: d.title.trim(),
-      text: d.text.trim(),
+      text: text.trim(),
+      text_html: html,
+      // ما مُحي مِسماكُه من النصّ يسقط هامشُه، ولا يبقى في المستند نصٌّ
+      // لا موضعَ له
+      footnotes: orderedFootnotes(html, d.footnotes).filter((f) => f.text.trim()),
       comment: d.comment.trim(),
       page: d.page.trim(),
       volume: d.volume.trim(),
-      category: d.category.trim(),
-      sub_category: d.subCategory.trim(),
-      rating: d.rating,
-      notebook: d.notebook.trim(),
+      categories: d.categories,
+      // فرعٌ رُفع رئيسُه بعد اختياره لا يبقى: الفرعُ لا يقوم بغير رئيسه
+      sub_categories: d.subCategories.filter(
+        (s) => cats.some((c) => c.name === s && d.categories.includes(c.parent)),
+      ),
       people: d.people,
       tags: d.tags,
       source: d.fromLibrary
@@ -141,10 +163,18 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
         : {
           title: d.sourceTitle.trim(),
           author: d.sourceAuthor.trim(),
+          death: d.sourceDeath.trim(),
           edition: d.sourceEdition.trim(),
         },
     }
-    await run(() => (perk ? api.updatePerk(perk.id, input) : api.insertPerk(input)))
+
+    await run(async () => {
+      // العَلَمُ الذي كُتب ولم يكن في السجلّ يُسجَّل، فيُختار من القائمة بعدُ
+      for (const name of d.people) {
+        if (!figureNames.includes(name)) await api.findOrCreatePerkFigure(name)
+      }
+      await (perk ? api.updatePerk(perk.id, input) : api.insertPerk(input))
+    })
     await reload()
     setSaving(false)
     onClose()
@@ -163,90 +193,140 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     <Overlay onClose={onClose} align="flex-start">
       <div className="perk-editor overlay-sheet">
         <header className="perk-editor-head">
-          <h2>{perk ? 'تعديل القيد' : 'قيدٌ جديد'}</h2>
+          <h2>{perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
           <CloseButton onClose={onClose} />
         </header>
 
         <div className="perk-editor-body thin-scroll">
-          {/* ------------------------------------------------ ١. القيد */}
-          <span className="perk-part">القيد</span>
+          {/* ---------------------------------------------- ١. الفائدة */}
+          <span className="perk-part">الفائدة</span>
 
           <div className="perk-field perk-field-wide">
-            <span className="perk-field-label">نوعه</span>
+            <span className="perk-field-label">نوعُها</span>
             <div className="perk-kinds">
               {kinds.map((k) => (
                 <button
-                  key={k}
+                  key={k.name}
                   type="button"
-                  onClick={() => set('kind', k)}
-                  style={chipStyle(d.kind === k)}
+                  onClick={() => toggle('kinds', k.name)}
+                  style={chipStyle(d.kinds.includes(k.name))}
+                  title={k.hint || undefined}
                 >
-                  {k}
+                  <Icon name={k.icon} size={14} />
+                  {k.name}
                 </button>
               ))}
             </div>
-            {/* وما استجدّ من أنواعِ صاحب المكتبة لا شرحَ له، ولا يُختلق */}
-            {PERK_KIND_HINTS[d.kind] && (
-              <p className="perk-hint">{PERK_KIND_HINTS[d.kind]}</p>
-            )}
+            <p className="perk-hint">
+              {/* والفائدةُ الواحدة تكون تحريرًا وتعقُّبًا معًا، فلا تُحبَس في نوع */}
+              للفائدة أكثرُ من نوع، فاختر ما اجتمع فيها.
+              {d.kinds.length === 1 && kinds.find((k) => k.name === d.kinds[0])?.hint
+                ? ` و«${d.kinds[0]}»: ${kinds.find((k) => k.name === d.kinds[0])!.hint}.`
+                : ''}
+            </p>
           </div>
 
           <label className="perk-field perk-field-wide">
-            <span className="perk-field-label">عنوانه</span>
+            <span className="perk-field-label">عنوانُها</span>
             <input
               value={d.title}
               onChange={(e) => set('title', e.target.value)}
-              placeholder="عنوانٌ يدلّ عليه — «أوّل من رُويت له ثلاثون بيتًا»"
+              placeholder="عنوانٌ يدلّ عليها — «أوّل من رُويت له ثلاثون بيتًا»"
               style={inputStyle}
             />
           </label>
 
           <div className="perk-field perk-field-wide">
-            <label className="perk-field-label" htmlFor="perk-text">نصّه</label>
-            <textarea
-              id="perk-text"
-              ref={textRef}
-              value={d.text}
-              onChange={(e) => set('text', e.target.value)}
-              placeholder="النصّ كما هو في الكتاب"
-              className="perk-area"
-              style={inputStyle}
-            />
-            <PoetryComposer
-              areaRef={textRef}
-              value={d.text}
-              onChange={(v) => set('text', v)}
+            <span className="perk-field-label">نصُّها</span>
+            <RichEditor
+              html={d.html}
+              onChange={(v) => set('html', v)}
+              footnotes={d.footnotes}
+              onFootnotes={(v) => set('footnotes', v)}
+              placeholder="النصُّ كما هو في الكتاب"
             />
           </div>
 
+          {/* تعليقُ المُقيِّد تنسيقُه ثابتٌ مغايرٌ لتنسيق النصّ: كلامُه لا
+              يُخلَط بكلام صاحب الكتاب، وهذا أوّلُ ما يُتحرَّى في النقل. ولذلك
+              هو حقلٌ مجرَّد لا لوحُ تحرير — لا يُنسَّق فيه شيء. */}
           <div className="perk-field perk-field-wide">
-            <label className="perk-field-label" htmlFor="perk-comment">تعليقي عليه</label>
+            <label className="perk-field-label" htmlFor="perk-comment">تعليقي عليها</label>
             <textarea
               id="perk-comment"
-              ref={commentRef}
               value={d.comment}
               onChange={(e) => set('comment', e.target.value)}
-              placeholder="ما تُعقِّب به عليه — يُعرض مفصولًا عنه فلا يلتبس بكلام صاحبه"
-              className="perk-area perk-area-small"
+              onFocus={() => { if (!d.comment) set('comment', 'قلتُ: ') }}
+              placeholder="قلتُ: …"
+              className="perk-area perk-area-small perk-comment-input"
               style={inputStyle}
             />
-            {/* والتعقُّبُ قد يكون بيتًا كما يكون كلامًا، فله ما للنصّ */}
-            <PoetryComposer
-              areaRef={commentRef}
-              value={d.comment}
-              onChange={(v) => set('comment', v)}
-            />
+            <p className="perk-hint">
+              يُعرض مفصولًا عن النصّ بشارةٍ وشريط، وتنسيقُه ثابتٌ لا يتبع تنسيقَه.
+            </p>
           </div>
 
-          {/* ------------------------------------------------ ٢. مصدره */}
-          <span className="perk-part">مصدره</span>
+          {/* ---------------------------------------------- ٢. تصنيفُها */}
+          <span className="perk-part">تصنيفُها</span>
+
+          <div className="perk-field perk-field-wide">
+            <span className="perk-field-label">في أيّ العلوم هي</span>
+            <div className="perk-kinds">
+              {mains.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => toggle('categories', c.name)}
+                  style={chipStyle(d.categories.includes(c.name))}
+                >
+                  <Icon name={c.icon} size={14} />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            <p className="perk-hint">
+              تصنيفاتُ الفوائد قائمةٌ بنفسها لا صلةَ لها بتصنيفات الكتب، وتُحرَّر
+              من إعدادات القسم.
+            </p>
+          </div>
+
+          {subs.length > 0 && (
+            <div className="perk-field perk-field-wide">
+              <span className="perk-field-label">وفروعُه</span>
+              <div className="perk-kinds">
+                {subs.map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => toggle('subCategories', c.name)}
+                    style={chipStyle(d.subCategories.includes(c.name))}
+                    title={`من ${c.parent}`}
+                  >
+                    <Icon name={c.icon} size={14} />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ---------------------------------------------- ٣. مصدرُها */}
+          <span className="perk-part">مصدرُها</span>
 
           <div className="perk-field perk-field-wide">
             <div className="perk-kinds">
-              <button type="button" onClick={() => set('fromLibrary', true)} style={chipStyle(d.fromLibrary)}>
+              <button
+                type="button"
+                onClick={() => set('fromLibrary', true)}
+                style={chipStyle(d.fromLibrary)}
+              >
                 من كتب المكتبة
               </button>
-              <button type="button" onClick={() => set('fromLibrary', false)} style={chipStyle(!d.fromLibrary)}>
+              <button
+                type="button"
+                onClick={() => set('fromLibrary', false)}
+                style={chipStyle(!d.fromLibrary)}
+              >
                 من كتابٍ ليس فيها
               </button>
             </div>
@@ -282,12 +362,21 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 <input
                   value={d.sourceAuthor}
                   onChange={(e) => set('sourceAuthor', e.target.value)}
-                  placeholder="باسمه ووفاته — «أبو العبَّاس ثعلب (ت ٢٩١ هـ)»"
+                  placeholder="أبو العبَّاس ثعلب"
                   style={inputStyle}
                 />
               </label>
-              <label className="perk-field perk-field-wide">
-                <span className="perk-field-label">طبعته</span>
+              <label className="perk-field">
+                <span className="perk-field-label">وفاتُه</span>
+                <input
+                  value={d.sourceDeath}
+                  onChange={(e) => set('sourceDeath', e.target.value)}
+                  placeholder="ت ٢٩١ هـ — إن عُرفت"
+                  style={inputStyle}
+                />
+              </label>
+              <label className="perk-field">
+                <span className="perk-field-label">طبعتُه</span>
                 <input
                   value={d.sourceEdition}
                   onChange={(e) => set('sourceEdition', e.target.value)}
@@ -318,79 +407,21 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             />
           </label>
 
-          {/* ------------------------------------- ٣. موضعه من الكنّاش */}
-          <span className="perk-part">موضعه من الكنّاش</span>
-
-          <label className="perk-field">
-            <span className="perk-field-label">بابه</span>
-            <select
-              value={d.category}
-              onChange={(e) => setD((p) => ({ ...p, category: e.target.value, subCategory: '' }))}
-              style={inputStyle}
-            >
-              <option value="">— بلا باب —</option>
-              {mainCats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <label className="perk-field">
-            <span className="perk-field-label">فرعه</span>
-            <select
-              value={d.subCategory}
-              onChange={(e) => set('subCategory', e.target.value)}
-              disabled={subCats.length === 0}
-              style={subCats.length === 0
-                ? { ...inputStyle, background: 'var(--header)', color: 'var(--muted)' }
-                : inputStyle}
-            >
-              <option value="">{subCats.length === 0 ? 'لا فروع لهذا الباب' : '— بلا فرع —'}</option>
-              {subCats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-
-          <div className="perk-field perk-field-wide">
-            <span className="perk-field-label">نفاسته</span>
-            <div className="perk-kinds">
-              {PERK_RATINGS.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => set('rating', r.value)}
-                  style={chipStyle(d.rating === r.value)}
-                >
-                  {r.value > 0 ? `${'★'.repeat(r.value)} ${r.label}` : r.label}
-                </button>
-              ))}
-            </div>
-            <p className="perk-hint">وما بلغ النجومَ الثلاث اجتمع في «النفائس».</p>
-          </div>
-
-          <label className="perk-field perk-field-wide">
-            <span className="perk-field-label">كرّاسته</span>
-            <Combobox
-              value={d.notebook}
-              onChange={(v) => set('notebook', v)}
-              options={notebooks}
-              placeholder="مسألةٌ يُجمع لها المتفرِّق — «عقِبُ خالد بن الوليد»"
-              emptyHint={
-                d.notebook.trim() && !notebooks.includes(d.notebook.trim())
-                  ? 'كرّاسةٌ جديدة، تقوم بأوّل قيدٍ فيها.'
-                  : undefined
-              }
-            />
-          </label>
+          {/* ------------------------------------- ٤. أعلامُها ووسومُها */}
+          <span className="perk-part">أعلامُها ووسومُها</span>
 
           <TokenField
-            label="الأعلام المذكورون فيه"
-            hint="يُجمع بالعَلَم ما تفرَّق عنه من القيود"
+            label="الأعلام المذكورون فيها"
+            hint="يُسجَّل العَلَمُ أوّلَ مرّةٍ يُكتب، ثم يُختار من القائمة — فلا يفترق الاسمُ الواحد بوجهين"
             values={d.people}
-            options={knownPeople}
+            options={figureNames}
             onChange={(v) => set('people', v)}
             placeholder="اسمُ العَلَم، ثم Enter"
           />
 
           <TokenField
-            label="وسومه"
-            hint="كلماتٌ يُهتدى بها إليه في البحث وتُعرض عليه"
+            label="وسومُها"
+            hint="كلماتٌ يُهتدى بها إليها في البحث وتُعرض عليها"
             values={d.tags}
             options={knownTags}
             onChange={(v) => set('tags', v)}
@@ -403,7 +434,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
         <footer className="perk-editor-foot">
           {perk && (
             <button type="button" onClick={() => void remove()} className="perk-remove">
-              حذف القيد
+              حذف الفائدة
             </button>
           )}
           <button type="button" onClick={onClose} className="perk-save" style={ghostButtonStyle}>
@@ -415,7 +446,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             onClick={() => void save()}
             style={primaryButtonStyle(ready && !saving)}
           >
-            {saving ? 'يُحفَظ…' : perk ? 'حفظ التعديل' : 'قيِّده'}
+            {saving ? 'تُحفَظ…' : perk ? 'حفظ التعديل' : 'قيِّدها'}
           </button>
         </footer>
       </div>

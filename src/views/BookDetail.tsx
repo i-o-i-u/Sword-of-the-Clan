@@ -1386,10 +1386,13 @@ function WorksAbout({ rows }: { rows: { type: string; target: Book | undefined }
  * صندوقٌ كامل، فإذا فُتح فُتح النموذجُ وحده.
  */
 /**
- * صندوقُ القيود في صفحة الكتاب: ما خرج من هذا الكتاب من فوائدَ ونصوص.
+ * صندوقُ الفوائد في صفحة الكتاب: ما خرج من هذا الكتاب منها.
  *
- * وهو عرضٌ لا نموذجُ إدخال: القيدُ يُكتب في نافذته حيثما كان — من هنا أو من
- * سيل الكنّاش — فسلوكُ كل حقلٍ مكتوبٌ مرّةً واحدة في `PerkEditor`، ولا
+ * **وكلُّ فائدةٍ مصدرُها كتابٌ مفهرَس تُعرض ههنا**: تُقيَّد من الكنّاش أو من
+ * هذه الصفحة، ثم تجتمع في بطاقة كتابها على كل حال.
+ *
+ * وهو عرضٌ لا نموذجُ إدخال: الفائدةُ تُكتب في نافذتها حيثما كانت — من هنا أو
+ * من سيل الكنّاش — فسلوكُ كل حقلٍ مكتوبٌ مرّةً واحدة في `PerkEditor`، ولا
  * يفترق نصفُ نموذجٍ ههنا عن نموذجٍ تامٍّ هناك.
  *
  * ولا يُعرض فارغًا: بطاقةٌ تُخبر أن لا فائدة فيه ليست خبرًا. ويبقى لصاحب
@@ -1399,10 +1402,10 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
   const { canEdit } = useLibrary()
   const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
 
-  // الأنواعُ تُقرأ من القيود نفسها لا من قائمةٍ ثابتة: صاحبُ المكتبة
+  // الأنواعُ تُقرأ من الفوائد نفسها لا من قائمةٍ ثابتة: صاحبُ المكتبة
   // يُحرِّرها، ولا يسقط عدٌّ لأن نوعًا رُفع من القائمة
-  const counts = [...new Set(perks.map((p) => p.kind))]
-    .map((kind) => ({ kind, n: perks.filter((p) => p.kind === kind).length }))
+  const counts = [...new Set(perks.flatMap((p) => p.kinds))]
+    .map((kind) => ({ kind, n: perks.filter((p) => p.kinds.includes(kind)).length }))
     .filter(({ n }) => n > 0)
 
   if (perks.length === 0 && !canEdit) return null
@@ -1411,13 +1414,13 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
     <div className="book-perks">
       {perks.length === 0 ? (
         <button type="button" onClick={() => setEditing(null)} style={ghostButtonStyle}>
-          + قيِّد فائدةً أو نصًّا من هذا الكتاب
+          + قيِّد فائدةً من هذا الكتاب
         </button>
       ) : (
         <>
           <div className="book-perks-head">
             <div>
-              <h2>ما قُيِّد منه</h2>
+              <h2>ما قُيِّد منه من فوائد</h2>
               <p>
                 {counts.map(({ kind, n }) => `${formatNumber(n)} ${kind}`).join('، و')}
               </p>
@@ -1434,7 +1437,7 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
               </button>
               {canEdit && (
                 <button type="button" onClick={() => setEditing(null)} style={ghostButtonStyle}>
-                  + قيدٌ جديد
+                  + فائدةٌ جديدة
                 </button>
               )}
             </div>
@@ -1454,7 +1457,12 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
       )}
 
       {editing !== undefined && (
-        <PerkEditor perk={editing} bookId={bookId} onClose={() => setEditing(undefined)} />
+        <PerkEditor
+          key={editing?.id ?? 'new'}
+          perk={editing}
+          bookId={bookId}
+          onClose={() => setEditing(undefined)}
+        />
       )}
     </div>
   )

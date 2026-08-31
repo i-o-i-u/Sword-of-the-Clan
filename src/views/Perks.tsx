@@ -1,53 +1,59 @@
-// «الفوائد والمقتطفات»: كنّاشُ المكتبة.
+// «الفوائد والمقتطفات»: كنّاشُ المكتبة. واسمُه في الترويسة «الفوائد»
+// اختصارًا، والاسمُ التامّ في صدره.
 //
 // وهو بابٌ ذو أبواب، لا صفحةً واحدة تُسرَد فيها الفوائدُ تحت عناوين كتبها
-// كما كان. فالقيدُ لا يُطلب من جهةٍ واحدة: يُطلب من بابه، ومن العَلَم الذي
-// ذُكر فيه، ومن الكرّاسة التي جُمع لها، ومن الكتاب الذي خرج منه — ولكلِّ
-// طالبٍ بابُه:
+// كما كان. فالفائدةُ لا تُطلب من جهةٍ واحدة: تُطلب من تصنيفها، ومن العَلَم
+// الذي ذُكر فيها، ومن الكرّاسة التي جُمعت لها، ومن الكتاب الذي خرجت منه —
+// ولكلِّ طالبٍ بابُه:
 //
-//   • السَّيْل     — القيود كلُّها، تُصفَّى وتُرتَّب وتُقرأ بثلاث طرائق.
-//   • الأبواب    — أبوابُ العلم التي تتوزّع عليها، ومعها فروعُها.
-//   • الأعلام    — كلُّ عَلَمٍ ذُكر في قيدٍ، يجتمع به ما تفرَّق عنه.
-//   • الكرّاسات  — قيودٌ متفرِّقة جُمعت حول مسألةٍ واحدة فصارت بحثًا مصغَّرًا.
-//   • النفائس   — ما بلغ من القيود النجومَ الثلاث، وهي خلاصةُ الكنّاش.
+//   • الفوائد     — كلُّها مجموعةً، تُصفَّى وتُرتَّب وتُقرأ بثلاث طرائق.
+//   • التصنيفات  — أبوابُ العلم التي تتوزّع عليها، ومعها فروعُها.
+//   • الأعلام    — كلُّ عَلَمٍ ذُكر في فائدة، يجتمع به ما تفرَّق عنه.
+//   • الكرّاسات  — مسائلُ تُفتح ثم يُجمع لها المتفرِّق، **ومن صفحة الكرّاسة
+//     تُضاف الفوائدُ الداخلة فيها** لا من نموذج الفائدة.
+//   • النفائس    — ما بلغ من الفوائد النجومَ الثلاث، وهي خلاصةُ الكنّاش.
 //
 // ولكلّ بابٍ موضعُه من الرابط (`#/perks/topics`) فيُشارَك ويُعاد إليه، ولكلّ
-// قيدٍ صفحتُه (`#/perk/:id`).
+// فائدةٍ صفحتُها (`#/perk/:id`)، ولكلّ كرّاسةٍ صفحتُها (`#/notebook/:id`).
 //
-// وما حجبه الخادم عن الزائر لا يصل هذه الصفحة أصلًا: قيودُ الكتاب المخفيّ
+// وما حجبه الخادم عن الزائر لا يصل هذه الصفحة أصلًا: فوائدُ الكتاب المخفيّ
 // لا تُرسَل، ومفتاحُ «الفوائد والمقتطفات» في تبويب الزوار يُسقطها كلَّها.
 
 import { useMemo, useState } from 'react'
+import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
+import { Icon } from '../lib/icons'
 import {
-  EMPTY_FILTER, PERK_SORTS, filterIsOn, filterPerks, perkDate, perkNotebooks,
+  EMPTY_FILTER, PERK_SORTS, filterIsOn, filterPerks, notebookTallies, perkDate,
   perkPeople, perkSources, perkTags, perkTopics, sortPerks, sourceTitle,
   type PerkFilter, type PerkSort, type Tally,
 } from '../lib/perks'
 import {
-  PERKS_COUNT, countLabel, formatNumber, perkKindsOf, type Perk,
+  PERKS_COUNT, countLabel, formatNumber, perkCategoriesOf, perkKindsOf,
+  type Notebook, type Perk, type PerkKindDef,
 } from '../lib/types'
 import PerkCard from '../components/PerkCard'
 import Prose from '../components/Prose'
 import PerkEditor from '../components/PerkEditor'
 import PerkSettings from '../components/PerkSettings'
+import { IconChoice } from '../components/IconPicker'
 import {
   BackButton, ClearIcon, EmptyState, GearIcon, GridIcon, HashIcon, OpenBookIcon,
   OwnerIcon, PerkIcon, ScrollIcon, SearchIcon, TableIcon, VerifyIcon,
-  facetStyle, viewToggleStyle,
+  facetStyle, ghostButtonStyle, inputStyle, primaryButtonStyle, viewToggleStyle,
 } from '../components/ui'
 
 /** أبوابُ الكنّاش. المفتاحُ موضعُه من الرابط، والصدرُ بلا مفتاح. */
 const TABS = [
-  { key: '', label: 'السَّيْل', icon: ScrollIcon },
-  { key: 'topics', label: 'الأبواب', icon: GridIcon },
+  { key: '', label: 'الفوائد', icon: ScrollIcon },
+  { key: 'topics', label: 'التصنيفات', icon: GridIcon },
   { key: 'people', label: 'الأعلام', icon: OwnerIcon },
   { key: 'notebooks', label: 'الكرّاسات', icon: OpenBookIcon },
   { key: 'gems', label: 'النفائس', icon: VerifyIcon },
 ] as const
 
-/** طرائقُ قراءة السيل: بطاقاتٌ مفصَّلة، أو فهرسٌ يُمسح بالعين، أو نصٌّ متّصل */
+/** طرائقُ قراءتها: بطاقاتٌ مفصَّلة، أو فهرسٌ يُمسح بالعين، أو نصٌّ متّصل */
 const VIEWS = [
   { key: 'cards', label: 'بطاقات', icon: GridIcon },
   { key: 'index', label: 'فهرس', icon: TableIcon },
@@ -57,7 +63,9 @@ const VIEWS = [
 type ViewKey = typeof VIEWS[number]['key']
 
 export default function Perks({ tab = '' }: { tab?: string }) {
-  const { perks, bookById, settings, isOwner, canEdit } = useLibrary()
+  const {
+    perks, notebooks, perkKinds, perkCategories, bookById, settings, isOwner, canEdit,
+  } = useLibrary()
   const canSee = isOwner || settings.visibility.perks
 
   const [filter, setFilter] = useState<PerkFilter>(EMPTY_FILTER)
@@ -66,12 +74,13 @@ export default function Perks({ tab = '' }: { tab?: string }) {
   const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  /** الأنواع كما حرّرها صاحب المكتبة، ومعها ما بقي في القيود من نوعٍ رُفع */
-  const kinds = useMemo(() => perkKindsOf(settings, perks), [settings, perks])
+  /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ */
+  const kinds = useMemo(() => perkKindsOf(perkKinds, perks), [perkKinds, perks])
+  const cats = useMemo(() => perkCategoriesOf(perkCategories), [perkCategories])
 
   /**
-   * ينتقل إلى السيل ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان: عَلَمًا في
-   * «الأعلام»، أو كرّاسةً في «الكرّاسات»، أو رُقعةً على بطاقة قيد.
+   * ينتقل إلى باب «الفوائد» ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان: عَلَمًا في
+   * «الأعلام»، أو تصنيفًا في «التصنيفات»، أو رُقعةً على بطاقة فائدة.
    *
    * والترشيحُ يُوضَع قبل الانتقال ولا يُخلى بعده: إخلاؤه إنما يكون بضغط
    * القارئ على بابٍ من التبويب — وذلك في `openTab` — لا بمجرَّد تبدُّل
@@ -88,9 +97,9 @@ export default function Perks({ tab = '' }: { tab?: string }) {
     navigate(key ? { name: 'perks', tab: key } : { name: 'perks' })
   }
 
-  const topics = useMemo(() => perkTopics(perks), [perks])
+  const topics = useMemo(() => perkTopics(perks, cats), [perks, cats])
   const people = useMemo(() => perkPeople(perks), [perks])
-  const notebooks = useMemo(() => perkNotebooks(perks), [perks])
+  const books = useMemo(() => notebookTallies(notebooks, perks), [notebooks, perks])
   const tags = useMemo(() => perkTags(perks), [perks])
   const sources = useMemo(() => perkSources(perks, bookById), [perks, bookById])
   const gems = useMemo(() => perks.filter((p) => p.rating >= 3), [perks])
@@ -107,8 +116,8 @@ export default function Perks({ tab = '' }: { tab?: string }) {
       {/*
         ترويسةُ القسم: قسمٌ قائمٌ بنفسه له اسمُه وأبوابُه وأدواتُه، لا صفحةٌ
         في المكتبة. فترويستُه تحمل ما تحمله ترويسةُ قسم: التعريفَ به،
-        وأعدادَه، وأبوابَه الخمسة، وأدواتِ صاحبه — القيدَ الجديد وإعداداتِ
-        الأنواع.
+        وأعدادَه، وأبوابَه الخمسة، وأدواتِ صاحبه — الفائدةَ الجديدة
+        وإعداداتِ الأنواع والتصنيفات.
       */}
       <header className="kunnash-head">
         <div className="kunnash-brand">
@@ -116,22 +125,22 @@ export default function Perks({ tab = '' }: { tab?: string }) {
           <div className="kunnash-name">
             <h1>الفوائد والمقتطفات</h1>
             <p>
-              كنّاشُ المكتبة: ما قُيِّد من كتبها ومن غيرها — فائدةً استُنبطت،
-              أو نصًّا نُقل، أو تعقُّبًا على قول.
+              كنّاشُ المكتبة: ما قُيِّد من كتبها ومن غيرها — تحريرًا لمسألة،
+              أو تعقُّبًا على قول، أو نصًّا نُقل.
             </p>
           </div>
 
           {canEdit && (
             <div className="kunnash-tools">
               <button type="button" className="perks-new" onClick={() => setEditing(null)}>
-                + قيدٌ جديد
+                + فائدةٌ جديدة
               </button>
               <button
                 type="button"
                 className="kunnash-gear"
                 onClick={() => setSettingsOpen(true)}
-                title="إعدادات الكنّاش — أنواع القيد"
-                aria-label="إعدادات الكنّاش"
+                title="إعدادات الفوائد — الأنواع والتصنيفات والأعلام"
+                aria-label="إعدادات الفوائد"
               >
                 <GearIcon size={18} />
               </button>
@@ -139,25 +148,30 @@ export default function Perks({ tab = '' }: { tab?: string }) {
           )}
         </div>
 
-        {canSee && perks.length > 0 && (
+        {/* الأعدادُ لا تُعرض قبل أن يُقيَّد شيء — بطاقةٌ تقرأ صفرًا ليست
+            خبرًا — وأمّا الأبوابُ فتبقى: التصنيفاتُ والكرّاساتُ تُحرَّر
+            وتُفتح قبل أن تجتمع تحتها فائدة. */}
+        {canSee && (
           <>
+            {perks.length > 0 && (
             <div className="perks-tally">
-              <Tile value={perks.length} label="قيدًا" />
+              <Tile value={perks.length} label="فائدة" />
               <Tile value={sources.length} label="كتابًا أفاد" />
-              <Tile value={topics.length} label="بابًا" />
+              <Tile value={topics.filter((t) => t.count > 0).length} label="تصنيفًا" />
               <Tile value={people.length} label="عَلَمًا" />
               <Tile value={gems.length} label="من النفائس" />
             </div>
+            )}
 
             <nav className="perks-tabs" aria-label="أبواب الكنّاش">
-              {TABS.map(({ key, label, icon: Icon }) => (
+              {TABS.map(({ key, label, icon: Icons }) => (
                 <button
                   key={key || 'feed'}
                   type="button"
                   className={key === tab ? 'perks-tab perks-tab-on' : 'perks-tab'}
                   onClick={() => openTab(key)}
                 >
-                  <Icon size={16} />
+                  <Icons size={16} />
                   {label}
                 </button>
               ))}
@@ -168,11 +182,11 @@ export default function Perks({ tab = '' }: { tab?: string }) {
 
       {!canSee ? (
         <EmptyState title="الفوائد والمقتطفات غير معروضة" />
-      ) : perks.length === 0 ? (
+      ) : perks.length === 0 && (tab === '' || tab === 'gems' || tab === 'people') ? (
         <EmptyState
-          title="لم يُقيَّد شيءٌ بعد"
+          title="لم تُقيَّد فائدةٌ بعد"
           hint={canEdit
-            ? 'ابدأ بقيدٍ واحد: اضغط «قيدٌ جديد»، أو قيِّده من صفحة كتابه.'
+            ? 'ابدأ بواحدة: اضغط «فائدةٌ جديدة»، أو قيِّدها من صفحة كتابها.'
             : 'تُسجَّل الفائدةُ من صفحة الكتاب الذي استُخرجت منه.'}
         />
       ) : (
@@ -192,49 +206,48 @@ export default function Perks({ tab = '' }: { tab?: string }) {
               kinds={kinds}
               onEdit={canEdit ? setEditing : undefined}
               onPick={pick}
-              emptyTitle={tab === 'gems' ? 'لم يُوسَم قيدٌ بالنجوم الثلاث بعد' : 'لا مطابق'}
+              emptyTitle={tab === 'gems'
+                ? 'لم تُوسَم فائدةٌ بالنجوم الثلاث بعد'
+                : 'لا مطابق'}
             />
           )}
 
           {tab === 'topics' && (
             <TallyGrid
               rows={topics}
-              hint="أبوابُ العلم التي تتوزّع عليها القيود، ومعها فروعُها. وهي تصنيفاتُ المكتبة نفسها، تُحرَّر من نافذة الإعدادات."
-              onPick={(name) => pick('category', name)}
-              onPickChild={(name) => pick('subCategory', name)}
-              empty="لم يُنسَب قيدٌ إلى بابٍ بعد."
+              hint="أبوابُ العلم التي تتوزّع عليها الفوائد، ومعها فروعُها. وهي قائمةٌ بنفسها لا صلةَ لها بتصنيفات الكتب، تُحرَّر من إعدادات القسم."
+              onPick={(row) => pick('category', row.name)}
+              onPickChild={(row) => pick('subCategory', row.name)}
+              empty="لم يُحرَّر تصنيفٌ بعد."
             />
           )}
 
           {tab === 'people' && (
             <TallyGrid
               rows={people}
-              hint="كلُّ عَلَمٍ ذُكر في قيدٍ. واضغط الاسمَ يجتمع لك ما يتعلَّق به وحده."
-              onPick={(name) => pick('person', name)}
-              empty="لم يُذكر عَلَمٌ في قيدٍ بعد."
+              hint="كلُّ عَلَمٍ ذُكر في فائدة. واضغط الاسمَ يجتمع لك ما يتعلَّق به وحده."
+              onPick={(row) => pick('person', row.name)}
+              empty="لم يُذكر عَلَمٌ في فائدةٍ بعد."
             />
           )}
 
-          {tab === 'notebooks' && (
-            <TallyGrid
-              rows={notebooks}
-              hint="قيودٌ متفرِّقة جُمعت حول مسألةٍ واحدة فصارت بحثًا مصغَّرًا. وهي ثمرةُ الكنّاش لا مجرَّدَ تصنيف."
-              onPick={(name) => pick('notebook', name)}
-              empty="لم تُفتح كرّاسةٌ بعد. تُفتح بكتابة اسمها في قيدٍ."
-            />
-          )}
+          {tab === 'notebooks' && <Notebooks rows={books} />}
         </>
       )}
 
       {editing !== undefined && (
-        <PerkEditor perk={editing} onClose={() => setEditing(undefined)} />
+        <PerkEditor
+          key={editing?.id ?? 'new'}
+          perk={editing}
+          onClose={() => setEditing(undefined)}
+        />
       )}
       {settingsOpen && <PerkSettings onClose={() => setSettingsOpen(false)} />}
     </main>
   )
 }
 
-// ---------------------------------------------------------------- السَّيْل
+// ------------------------------------------------- بابُ الفوائد: مجموعةً
 function Feed(
   { perks, total, filter, setFilter, sort, setSort, view, setView, topics, tags,
     kinds, onEdit, onPick, emptyTitle }: {
@@ -248,7 +261,7 @@ function Feed(
     setView: (v: ViewKey) => void
     topics: Tally[]
     tags: Tally[]
-    kinds: string[]
+    kinds: PerkKindDef[]
     onEdit?: (perk: Perk) => void
     onPick: (field: keyof PerkFilter, value: string | number) => void
     emptyTitle: string
@@ -265,8 +278,8 @@ function Feed(
           <input
             value={filter.query}
             onChange={(e) => setFilter({ ...filter, query: e.target.value })}
-            placeholder="ابحث في القيود: نصًّا، أو عنوانًا، أو عَلَمًا، أو اسم كتاب…"
-            aria-label="ابحث في القيود"
+            placeholder="ابحث في الفوائد: نصًّا، أو عنوانًا، أو عَلَمًا، أو اسم كتاب…"
+            aria-label="ابحث في الفوائد"
           />
           {filter.query && (
             <button
@@ -280,7 +293,7 @@ function Feed(
         </div>
 
         <div className="perks-views">
-          {VIEWS.map(({ key, label, icon: Icon }) => (
+          {VIEWS.map(({ key, label, icon: Icons }) => (
             <button
               key={key}
               type="button"
@@ -289,7 +302,7 @@ function Feed(
               aria-label={label}
               style={viewToggleStyle(view === key)}
             >
-              <Icon size={16} />
+              <Icons size={16} />
             </button>
           ))}
         </div>
@@ -299,12 +312,13 @@ function Feed(
         {/* النوع: كلُّ نوعٍ رُقعة، والمضغوطةُ تُرفع بضغطةٍ ثانية */}
         {kinds.map((k) => (
           <button
-            key={k}
+            key={k.name}
             type="button"
-            onClick={() => setFilter({ ...filter, kind: filter.kind === k ? '' : k })}
-            style={facetStyle(filter.kind === k)}
+            onClick={() => setFilter({ ...filter, kind: filter.kind === k.name ? '' : k.name })}
+            style={facetStyle(filter.kind === k.name)}
           >
-            {k}
+            <Icon name={k.icon} size={13} />
+            {k.name}
           </button>
         ))}
 
@@ -314,9 +328,9 @@ function Feed(
           value={filter.category}
           onChange={(e) => setFilter({ ...filter, category: e.target.value, subCategory: '' })}
           className="perks-select"
-          aria-label="الباب"
+          aria-label="التصنيف"
         >
-          <option value="">كلّ الأبواب</option>
+          <option value="">كلّ التصنيفات</option>
           {topics.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
         </select>
 
@@ -344,7 +358,7 @@ function Feed(
         </select>
       </div>
 
-      {/* الوسومُ صفٌّ تحت المُصفِّيات: هي أسرعُ ما يُطلب به القيد */}
+      {/* الوسومُ صفٌّ تحت المُصفِّيات: هي أسرعُ ما تُطلب به الفائدة */}
       {tags.length > 0 && (
         <div className="perks-tagline">
           {tags.slice(0, 18).map((t) => (
@@ -353,7 +367,7 @@ function Feed(
               type="button"
               className={filter.tag === t.name ? 'perk-tag perk-tag-on' : 'perk-tag'}
               // الرُّقعةُ ههنا تُبدَّل وحدَها ولا تمحو ما سواها: القارئُ قد
-              // كتب بحثًا واختار بابًا، فليس رفعُ وسمٍ رفعًا لعمله كلِّه
+              // كتب بحثًا واختار تصنيفًا، فليس رفعُ وسمٍ رفعًا لعمله كلِّه
               onClick={() => setFilter({
                 ...filter, tag: filter.tag === t.name ? '' : t.name,
               })}
@@ -386,7 +400,7 @@ function Feed(
           {perks.map((p) => (
             <li key={p.id}>
               <button type="button" onClick={() => navigate({ name: 'perk', id: p.id })}>
-                <span className="perk-index-kind">{p.kind}</span>
+                <span className="perk-index-kind">{p.kinds[0] ?? ''}</span>
                 <span className="perk-index-title">{p.title || p.text.slice(0, 70) + '…'}</span>
                 <span className="perk-index-book">
                   {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined)}
@@ -407,7 +421,7 @@ function Feed(
               <Prose text={p.text} />
               <footer>
                 <button type="button" onClick={() => navigate({ name: 'perk', id: p.id })}>
-                  {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'القيد'}
+                  {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'الفائدة'}
                 </button>
               </footer>
             </section>
@@ -429,14 +443,14 @@ function Feed(
   )
 }
 
-// ------------------------------------------------------- الأبواب والأعلام
-/** شبكةُ أسماءٍ بأعدادها: بها تُعرض الأبوابُ والأعلامُ والكرّاسات جميعًا */
+// ------------------------------------------------------- التصنيفات والأعلام
+/** شبكةُ أسماءٍ بأعدادها: بها تُعرض التصنيفاتُ والأعلامُ جميعًا */
 function TallyGrid(
   { rows, hint, onPick, onPickChild, empty }: {
     rows: Tally[]
     hint: string
-    onPick: (name: string) => void
-    onPickChild?: (name: string) => void
+    onPick: (row: Tally) => void
+    onPickChild?: (row: Tally) => void
     empty: string
   },
 ) {
@@ -448,7 +462,12 @@ function TallyGrid(
       <div className="tally-grid">
         {rows.map((row) => (
           <div key={row.name} className="tally-card">
-            <button type="button" className="tally-head" onClick={() => onPick(row.name)}>
+            <button type="button" className="tally-head" onClick={() => onPick(row)}>
+              {row.icon && (
+                <span className="tally-icon" aria-hidden="true">
+                  <Icon name={row.icon} size={20} />
+                </span>
+              )}
               <span className="tally-name">{row.name}</span>
               <span className="tally-count">{countLabel(row.count, PERKS_COUNT)}</span>
             </button>
@@ -459,8 +478,9 @@ function TallyGrid(
                   <button
                     key={kid.name}
                     type="button"
-                    onClick={() => (onPickChild ?? onPick)(kid.name)}
+                    onClick={() => (onPickChild ?? onPick)(kid)}
                   >
+                    {kid.icon && <Icon name={kid.icon} size={13} />}
                     {kid.name}
                     <span>{formatNumber(kid.count)}</span>
                   </button>
@@ -470,6 +490,94 @@ function TallyGrid(
           </div>
         ))}
       </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------- الكرّاسات
+/**
+ * الكرّاسات: مسائلُ تُفتح ثم يُجمع لها المتفرِّق. وهي جدولٌ قائم لا تُشتقّ من
+ * الفوائد، فتقوم الكرّاسةُ وهي بعدُ خالية — ومن صفحتها تُضاف الفوائدُ الداخلة
+ * فيها.
+ */
+function Notebooks({ rows }: { rows: Tally[] }) {
+  const { canEdit, run, reload } = useLibrary()
+  const [name, setName] = useState('')
+  const [icon, setIcon] = useState('notebook')
+  const [adding, setAdding] = useState(false)
+
+  async function add() {
+    if (!name.trim()) return
+    await run(() => api.insertNotebook(name.trim(), '', icon))
+    await reload()
+    setName('')
+    setAdding(false)
+  }
+
+  return (
+    <>
+      <p className="perks-hint">
+        مسائلُ يُجمع لها المتفرِّق من الفوائد فتصير بحثًا مصغَّرًا. تُفتح
+        الكرّاسةُ ههنا، ثم تُضاف إليها الفوائدُ من صفحتها.
+      </p>
+
+      {rows.length === 0 && !canEdit && (
+        <EmptyState title="لم تُفتح كرّاسةٌ بعد." />
+      )}
+
+      <div className="tally-grid">
+        {rows.map((row) => (
+          <div key={row.id} className="tally-card">
+            <button
+              type="button"
+              className="tally-head"
+              onClick={() => navigate({ name: 'notebook', id: row.id! })}
+            >
+              <span className="tally-icon" aria-hidden="true">
+                <Icon name={row.icon || 'notebook'} size={20} />
+              </span>
+              <span className="tally-name">{row.name}</span>
+              <span className="tally-count">
+                {row.count > 0 ? countLabel(row.count, PERKS_COUNT) : 'خالية بعدُ'}
+              </span>
+            </button>
+          </div>
+        ))}
+
+        {/* زرُّ الزائد في هيئة البطاقات لا زرًّا غريبًا عنها، كزرِّ الدار
+            في صفحة دُور النشر */}
+        {canEdit && !adding && (
+          <button type="button" className="tally-card tally-add" onClick={() => setAdding(true)}>
+            + كرّاسةٌ جديدة
+          </button>
+        )}
+      </div>
+
+      {canEdit && adding && (
+        <div className="notebook-add">
+          <IconChoice value={icon} onChange={setIcon} label="الكرّاسة" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add() } }}
+            placeholder="مسألةٌ تُجمع لها الفوائد — «عقِبُ خالد بن الوليد»"
+            style={inputStyle}
+            aria-label="اسم الكرّاسة"
+            autoFocus
+          />
+          <button type="button" onClick={() => setAdding(false)} style={ghostButtonStyle}>
+            إلغاء
+          </button>
+          <button
+            type="button"
+            onClick={() => void add()}
+            disabled={!name.trim()}
+            style={primaryButtonStyle(!!name.trim())}
+          >
+            افتحها
+          </button>
+        </div>
+      )}
     </>
   )
 }
@@ -485,16 +593,17 @@ function Tile({ value, label }: { value: number; label: string }) {
   )
 }
 
-// ------------------------------------------------------- صفحة القيد الواحد
+// ----------------------------------------------------- صفحة الفائدة الواحدة
 /**
- * القيدُ وحده في صفحته: نصُّه تامًّا لا يُطوى، وعزوُه، وما اتّصل به من قيود —
- * ما كان في كرّاسته، وما خرج من كتابه.
+ * الفائدةُ وحدها في صفحتها: نصُّها تامًّا لا يُطوى، وعزوُها، وما اتّصل بها
+ * من فوائد — ما كان في كرّاساتها، وما خرج من كتابها. **وههنا تُعلَّم نفاستُها**
+ * — بالنجوم في صدر بطاقتها — لا من نموذجها.
  *
  * وتقبل بادئةَ المعرّف كما تقبله تامًّا، كصفحة الكتاب: الرابطُ المنسوخ
  * مختصَر.
  */
 export function PerkPage({ perkId }: { perkId: string }) {
-  const { perks, bookById, settings, isOwner, canEdit } = useLibrary()
+  const { perks, notebooks, bookById, settings, isOwner, canEdit } = useLibrary()
   const [editing, setEditing] = useState(false)
 
   const perk = useMemo(
@@ -505,8 +614,10 @@ export function PerkPage({ perkId }: { perkId: string }) {
   const kin = useMemo(() => {
     if (!perk) return { notebook: [] as Perk[], book: [] as Perk[] }
     return {
-      notebook: perk.notebook
-        ? perks.filter((p) => p.id !== perk.id && p.notebook === perk.notebook)
+      notebook: perk.notebook_ids.length
+        ? perks.filter(
+          (p) => p.id !== perk.id && p.notebook_ids.some((n) => perk.notebook_ids.includes(n)),
+        )
         : [],
       book: perk.book_id
         ? perks.filter((p) => p.id !== perk.id && p.book_id === perk.book_id)
@@ -519,14 +630,15 @@ export function PerkPage({ perkId }: { perkId: string }) {
       <main className="app-main perks-page">
         <BackButton label="العودة إلى الفوائد" onClick={() => navigate({ name: 'perks' })} />
         <EmptyState
-          title="لم يُعثَر على هذا القيد"
-          hint="قد يكون حُذف، أو أنه غير ظاهرٍ للزوار."
+          title="لم يُعثَر على هذه الفائدة"
+          hint="قد تكون حُذفت، أو أنها غير ظاهرةٍ للزوار."
         />
       </main>
     )
   }
 
   const book = perk.book_id ? bookById(perk.book_id) : undefined
+  const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
 
   return (
     <main className="app-main perks-page perk-single">
@@ -537,7 +649,9 @@ export function PerkPage({ perkId }: { perkId: string }) {
       {kin.notebook.length > 0 && (
         <section className="perk-kin">
           <h2>
-            من كرّاسة «{perk.notebook}»
+            {inNotebooks.length === 1
+              ? `من كرّاسة «${inNotebooks[0].name}»`
+              : 'من كرّاساتها'}
             <span>{countLabel(kin.notebook.length, PERKS_COUNT)} أخرى</span>
           </h2>
           <div className="perk-list">
@@ -558,7 +672,200 @@ export function PerkPage({ perkId }: { perkId: string }) {
         </section>
       )}
 
-      {editing && <PerkEditor perk={perk} onClose={() => setEditing(false)} />}
+      {editing && (
+        <PerkEditor key={perk.id} perk={perk} onClose={() => setEditing(false)} />
+      )}
+    </main>
+  )
+}
+
+// ----------------------------------------------------- صفحة الكرّاسة الواحدة
+/**
+ * الكرّاسةُ في صفحتها: اسمُها وأيقونتُها وما جُمع لها، **ومنها تُضاف الفوائدُ
+ * الداخلة فيها**. والإضافةُ ههنا لا في نموذج الفائدة: الكرّاسةُ تقوم بعد أن
+ * يجتمع لها شيء، فتُجمع إليها مما قُيِّد لا مما يُقيَّد.
+ *
+ * وهي عرضٌ حتى يُضغط القلم، كصفحتَي المؤلِّف والدار: لا يرى الفاهرسُ نموذجَ
+ * إدخالٍ وهو إنما جاء ليقرأ.
+ */
+export function NotebookPage({ notebookId }: { notebookId: string }) {
+  const {
+    perks, notebooks, settings, isOwner, canEdit, run, reload,
+  } = useLibrary()
+  const [editing, setEditing] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const notebook = useMemo<Notebook | undefined>(
+    () => notebooks.find((n) => n.id === notebookId)
+      ?? notebooks.find((n) => n.id.startsWith(notebookId)),
+    [notebooks, notebookId],
+  )
+
+  const inside = useMemo(
+    () => (notebook ? perks.filter((p) => p.notebook_ids.includes(notebook.id)) : []),
+    [perks, notebook],
+  )
+  const outside = useMemo(() => {
+    if (!notebook) return []
+    const needle = query.trim()
+    return perks
+      .filter((p) => !p.notebook_ids.includes(notebook.id))
+      .filter((p) => !needle || (p.title + ' ' + p.text).includes(needle))
+      .slice(0, 40)
+  }, [perks, notebook, query])
+
+  if (!(isOwner || settings.visibility.perks) || !notebook) {
+    return (
+      <main className="app-main perks-page">
+        <BackButton
+          label="العودة إلى الكرّاسات"
+          onClick={() => navigate({ name: 'perks', tab: 'notebooks' })}
+        />
+        <EmptyState title="لم يُعثَر على هذه الكرّاسة" />
+      </main>
+    )
+  }
+
+  const setMembership = async (perk: Perk, inIt: boolean) => {
+    const next = inIt
+      ? [...perk.notebook_ids, notebook.id]
+      : perk.notebook_ids.filter((n) => n !== notebook.id)
+    await run(() => api.setPerkNotebooks(perk.id, next))
+    await reload()
+  }
+
+  return (
+    <main className="app-main perks-page">
+      <BackButton
+        label="العودة إلى الكرّاسات"
+        onClick={() => navigate({ name: 'perks', tab: 'notebooks' })}
+      />
+
+      <header className="kunnash-head">
+        <div className="kunnash-brand">
+          <span className="kunnash-mark" aria-hidden="true">
+            <Icon name={notebook.icon || 'notebook'} size={26} />
+          </span>
+          <div className="kunnash-name">
+            {editing ? (
+              <div className="notebook-add">
+                <IconChoice
+                  value={notebook.icon}
+                  label={notebook.name}
+                  onChange={(icon) => void run(async () => {
+                    await api.updateNotebook(notebook.id, { icon })
+                    await reload()
+                  })}
+                />
+                <input
+                  defaultValue={notebook.name}
+                  onBlur={(e) => void run(async () => {
+                    const name = e.target.value.trim()
+                    if (name && name !== notebook.name) {
+                      await api.updateNotebook(notebook.id, { name })
+                      await reload()
+                    }
+                  })}
+                  style={inputStyle}
+                  aria-label="اسم الكرّاسة"
+                />
+                <button type="button" onClick={() => setEditing(false)} style={ghostButtonStyle}>
+                  تمّ
+                </button>
+              </div>
+            ) : (
+              <>
+                <h1>{notebook.name}</h1>
+                <p>
+                  {inside.length > 0
+                    ? `جُمع فيها ${countLabel(inside.length, PERKS_COUNT)}.`
+                    : 'كرّاسةٌ خالية بعدُ. أضِفْ إليها ما يخصُّ مسألتَها من الفوائد.'}
+                </p>
+              </>
+            )}
+          </div>
+
+          {canEdit && !editing && (
+            <div className="kunnash-tools">
+              <button type="button" className="perks-new" onClick={() => setPicking((v) => !v)}>
+                {picking ? 'أغلِق الاختيار' : '+ أضِفْ فوائدَ إليها'}
+              </button>
+              <button
+                type="button"
+                className="kunnash-gear"
+                onClick={() => setEditing(true)}
+                title="تعديل اسم الكرّاسة وأيقونتها"
+                aria-label="تعديل الكرّاسة"
+              >
+                <GearIcon size={18} />
+              </button>
+              <button
+                type="button"
+                className="kunnash-gear"
+                onClick={() => void run(async () => {
+                  await api.deleteNotebook(notebook.id)
+                  await reload()
+                  navigate({ name: 'perks', tab: 'notebooks' })
+                })}
+                title="حذف الكرّاسة — ولا تُحذف فوائدُها، وإنما تخرج منها"
+                aria-label="حذف الكرّاسة"
+              >
+                <ClearIcon size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* لوحُ الاختيار: الفوائدُ التي ليست فيها، تُضاف بضغطة */}
+      {canEdit && picking && (
+        <div className="notebook-picker">
+          <div className="perks-search">
+            <SearchIcon size={16} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ابحث في الفوائد لتُضيفها…"
+              aria-label="ابحث في الفوائد"
+            />
+          </div>
+          <ul>
+            {outside.map((p) => (
+              <li key={p.id}>
+                <span>{p.title || p.text.slice(0, 80) + '…'}</span>
+                <button type="button" onClick={() => void setMembership(p, true)}>
+                  أضِفْها
+                </button>
+              </li>
+            ))}
+            {outside.length === 0 && <li className="perk-hint">لا فائدةَ خارجها.</li>}
+          </ul>
+        </div>
+      )}
+
+      {inside.length === 0 ? (
+        <EmptyState title="لم يُجمع فيها شيءٌ بعد" />
+      ) : (
+        <div className="perk-list">
+          {inside.map((p) => (
+            <div key={p.id} className="notebook-item">
+              <PerkCard perk={p} />
+              {canEdit && (
+                <button
+                  type="button"
+                  className="notebook-drop"
+                  onClick={() => void setMembership(p, false)}
+                  title="أخرِجْها من هذه الكرّاسة — ولا تُحذف الفائدة"
+                >
+                  <ClearIcon size={12} />
+                  أخرِجْها من الكرّاسة
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   )
 }

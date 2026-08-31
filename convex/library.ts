@@ -104,8 +104,8 @@ export const perks = query({
         .filter((b) => bookIsPublic(b, s))
         .map((b) => b._id),
     )
-    // القيدُ من كتابٍ ليس في المكتبة لا كتابَ له يُخفى، فحكمُه حكمُ الباب
-    // كلِّه: إن عُرضت القيودُ عُرض معها، وإن حُجبت حُجب.
+    // الفائدةُ من كتابٍ ليس في المكتبة لا كتابَ لها يُخفى، فحكمُها حكمُ
+    // الباب كلِّه: إن عُرضت الفوائدُ عُرضت معها، وإن حُجبت حُجبت.
     return all
       .filter((p) => p.book_id === null || visible.has(p.book_id))
       .map(toClient)
@@ -175,6 +175,59 @@ export const categories = query({
       (c) => !s.hidden_categories.includes(c.name)
         && !(c.parent && s.hidden_categories.includes(c.parent)),
     )
+  },
+})
+
+/**
+ * أنواعُ الفوائد وتصنيفاتُها وأعلامُها وكرّاساتُها.
+ *
+ * أربعةُ جداولٍ حكمُها واحد: هي أثاثُ قسم الفوائد، فإن حُجب القسمُ عن
+ * الزائر حُجبت معه — لا معنى لعرض أبوابٍ لا يُعرض ما تحتها. ولا تُرشَّح
+ * بغير ذلك: ليس فيها ما يُخفى بعينه.
+ */
+async function perkSideTable<T extends { _id: unknown; _creationTime: number }>(
+  ctx: Parameters<typeof isOwner>[0], rows: T[],
+): Promise<Record<string, unknown>[]> {
+  if (!(await isOwner(ctx))) {
+    const s = await loadSettings(ctx)
+    if (!s.visibility.perks) return []
+  }
+  return rows.map(toClient) as Record<string, unknown>[]
+}
+
+export const perkKinds = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = (await ctx.db.query('perk_kinds').collect())
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a._creationTime - b._creationTime)
+    return await perkSideTable(ctx, all)
+  },
+})
+
+export const perkCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = (await ctx.db.query('perk_categories').collect())
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a._creationTime - b._creationTime)
+    return await perkSideTable(ctx, all)
+  },
+})
+
+export const perkFigures = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = (await ctx.db.query('perk_figures').collect())
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+    return await perkSideTable(ctx, all)
+  },
+})
+
+export const perkNotebooks = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = (await ctx.db.query('perk_notebooks').collect())
+      .sort((a, b) => a._creationTime - b._creationTime)
+    return await perkSideTable(ctx, all)
   },
 })
 

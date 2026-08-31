@@ -1,6 +1,6 @@
 // الإحالة إلى الكتاب كما تُوضع في جريدة المصادر.
 //
-// وهي مشتركةٌ بين بطاقة الكتاب وقيود «الفوائد»: القيدُ لا يُنقل بغير عزوٍ
+// وهي مشتركةٌ بين بطاقة الكتاب وفوائد الكنّاش: الفائدةُ لا تُنقل بغير عزوٍ
 // إلى مصدره، وصياغةُ العزو واحدةٌ في الموضعين فلا تفترق.
 
 import { toArabicDigits, yearLabel } from './hijri'
@@ -78,7 +78,7 @@ export function citationOf(book: Book, author: Author | null): string {
   return `${parts.join('، ')}.`
 }
 
-/** موضعُ القيد من كتابه: «ج٤، ص٨٥»، أو «ص٨٥» لمن لا مجلَّدَ له */
+/** موضعُ الفائدة من كتابها: «ج٤، ص٨٥»، أو «ص٨٥» لمن لا مجلَّدَ له */
 export function perkLocation(perk: Perk): string {
   const volume = (perk.volume ?? '').trim()
   const page = perk.page.trim()
@@ -90,10 +90,10 @@ export function perkLocation(perk: Perk): string {
 }
 
 /**
- * عزوُ القيد: مصدرُه ثم موضعُه منه. والمصدرُ إمّا كتابٌ من الفهرس فتُؤخذ
+ * عزوُ الفائدة: مصدرُها ثم موضعُها منه. والمصدرُ إمّا كتابٌ من الفهرس فتُؤخذ
  * إحالتُه كاملةً، وإمّا مصدرٌ كُتب نصًّا فيُنقل كما كُتب.
  *
- * والعزوُ يسبقه نصُّ القيد بين قوسين حين يُطلب تامًّا، ليُلصَق في موضعه من
+ * والعزوُ يسبقه نصُّ الفائدة بين قوسين حين يُطلب تامًّا، ليُلصَق في موضعه من
  * البحث بلا إعادة كتابة.
  */
 export function perkCitation(
@@ -103,7 +103,9 @@ export function perkCitation(
     ? citationOf(book, author)
     : [
       (perk.source?.title ?? '').trim(),
-      (perk.source?.author ?? '').trim(),
+      // ووفاةُ المؤلِّف بين قوسين بعد اسمه، كما تُكتب في الحاشية
+      [(perk.source?.author ?? '').trim(), (perk.source?.death ?? '').trim()]
+        .filter(Boolean).join(' ').replace(/^(.+?) (ت .+)$/, '$1 ($2)'),
       (perk.source?.edition ?? '').trim(),
     ].filter(Boolean).join('، ') + '.'
 

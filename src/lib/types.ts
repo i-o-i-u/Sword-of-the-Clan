@@ -10,8 +10,8 @@ export const LIBRARY_PLACE = 'أبها - حيُّ المُوظَّفين - شا�
 export type Era = 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
 export type ReadingStatus = 'لم يُقرأ' | 'قيد القراءة' | 'مقروء'
 /**
- * نوعُ القيد نصٌّ حرّ: أبوابُ الكنّاش لصاحبه يزيد فيها ويُعدِّل أسماءها من
- * إعدادات القسم، ولا تُملى عليه قائمةٌ مغلقة.
+ * نوعُ الفائدة نصٌّ حرّ: أبوابُ الكنّاش لصاحبه يزيد فيها ويُعدِّل أسماءها من
+ * إعدادات القسم، ولا تُملى عليه قائمةٌ مغلقة. وصفُّه في `PerkKindDef`.
  */
 export type PerkKind = string
 export type ViewMode = 'grid' | 'table' | 'shelf'
@@ -24,38 +24,107 @@ export const STATUSES: ReadingStatus[] = ['لم يُقرأ', 'قيد القرا�
 /** ما يُعرض حين لا حالة للكتاب. الفراغ هو ما يُخزَّن، وهذا لفظُه. */
 export const STATUS_UNKNOWN = 'غير معروفة'
 /**
- * أنواع القيد. ليس كلُّ ما يُقيَّد من الكتب فائدةً مستنبَطة ولا نصًّا
- * منقولًا: منه التعقُّبُ على قول، والمسألةُ تُحرَّر، وتحريرُ مصطلح،
- * والنادرةُ تُستملَح. والأوّلان أوّلُ ما كان، وعليهما قيودٌ في القاعدة.
+ * نوعُ الفائدة كما يُحرَّر: اسمُه، وأيقونتُه، وشرحُه. وهو صفٌّ في جدول
+ * `perk_kinds` لا لفظٌ في قائمة، لأن لكلّ نوعٍ أيقونةً يختارها صاحبُ
+ * المكتبة من مكتبة الأيقونات — والأيقونةُ خبرٌ عن النوع لا زينة.
  */
-export const PERK_KINDS: PerkKind[] = [
-  'فائدة', 'نقل', 'مقتطف', 'تعقُّب', 'مسألة', 'تحرير', 'نادرة',
-]
-
-/**
- * أنواعُ القيد كما هي اليوم: ما حرّره صاحب المكتبة إن حرّر، وإلّا فالمبدأ.
- * وما بقي في القيود من نوعٍ رُفع من القائمة يُضاف إليها، فلا يسقط قيدٌ من
- * السيل لأن نوعَه حُذف.
- */
-export function perkKindsOf(settings: Settings, perks: { kind: string }[]): string[] {
-  const listed = (settings.perk_kinds ?? []).map((k) => k.trim()).filter(Boolean)
-  const base = listed.length > 0 ? listed : PERK_KINDS
-  const used = [...new Set(perks.map((p) => p.kind).filter(Boolean))]
-  return [...base, ...used.filter((k) => !base.includes(k))]
+export interface PerkKindDef {
+  /** معرّفُ صفّه، وهو فارغٌ في المبدئيّ الذي لم يُحفظ بعد */
+  id: string
+  name: string
+  icon: string
+  hint: string
 }
 
 /**
- * شرحُ الأنواع المعروفة، يُعرض تحت اختيارها في نموذج القيد فلا يُخلَط نوعٌ
- * بنوع. وما استجدّ من أنواعِ صاحب المكتبة لا شرحَ له، ولا يُختلق له شرح.
+ * تصنيفُ الفوائد: بابٌ من أبواب العلم تُنسب إليه الفائدة. والفرعُ صفٌّ فيه
+ * `parent` اسمُ أصله، كما في تصنيفات المكتبة سواءً.
+ *
+ * **وهي منفصلةٌ عن تصنيفات المكتبة انفصالًا تامًّا**: تلك تُصنَّف بها الكتبُ
+ * على الأرفف، وهذه تُصنَّف بها الفوائد — والفائدةُ في «التغافل» لا يلزم أن
+ * يكون في المكتبة كتابٌ في بابه.
  */
-export const PERK_KIND_HINTS: Record<string, string> = {
-  'فائدة': 'ما استُنبط أو استُفيد، بلفظ المُقيِّد أو بلفظ صاحبه',
-  'نقل': 'نصٌّ يُنقل بحروفه عن قائله ليُعتمَد عليه',
-  'مقتطف': 'ما استُملح من كلامٍ أو شعرٍ لجماله لا للاحتجاج به',
-  'تعقُّب': 'استدراكٌ على قولٍ أو تنبيهٌ على وهمٍ فيه',
-  'مسألة': 'مسألةٌ تُحرَّر ويُجمع فيها كلامُ أهل العلم',
-  'تحرير': 'ضبطُ مصطلحٍ أو لفظٍ وبيانُ حدِّه',
-  'نادرة': 'مُلحةٌ أو خبرٌ طريف يُستظرَف',
+export interface PerkCategory {
+  id: string
+  name: string
+  /** اسمُ الرئيس، وفارغُه: هو رئيسٌ بنفسه */
+  parent: string
+  icon: string
+}
+
+/** عَلَمٌ مُسجَّل، يُختار من القائمة ولا يُكتب في كل فائدةٍ من جديد */
+export interface PerkFigure {
+  id: string
+  name: string
+  /** وفاتُه إن عُرفت، نصًّا: «ت ٢٩١ هـ» */
+  death: string
+  note: string
+}
+
+/** كرّاسة: مسألةٌ يُجمع لها المتفرِّق من الفوائد */
+export interface Notebook {
+  id: string
+  name: string
+  note: string
+  icon: string
+  created_at: string
+}
+
+/**
+ * أنواعُ الفوائد أوّلَ ما يقوم القسم. وهي مبدأٌ يُعرض ما لم يُحرَّر شيء، لا
+ * حدٌّ يُلزَم به: أوّلُ حفظٍ من نافذة الإعدادات يُثبتها في الجدول صفوفًا،
+ * فيزيد صاحبُ المكتبة عليها ويُبدِّل أسماءها وأيقوناتها.
+ */
+export const DEFAULT_PERK_KINDS: PerkKindDef[] = [
+  { id: '', name: 'تحرير', icon: 'verify', hint: 'ضبطُ مصطلحٍ أو مسألةٍ وبيانُ حدِّها' },
+  { id: '', name: 'تعقُّب', icon: 'magnifier', hint: 'استدراكٌ على قولٍ أو تنبيهٌ على وهمٍ فيه' },
+  { id: '', name: 'نقل', icon: 'quote-marks', hint: 'نصٌّ يُنقل بحروفه عن قائله ليُعتمَد عليه' },
+  { id: '', name: 'فائدة', icon: 'pearl', hint: 'ما استُنبط أو استُفيد، بلفظ المُقيِّد أو بلفظ صاحبه' },
+  { id: '', name: 'مقتطف', icon: 'gem', hint: 'ما استُملح من كلامٍ أو شعرٍ لجماله لا للاحتجاج به' },
+  { id: '', name: 'مسألة', icon: 'question', hint: 'مسألةٌ تُحرَّر ويُجمع فيها كلامُ أهل العلم' },
+  { id: '', name: 'نادرة', icon: 'smile', hint: 'مُلحةٌ أو خبرٌ طريف يُستظرَف' },
+]
+
+/**
+ * وتصنيفاتُها المبدئيّة: أبوابُ العلم المشهورة، لكلٍّ أيقونتُه. وحكمُها حكمُ
+ * الأنواع — تُعرض حتى تُحرَّر، فإذا حُفظت صارت صفوفًا تُزاد ويُزاد تحتها.
+ */
+export const DEFAULT_PERK_CATEGORIES: PerkCategory[] = [
+  { id: '', name: 'القرآن وعلومه', parent: '', icon: 'quran' },
+  { id: '', name: 'التفسير', parent: 'القرآن وعلومه', icon: 'tafsir' },
+  { id: '', name: 'الحديث وعلومه', parent: '', icon: 'hadith' },
+  { id: '', name: 'العلل والتخريج', parent: 'الحديث وعلومه', icon: 'takhrij' },
+  { id: '', name: 'الرجال والتراجم', parent: 'الحديث وعلومه', icon: 'rijal' },
+  { id: '', name: 'العقيدة', parent: '', icon: 'tawhid' },
+  { id: '', name: 'الفقه', parent: '', icon: 'fiqh' },
+  { id: '', name: 'أصول الفقه', parent: '', icon: 'usul' },
+  { id: '', name: 'السيرة النبوية', parent: '', icon: 'sira' },
+  { id: '', name: 'التاريخ', parent: '', icon: 'history' },
+  { id: '', name: 'الأنساب', parent: '', icon: 'nasab' },
+  { id: '', name: 'اللغة', parent: '', icon: 'dictionary' },
+  { id: '', name: 'النحو والصرف', parent: 'اللغة', icon: 'nahw' },
+  { id: '', name: 'الأدب والشعر', parent: '', icon: 'poetry' },
+  { id: '', name: 'البلاغة', parent: 'الأدب والشعر', icon: 'balagha' },
+  { id: '', name: 'الأخلاق والآداب', parent: '', icon: 'heart' },
+  { id: '', name: 'التغافل', parent: 'الأخلاق والآداب', icon: 'dove' },
+  { id: '', name: 'الرقائق', parent: '', icon: 'lamp' },
+]
+
+/**
+ * الأنواعُ كما هي اليوم: ما في الجدول إن كان فيه شيء، وإلّا فالمبدأ. وما
+ * بقي في الفوائد من نوعٍ رُفع من الجدول يُضاف إليها، فلا تسقط فائدةٌ من
+ * العرض لأن نوعَها حُذف.
+ */
+export function perkKindsOf(kinds: PerkKindDef[], perks: { kinds: string[] }[]): PerkKindDef[] {
+  const base = kinds.length > 0 ? kinds : DEFAULT_PERK_KINDS
+  const known = new Set(base.map((k) => k.name))
+  const orphans = [...new Set(perks.flatMap((p) => p.kinds))].filter((k) => k && !known.has(k))
+  return [...base, ...orphans.map((name) => ({ id: '', name, icon: '', hint: '' }))]
+}
+
+/** وكذلك التصنيفات: ما في الجدول، وإلّا فالمبدأ */
+export function perkCategoriesOf(rows: PerkCategory[]): PerkCategory[] {
+  return rows.length > 0 ? rows : DEFAULT_PERK_CATEGORIES
 }
 
 /** مراتبُ النفاسة الثلاث، وما فوقها فهو من «النفائس» */
@@ -66,7 +135,7 @@ export const PERK_RATINGS = [
   { value: 3, label: 'من النفائس' },
 ]
 
-/** حدُّ ما يُعرض من نصّ القيد في البطاقة قبل أن يُطوى */
+/** حدُّ ما يُعرض من نصّ الفائدة في البطاقة قبل أن يُطوى */
 export const PERK_PREVIEW_CHARS = 520
 export const LANGUAGES = ['العربية', 'مُترجَمٌ إلى العربية', 'لغةٌ أخرى']
 
@@ -499,33 +568,46 @@ export interface BookWork {
   type: string
 }
 
-/** مصدرُ القيد حين لا يكون من كتب المكتبة، يُكتب نصًّا كما يُكتب في العزو */
+/** مصدرُ الفائدة حين لا يكون من كتب المكتبة، يُكتب نصًّا كما يُكتب في العزو */
 export interface PerkSource {
   title: string
   author: string
+  /** وفاةُ مؤلِّفه إن وُجدت، نصًّا: «ت ٢٩١ هـ» */
+  death: string
   edition: string
+}
+
+/** هامشٌ في نصّ الفائدة: مِسماكُه في النصّ ونصُّه تحته */
+export interface PerkFootnote {
+  id: string
+  text: string
 }
 
 export interface Perk {
   id: string
-  /** فارغٌ إذا كان القيدُ من كتابٍ ليس في المكتبة، وحينئذٍ يُقرأ `source` */
+  /** فارغٌ إذا كانت الفائدةُ من كتابٍ ليس في المكتبة، وحينئذٍ يُقرأ `source` */
   book_id: string | null
-  kind: PerkKind
+  /** أنواعُها. الفائدةُ الواحدة تكون تحريرًا وتعقُّبًا معًا، فلا تُحبَس في نوع */
+  kinds: string[]
   title: string
+  /** النصُّ مجرَّدًا: عليه البحثُ والعزوُ ومختصرُ البطاقة */
   text: string
+  /** والنصُّ منسَّقًا كما كُتب. وفارغُه: فائدةٌ قُيِّدت قبل المُحرِّر المنسَّق. */
+  text_html: string
+  footnotes: PerkFootnote[]
   page: string
   /** المجلَّد الذي فيه الموضع، حين يكون الكتابُ مجلَّدات */
   volume: string
-  /** بابُ القيد، وهو من تصنيفات المكتبة نفسها */
-  category: string
-  sub_category: string
+  /** تصنيفاتُها وفروعُها، وهي أبوابُ الفوائد لا تصنيفاتُ المكتبة */
+  categories: string[]
+  sub_categories: string[]
   tags: string[]
-  /** الأعلامُ المذكورون في القيد */
+  /** الأعلامُ المذكورون فيها، بأسمائهم من سجلّ الأعلام */
   people: string[]
-  /** النفاسة من صفرٍ إلى ثلاث */
+  /** النفاسة من صفرٍ إلى ثلاث، تُعلَّم من صفحة الفائدة */
   rating: number
-  /** الكرّاسة: اسمُ المسألة التي يُجمع لها المتفرِّق */
-  notebook: string
+  /** الكرّاسات التي أُدخلت فيها، بمعرّفاتها */
+  notebook_ids: string[]
   /** تعليقُ المُقيِّد على النصّ، يُميَّز عنه */
   comment: string
   source: PerkSource | null
@@ -601,7 +683,10 @@ export interface Settings {
   show_landing_place: boolean
   /** حاسبة القراءة في صفحة التصفُّح — لصاحب المكتبة أبدًا، وللزائر بهذا */
   show_calculator: boolean
-  /** أنواعُ القيد، يحرّرها صاحب المكتبة من إعدادات قسم الفوائد */
+  /**
+   * أنواعُ الفوائد. باقيةٌ ولا تُكتب اليوم: صارت جدولًا قائمًا لأن لكلّ
+   * نوعٍ أيقونتَه، والقائمةُ النصّية لا تحملها.
+   */
   perk_kinds: string[]
 
   /** مفتاحُه اسمُ الحقل، وقيمتُه معرّفاتُ الكتب المستثناة من إخفائه */

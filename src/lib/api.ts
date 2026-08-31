@@ -11,7 +11,8 @@ import type { Id } from '../../convex/_generated/dataModel'
 import {
   DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
   type Author, type Book, type BookWork, type Category, type LandingImage,
-  type LandingQuote, type Loan, type Perk, type PerkSource, type Publisher,
+  type LandingQuote, type Loan, type Notebook, type Perk, type PerkCategory,
+  type PerkFigure, type PerkKindDef, type PerkSource, type Publisher,
   type Settings,
 } from './types'
 
@@ -41,7 +42,7 @@ export async function claimOwnership(_userId: string, displayName: string): Prom
 /**
  * الكتاب. حقولُه المستجدّة اختياريّةٌ في المخطّط بالضرورة — في القاعدة كتبٌ
  * فُهرست قبلها، وإلزامُها يُفشل تحقّقَ المخطّط على مستنداتها — فتُسدّ ههنا
- * مرّةً واحدة كما تُسدّ حقولُ القيد في `toPerk`، ولا تُترك الواجهةُ تحرس
+ * مرّةً واحدة كما تُسدّ حقولُ الفائدة في `toPerk`، ولا تُترك الواجهةُ تحرس
  * كلَّ حقلٍ في كل موضعٍ يقرؤه.
  *
  * وهذا حدُّ الدرس الذي كلّفنا صفحةً بيضاء: `condition_notes` كان اختياريًّا،
@@ -83,30 +84,80 @@ export async function fetchWorks(_owner: boolean): Promise<BookWork[]> {
 }
 
 /**
- * القيود. حقولُها المستجدّة اختياريّةٌ في المخطّط — في القاعدة قيودٌ كُتبت
+ * الفوائد. حقولُها المستجدّة اختياريّةٌ في المخطّط — في القاعدة فوائدُ كُتبت
  * قبلها — فتُسدّ ههنا مرّةً واحدة، ولا تُترك الواجهةُ تحرس كلَّ حقلٍ في كل
  * موضعٍ يقرؤه.
  */
 function toPerk(row: Record<string, unknown>): Perk {
-  const src = row.source as PerkSource | undefined | null
+  const src = row.source as Partial<PerkSource> | undefined | null
+  // النوعُ الواحد والبابُ الواحد صارا قائمتين، فما فُهرس بهما قبلُ يُرفع
+  // إليهما ههنا — ولا تُسأل الواجهةُ عن الصورتين في كل موضعٍ تقرؤهما
+  const kind = (row.kind as string) ?? ''
+  const category = (row.category as string) ?? ''
+  const subCategory = (row.sub_category as string) ?? ''
   return {
     ...(row as unknown as Perk),
     book_id: (row.book_id as string | null) ?? null,
+    kinds: (row.kinds as string[]) ?? (kind ? [kind] : []),
+    text_html: (row.text_html as string) ?? '',
+    footnotes: (row.footnotes as Perk['footnotes']) ?? [],
     volume: (row.volume as string) ?? '',
-    category: (row.category as string) ?? '',
-    sub_category: (row.sub_category as string) ?? '',
+    categories: (row.categories as string[]) ?? (category ? [category] : []),
+    sub_categories: (row.sub_categories as string[]) ?? (subCategory ? [subCategory] : []),
     tags: (row.tags as string[]) ?? [],
     people: (row.people as string[]) ?? [],
     rating: (row.rating as number) ?? 0,
-    notebook: (row.notebook as string) ?? '',
+    notebook_ids: (row.notebook_ids as string[]) ?? [],
     comment: (row.comment as string) ?? '',
-    source: src ?? null,
+    source: src ? { title: '', author: '', death: '', edition: '', ...src } : null,
   }
 }
 
 export async function fetchPerks(_owner: boolean): Promise<Perk[]> {
   const rows = await convex.query(api.library.perks, {})
   return (rows as unknown as Record<string, unknown>[]).map(toPerk)
+}
+
+/** أنواعُ الفوائد كما حُرِّرت. وفراغُها: لم تُحرَّر بعد، فيُعرض المبدأ. */
+export async function fetchPerkKinds(_owner: boolean): Promise<PerkKindDef[]> {
+  const rows = await convex.query(api.library.perkKinds, {}) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '',
+    icon: (r.icon as string) ?? '',
+    hint: (r.hint as string) ?? '',
+  }))
+}
+
+export async function fetchPerkCategories(_owner: boolean): Promise<PerkCategory[]> {
+  const rows = await convex.query(api.library.perkCategories, {}) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '',
+    parent: (r.parent as string) ?? '',
+    icon: (r.icon as string) ?? '',
+  }))
+}
+
+export async function fetchPerkFigures(_owner: boolean): Promise<PerkFigure[]> {
+  const rows = await convex.query(api.library.perkFigures, {}) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '',
+    death: (r.death as string) ?? '',
+    note: (r.note as string) ?? '',
+  }))
+}
+
+export async function fetchNotebooks(_owner: boolean): Promise<Notebook[]> {
+  const rows = await convex.query(api.library.perkNotebooks, {}) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? '',
+    note: (r.note as string) ?? '',
+    icon: (r.icon as string) ?? '',
+    created_at: (r.created_at as string) ?? '',
+  }))
 }
 
 export async function fetchLoans(_owner: boolean): Promise<Loan[]> {
@@ -184,8 +235,12 @@ export async function deleteWork(id: string): Promise<void> {
   await convex.mutation(api.books.removeWork, { id: id as Id<'book_works'> })
 }
 
-/** ما يُكتب في القيد إدخالًا وتعديلًا، وهو حقولُه كلُّها دون معرّفه */
-export type PerkInput = Omit<Perk, 'id' | 'created_at'>
+/**
+ * ما يُكتب في الفائدة إدخالًا وتعديلًا. وليس فيه نفاستُها ولا كرّاساتُها:
+ * تلك تُعلَّم من صفحتها، وهذه تُضاف من صفحة الكرّاسة — ولكلٍّ دالّتُه، فلا
+ * يمحو حفظُ النموذج ما لم يُسأل عنه فيه.
+ */
+export type PerkInput = Omit<Perk, 'id' | 'created_at' | 'rating' | 'notebook_ids'>
 
 /** المستندُ كما يقبله المُحوِّل: المعرّفُ معرّفَ Convex، والفارغُ null */
 function fromPerk(perk: PerkInput) {
@@ -207,13 +262,70 @@ export async function updatePerk(id: string, perk: PerkInput): Promise<void> {
   })
 }
 
-/** تعديلُ اسم نوعٍ من أنواع القيد، ويُزامَن على قيوده في الخادم */
-export async function renamePerkKind(from: string, to: string): Promise<void> {
-  await convex.mutation(api.catalog.renamePerkKind, { from, to })
+/** نفاسةُ الفائدة، تُعلَّم من صفحتها */
+export async function setPerkRating(id: string, rating: number): Promise<void> {
+  await convex.mutation(api.catalog.setPerkRating, { id: id as Id<'perks'>, rating })
+}
+
+/** كرّاساتُ الفائدة، تُضاف إليها من صفحة الكرّاسة */
+export async function setPerkNotebooks(id: string, notebookIds: string[]): Promise<void> {
+  await convex.mutation(api.catalog.setPerkNotebooks, {
+    id: id as Id<'perks'>, notebook_ids: notebookIds,
+  })
 }
 
 export async function deletePerk(id: string): Promise<void> {
   await convex.mutation(api.catalog.deletePerk, { id: id as Id<'perks'> })
+}
+
+// --------------------------------------------- أثاثُ القسم: أنواعُه وأبوابُه
+
+/** الأنواعُ تُحفظ قائمةً واحدة: ما زاد يُنشأ، وما نقص يُحذف، والاسمُ يُزامَن */
+export async function savePerkKinds(rows: PerkKindDef[]): Promise<void> {
+  await convex.mutation(api.catalog.savePerkKinds, {
+    rows: rows.map((r) => ({
+      id: r.id || undefined, name: r.name, icon: r.icon, hint: r.hint,
+    })),
+  })
+}
+
+export async function savePerkCategories(rows: PerkCategory[]): Promise<void> {
+  await convex.mutation(api.catalog.savePerkCategories, {
+    rows: rows.map((r) => ({
+      id: r.id || undefined, name: r.name, parent: r.parent, icon: r.icon,
+    })),
+  })
+}
+
+export async function savePerkFigures(rows: PerkFigure[]): Promise<void> {
+  await convex.mutation(api.catalog.savePerkFigures, {
+    rows: rows.map((r) => ({
+      id: r.id || undefined, name: r.name, death: r.death, note: r.note,
+    })),
+  })
+}
+
+/** عَلَمٌ يُسجَّل من نموذج الفائدة نفسه، فلا يُخرَج صاحبُه إلى الإعدادات */
+export async function findOrCreatePerkFigure(name: string, death = ''): Promise<void> {
+  await convex.mutation(api.catalog.findOrCreatePerkFigure, { name, death })
+}
+
+export async function insertNotebook(
+  name: string, note = '', icon = '',
+): Promise<void> {
+  await convex.mutation(api.catalog.insertNotebook, { name, note, icon })
+}
+
+export async function updateNotebook(
+  id: string, patch: { name?: string; note?: string; icon?: string },
+): Promise<void> {
+  await convex.mutation(api.catalog.updateNotebook, {
+    id: id as Id<'perk_notebooks'>, patch,
+  })
+}
+
+export async function deleteNotebook(id: string): Promise<void> {
+  await convex.mutation(api.catalog.deleteNotebook, { id: id as Id<'perk_notebooks'> })
 }
 
 export async function insertLoan(

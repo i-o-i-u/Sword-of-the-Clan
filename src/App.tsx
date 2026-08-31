@@ -65,6 +65,9 @@ const Series = page(() => import('./views/Series'))
 const Matns = page(() => import('./views/Matns'))
 const Perks = page(() => import('./views/Perks'))
 const PerkPage = page(() => import('./views/Perks').then((m) => ({ default: m.PerkPage })))
+const NotebookPage = page(
+  () => import('./views/Perks').then((m) => ({ default: m.NotebookPage })),
+)
 const LoginOverlay = page(() => import('./components/LoginOverlay'))
 const SettingsOverlay = page(() => import('./components/SettingsOverlay'))
 const ViewerSettingsOverlay = page(() => import('./components/ViewerSettingsOverlay'))
@@ -179,6 +182,7 @@ export default function App() {
           {route.name === 'matns' && <Matns />}
           {route.name === 'perks' && <Perks tab={route.tab} />}
           {route.name === 'perk' && <PerkPage perkId={route.id} />}
+          {route.name === 'notebook' && <NotebookPage notebookId={route.id} />}
         </Suspense>
       )}
 

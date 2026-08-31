@@ -776,6 +776,117 @@ export function ZoomIcon({ size = 15, out = false }: IconProps & { out?: boolean
   )
 }
 
+/*
+ * أدواتُ مُحرِّر نصّ الفائدة. مرسومةٌ بالخطوط لا بحروفٍ لاتينية (B, I, U):
+ * اللوحُ عربيٌّ كلُّه، وحرفٌ لاتينيٌّ في شريطه غريبٌ عنه — ثم هو لا يُقرأ
+ * لمن لم يألف أشرطةَ التحرير الإنجليزية.
+ */
+
+/** حرفٌ ثخينٌ — العريض */
+export function BoldIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)} strokeWidth={2}>
+      <path d="M7 5h5.5a3.5 3.5 0 0 1 0 7H7z" />
+      <path d="M7 12h6.5a3.5 3.5 0 0 1 0 7H7z" />
+    </svg>
+  )
+}
+
+/** حرفٌ مائل */
+export function ItalicIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M15 5h-5" />
+      <path d="M14 19H9" />
+      <path d="M13 5l-2 14" />
+    </svg>
+  )
+}
+
+/** خطٌّ تحت الكلمة */
+export function UnderlineIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M7 4.5v6.5a5 5 0 0 0 10 0V4.5" />
+      <path d="M5.5 20h13" />
+    </svg>
+  )
+}
+
+/** خطٌّ في وسط الكلمة */
+export function StrikeIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M4.5 12h15" />
+      <path d="M7.5 7.5a4 4 0 0 1 4-3h1a4 4 0 0 1 3.8 2.6" />
+      <path d="M16.5 16a4 4 0 0 1-4 3.5h-1a4 4 0 0 1-4-3" />
+    </svg>
+  )
+}
+
+/** قلمُ تظليل */
+export function HighlightIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M14.5 3.5l6 6-7 7-6-6z" />
+      <path d="M7.5 10.5l-2.5 5 5 3 4-4" />
+      <path d="M4 20.5h7" />
+    </svg>
+  )
+}
+
+/** قائمةٌ بنقاط */
+export function ListIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M9 6.5h11" />
+      <path d="M9 12h11" />
+      <path d="M9 17.5h11" />
+      <path d="M4.6 6.5h.01" />
+      <path d="M4.6 12h.01" />
+      <path d="M4.6 17.5h.01" />
+    </svg>
+  )
+}
+
+/** قائمةٌ مُرقَّمة. أرقامُها خطوطٌ لا أرقامٌ مكتوبة: الرقمُ في أيقونةٍ صغيرة لا يُقرأ */
+export function NumberedListIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M9 6.5h11" />
+      <path d="M9 12h11" />
+      <path d="M9 17.5h11" />
+      <path d="M4 5.5l1.4-.8V8" />
+      <path d="M3.6 11.2a1.2 1.2 0 0 1 2 .9c0 .8-1.8 1.3-1.8 2.4h2" />
+      <path d="M3.8 16.4h1.8l-1.2 1.5a1.2 1.2 0 1 1-.6 2" />
+    </svg>
+  )
+}
+
+/** ورقةٌ صغيرة بنجمة — الهامش */
+export function NoteIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M5.5 4.5h9l4 4v11h-13z" />
+      <path d="M14.5 4.5v4h4" />
+      <path d="M8 13.5h7" />
+      <path d="M8 16.5h4.5" />
+    </svg>
+  )
+}
+
+/** نجمةٌ ثمانيّة — الرموز الخاصّة */
+export function SymbolIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...strokeIcon(size)}>
+      <path d="M12 3.5v17" />
+      <path d="M3.5 12h17" />
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  )
+}
+
 /**
  * سهمٌ نحو جهة — التنقّل في منتقيات التاريخ. مرسومٌ لا حرفَ قوسٍ، فيُعرف
  * اتجاهُه بالنظر. و«السابق» في العربية عن اليمين، فهو الاتجاه الأصل.
@@ -864,7 +975,7 @@ export function CloseButton({ onClose }: { onClose: () => void }) {
 /**
  * زرٌّ ينسخ نصًّا، ويُعلِن تمامَ النسخ بصحٍّ يظهر لحظةً ثم ينصرف.
  *
- * وهو مشتركٌ بين بطاقة الكتاب وبطاقة القيد: كلتاهما تُنسخ إحالتُها ورابطُها،
+ * وهو مشتركٌ بين بطاقة الكتاب وبطاقة الفائدة: كلتاهما تُنسخ إحالتُها ورابطُها،
  * فلا يُكتب الزرُّ مرَّتين ويفترق سلوكُه بينهما.
  */
 export function CopyButton(

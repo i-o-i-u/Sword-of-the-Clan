@@ -22,9 +22,11 @@ export type Route =
   | { name: 'series' }
   | { name: 'matns' }
   // «الفوائد والمقتطفات» بابٌ ذو أبواب، فلكلّ بابٍ منها موضعٌ في الرابط
-  // يُشارَك ويُعاد إليه — ولولاه لعاد كلُّ رابطٍ إلى صدر السيل.
+  // يُشارَك ويُعاد إليه — ولولاه لعاد كلُّ رابطٍ إلى صدر القسم.
   | { name: 'perks'; tab?: string }
   | { name: 'perk'; id: string }
+  // والكرّاسةُ صفحةٌ بنفسها: منها تُضاف الفوائدُ الداخلة فيها
+  | { name: 'notebook'; id: string }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '').split('?')[0]
@@ -48,6 +50,7 @@ export function parseHash(hash: string): Route {
     case 'matns': return { name: 'matns' }
     case 'perks': return id ? { name: 'perks', tab: id } : { name: 'perks' }
     case 'perk': return id ? { name: 'perk', id } : { name: 'perks' }
+    case 'notebook': return id ? { name: 'notebook', id } : { name: 'perks', tab: 'notebooks' }
     default: return { name: 'landing' }
   }
 }
@@ -69,6 +72,7 @@ export function hashFor(route: Route): string {
     case 'matns': return '#/matns'
     case 'perks': return route.tab ? `#/perks/${route.tab}` : '#/perks'
     case 'perk': return `#/perk/${route.id}`
+    case 'notebook': return `#/notebook/${route.id}`
     default: return '#/'
   }
 }

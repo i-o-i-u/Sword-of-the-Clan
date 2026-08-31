@@ -1,17 +1,23 @@
-// بطاقة القيد: النوعُ وبابُه ونفاستُه وتاريخُه، ثم عنوانُه ونصُّه وتعليقُ
-// المُقيِّد عليه، ثم عزوُه إلى مصدره وموضعُه منه، ثم أعلامُه ووسومُه، ثم
-// أدواتُه في الذيل.
+// بطاقة الفائدة: أنواعُها وتصنيفاتُها وكرّاساتُها ونفاستُها وتاريخُها، ثم
+// عنوانُها ونصُّها وتعليقُ المُقيِّد عليها، ثم عزوُها إلى مصدرها وموضعُها منه،
+// ثم أعلامُها ووسومُها، ثم أدواتُها في الذيل.
 //
-// وهي قطعةٌ واحدة في المواضع الثلاثة — سيلُ «الفوائد»، وصفحةُ القيد الواحد،
-// وصفحةُ الكتاب — كي لا يفترق شكلُ القيد بين موضعٍ وموضع.
+// وهي قطعةٌ واحدة في المواضع الثلاثة — بابُ «الفوائد»، وصفحةُ الفائدة
+// الواحدة، وصفحةُ الكتاب — كي لا يفترق شكلُ الفائدة بين موضعٍ وموضع.
 //
-// والنصُّ يُطوى إذا طال إلا في صفحة القيد وحدها: السيلُ يُتصفَّح لا يُقرأ،
-// وقيدٌ واحدٌ يملأ الشاشة يحجب ما بعده.
+// والنصُّ يُطوى إذا طال إلا في صفحة الفائدة وحدها: المجموعُ يُتصفَّح لا يُقرأ،
+// وفائدةٌ واحدةٌ تملأ الشاشة تحجب ما بعدها.
+//
+// **والنفاسة تُعلَّم من صفحة الفائدة وحدها**: هي حكمٌ على المقيَّد بعد النظر
+// فيه، فلا تُسأل ساعةَ الكتابة ولا تُبدَّل من صفّ البطاقات مرورًا.
 
 import { useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
+import * as api from '../lib/api'
 import Prose from './Prose'
+import RichText from './RichText'
+import { Icon } from '../lib/icons'
 import { perkCitation, perkLocation } from '../lib/citation'
 import { perkDate, perkLink, sourceAuthor, sourceTitle } from '../lib/perks'
 import { PERK_PREVIEW_CHARS, type Perk } from '../lib/types'
@@ -24,15 +30,18 @@ interface Props {
   perk: Perk
   /** موضعُها صفحةُ كتابها، فلا يُعاد ذكرُ المصدر الذي هي تحته */
   hideSource?: boolean
-  /** صفحةُ القيد الواحد: يُعرض النصُّ تامًّا ولا يُطوى، ولا زرَّ فتحٍ له */
+  /** صفحةُ الفائدة الواحدة: يُعرض النصُّ تامًّا ولا يُطوى، ولا زرَّ فتحٍ لها */
   full?: boolean
   onEdit?: (perk: Perk) => void
   /** الضغطُ على وسمٍ أو عَلَمٍ يجمع ما تحته. ومن لم يمرّره فهي نصٌّ لا رابط */
-  onPick?: (field: 'person' | 'tag' | 'category' | 'notebook', value: string) => void
+  onPick?: (field: 'person' | 'tag' | 'category' | 'subCategory' | 'notebook', value: string) => void
 }
 
 export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Props) {
-  const { perks, bookById, authorById, canEdit, setError } = useLibrary()
+  const {
+    perks, bookById, authorById, notebooks, perkKinds, perkCategories,
+    canEdit, setError, run, reload,
+  } = useLibrary()
   const [open, setOpen] = useState(false)
 
   const book = perk.book_id ? bookById(perk.book_id) : undefined
@@ -41,11 +50,15 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const writer = sourceAuthor(perk, book)
   const place = perkLocation(perk)
 
+  const iconOfKind = (name: string) => perkKinds.find((k) => k.name === name)?.icon ?? ''
+  const iconOfCat = (name: string) => perkCategories.find((c) => c.name === name)?.icon ?? ''
+  const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
+
   const long = perk.text.length > PERK_PREVIEW_CHARS
   const folded = long && !full && !open
 
   const chip = (
-    field: 'person' | 'tag' | 'category' | 'notebook',
+    field: 'person' | 'tag' | 'category' | 'subCategory' | 'notebook',
     value: string,
     className: string,
     body: React.ReactNode = value,
@@ -58,30 +71,65 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
     : <span key={value} className={className}>{body}</span>
   )
 
+  async function setRating(next: number) {
+    // النجمةُ المضغوطةُ نفسُها تُرفع بضغطةٍ ثانية، فلا يبقى الحكمُ لازمًا
+    await run(() => api.setPerkRating(perk.id, next === perk.rating ? 0 : next))
+    await reload()
+  }
+
   return (
     <article className="perk">
       {/* ------------------------------------------------------ الترويسة */}
       <header className="perk-head">
-        <span className={`perk-kind perk-kind-${KIND_TONE[perk.kind] ?? 'plain'}`}>
-          {perk.kind}
-        </span>
+        {perk.kinds.map((kind) => (
+          <span key={kind} className={`perk-kind perk-kind-${KIND_TONE[kind] ?? 'plain'}`}>
+            <Icon name={iconOfKind(kind)} size={12} />
+            {kind}
+          </span>
+        ))}
 
-        {perk.category && chip('category', perk.category, 'perk-chip')}
-        {perk.sub_category && (
-          <span className="perk-chip perk-chip-sub">{perk.sub_category}</span>
-        )}
-        {perk.notebook && chip(
-          'notebook', perk.notebook, 'perk-chip perk-chip-book',
+        {perk.categories.map((c) => chip(
+          'category', c, 'perk-chip',
           <>
-            <OpenBookIcon size={11} />
-            {perk.notebook}
+            <Icon name={iconOfCat(c)} size={11} />
+            {c}
           </>,
-        )}
+        ))}
+        {perk.sub_categories.map((c) => chip(
+          'subCategory', c, 'perk-chip perk-chip-sub',
+          <>
+            <Icon name={iconOfCat(c)} size={11} />
+            {c}
+          </>,
+        ))}
+        {inNotebooks.map((n) => chip(
+          'notebook', n.id, 'perk-chip perk-chip-book',
+          <>
+            <Icon name={n.icon || 'notebook'} size={11} />
+            {n.name}
+          </>,
+        ))}
 
         <span className="perk-head-tail">
-          {/* النفاسة نجومٌ مملوءة بقدرها لا رقمًا: تُقرأ في لمحة */}
-          {perk.rating > 0 && (
-            <span className="perk-stars" title={`نفاستُه ${perk.rating} من ٣`}>
+          {/* النفاسة نجومٌ مملوءة بقدرها لا رقمًا: تُقرأ في لمحة. وفي صفحة
+              الفائدة تُضغط فتُعلَّم — وهي موضعُ تعليمها لا غير. */}
+          {full && canEdit ? (
+            <span className="perk-stars perk-stars-edit" title="نفاستُها">
+              {[1, 2, 3].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => void setRating(n)}
+                  className={n <= perk.rating ? 'on' : ''}
+                  title={n === 3 ? 'من النفائس' : `${n} من ٣`}
+                  aria-label={`نفاستُها ${n} من ٣`}
+                >
+                  ★
+                </button>
+              ))}
+            </span>
+          ) : perk.rating > 0 && (
+            <span className="perk-stars" title={`نفاستُها ${perk.rating} من ٣`}>
               {'★'.repeat(Math.min(3, perk.rating))}
             </span>
           )}
@@ -91,8 +139,8 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
               type="button"
               className="perk-pen"
               onClick={() => onEdit(perk)}
-              title="تعديل القيد"
-              aria-label="تعديل القيد"
+              title="تعديل الفائدة"
+              aria-label="تعديل الفائدة"
             >
               <PencilIcon size={13} />
             </button>
@@ -104,17 +152,18 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       {perk.title && <h3 className="perk-title">{perk.title}</h3>}
 
       <div className={folded ? 'perk-text perk-text-folded' : 'perk-text'}>
-        <Prose text={perk.text} />
+        <RichText html={perk.text_html} text={perk.text} footnotes={perk.footnotes} />
       </div>
 
       {long && !full && (
         <button type="button" className="perk-more" onClick={() => setOpen((v) => !v)}>
-          {open ? 'اطوِ النصّ' : 'اقرأه تامًّا'}
+          {open ? 'اطوِ النصّ' : 'اقرأها تامّةً'}
         </button>
       )}
 
       {/* تعليقُ المُقيِّد مفصولٌ عن النصّ بشارةٍ وشريط: كلامُه لا يُخلَط
-          بكلام صاحب الكتاب، وهذا أوَّلُ ما يُتحرَّى في النقل */}
+          بكلام صاحب الكتاب، وهذا أوَّلُ ما يُتحرَّى في النقل. وتنسيقُه ثابتٌ
+          لا يتبع تنسيقَ النصّ، فيُعرف الكلامان بالنظر قبل القراءة. */}
       {perk.comment && (
         <div className="perk-comment">
           <span className="perk-comment-tag">
@@ -141,7 +190,12 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
               )
               : title}
           </span>
-          {writer && <span className="perk-source-author">{writer}</span>}
+          {writer && (
+            <span className="perk-source-author">
+              {writer}
+              {perk.source?.death ? ` (${perk.source.death})` : ''}
+            </span>
+          )}
           {perk.source?.edition && (
             <span className="perk-source-edition">{perk.source.edition}</span>
           )}
@@ -160,7 +214,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       )}
 
       {/* والموضعُ يُذكر ولو أُخفي المصدر: صفحةُ الكتاب تعرف كتابَها ولا تعرف
-          صفحتَه من القيد */}
+          صفحتَه من الفائدة */}
       {hideSource && place && (
         <div className="perk-source">
           <span className="perk-place">
@@ -198,7 +252,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
             onClick={() => navigate({ name: 'perk', id: perk.id })}
           >
             <OpenBookIcon size={15} />
-            <span>افتح القيد</span>
+            <span>افتح الفائدة</span>
           </button>
         )}
         <CopyButton
@@ -234,7 +288,8 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
 /**
  * لونُ شارة النوع. النقلُ والفائدةُ أكثرُ ما يُقيَّد فلهما اللونُ الممتلئ،
  * والتعقُّبُ لهُ لونُ التنبيه، وما سواهما شارةٌ هادئة — كثرةُ الألوان في
- * الصفحة الواحدة تُذهب دلالتَها.
+ * الصفحة الواحدة تُذهب دلالتَها. وما استجدّ من أنواع صاحب المكتبة فهادئٌ
+ * كذلك، وأيقونتُه هي التي تُميِّزه.
  */
 const KIND_TONE: Record<string, string> = {
   'فائدة': 'solid',

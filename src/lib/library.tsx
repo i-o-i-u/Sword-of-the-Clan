@@ -13,7 +13,8 @@ import { applyTheme } from './theme'
 import {
   DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
   type Author, type Book, type BookWork, type Category, type LandingImage,
-  type LandingQuote, type Loan, type Perk, type Publisher, type Settings,
+  type LandingQuote, type Loan, type Notebook, type Perk, type PerkCategory,
+  type PerkFigure, type PerkKindDef, type Publisher, type Settings,
 } from './types'
 
 const EMPTY_SETTINGS: Settings = {
@@ -53,6 +54,11 @@ interface LibraryValue {
   authors: Author[]
   works: BookWork[]
   perks: Perk[]
+  /** أثاثُ قسم الفوائد: أنواعُه وتصنيفاتُه وأعلامُه وكرّاساتُه */
+  perkKinds: PerkKindDef[]
+  perkCategories: PerkCategory[]
+  perkFigures: PerkFigure[]
+  notebooks: Notebook[]
   loans: Loan[]
   publishers: Publisher[]
   /** التصنيفات كلُّها، رئيسُها وفرعُها. الرئيسُ ما كان `parent` فيه فارغًا. */
@@ -137,6 +143,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [authors, setAuthors] = useState<Author[]>([])
   const [works, setWorks] = useState<BookWork[]>([])
   const [perks, setPerks] = useState<Perk[]>([])
+  const [perkKinds, setPerkKinds] = useState<PerkKindDef[]>([])
+  const [perkCategories, setPerkCategories] = useState<PerkCategory[]>([])
+  const [perkFigures, setPerkFigures] = useState<PerkFigure[]>([])
+  const [notebooks, setNotebooks] = useState<Notebook[]>([])
   const [loans, setLoans] = useState<Loan[]>([])
   const [publishers, setPublishers] = useState<Publisher[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -204,7 +214,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     if (!loadedOnce.current) setLoading(true)
     try {
       const owner = isOwnerRef.current
-      const [b, a, w, p, l, sh, c, img, q, st] = await Promise.all([
+      const [b, a, w, p, l, sh, c, img, q, st, pk, pc, pf, nb] = await Promise.all([
         api.fetchBooks(owner),
         api.fetchAuthors(owner),
         api.fetchWorks(owner),
@@ -215,9 +225,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         api.fetchLandingImages(owner),
         api.fetchLandingQuotes(owner),
         api.fetchSettings(owner),
+        api.fetchPerkKinds(owner),
+        api.fetchPerkCategories(owner),
+        api.fetchPerkFigures(owner),
+        api.fetchNotebooks(owner),
       ])
       if (seq !== loadSeq.current) return // سبقه تحميلٌ أحدث، فجوابُه أولى
       setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
+      setPerkKinds(pk); setPerkCategories(pc); setPerkFigures(pf); setNotebooks(nb)
       setPublishers(sh); setCategories(c)
       setLandingImages(img); setLandingQuotes(q)
       // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
@@ -350,6 +365,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     toggleBrowseOnly: () => setBrowseOnly((v) => !v),
     signOut, refreshRole,
     books, authors, works, perks, loans, publishers, categories, mainCategories,
+    perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings,
     authorById: (id) => (id ? authorMap.get(id) ?? null : null),
     bookById: (id) => bookMap.get(id),

@@ -110,9 +110,10 @@ export function matchWithin(t: WithinTitle, query: string, o: SearchOptions): bo
 }
 
 /**
- * القيدُ يُطابَق بنصّه وعنوانه وتعليقه وبابه وأعلامه ووسومه وكرّاسته، ثم
- * بعنوان مصدره ومؤلِّفه — بمعيار البحث نفسه: بلا تشكيلٍ ولا تفريقٍ بين
- * الهمزات.
+ * الفائدةُ تُطابَق بنصّها وعنوانها وتعليقها وأنواعها وتصنيفاتها وأعلامها
+ * ووسومها، ثم بعنوان مصدرها ومؤلِّفه — بمعيار البحث نفسه: بلا تشكيلٍ ولا
+ * تفريقٍ بين الهمزات. والنصُّ المقروء هو المجرَّد لا المنسَّق، فلا يُطابَق
+ * اسمُ وسمٍ في HTML ويُحسَب كلامَ المؤلِّف.
  *
  * و`sourceText` يأتي من خارج: الكتابُ في `perks` معرّفٌ لا عنوان، ومن يبحث
  * عن «مجالس ثعلب» يريد ما قُيِّد منه.
@@ -121,8 +122,9 @@ export function matchPerk(p: Perk, query: string, o: SearchOptions, sourceText =
   const needle = normalizeText(query, o)
   if (!needle) return true
   const hay = normalizeText([
-    p.title, p.text, p.comment, p.notebook, p.kind,
-    p.category, p.sub_category,
+    p.title, p.text, p.comment,
+    (p.kinds ?? []).join(' '),
+    (p.categories ?? []).join(' '), (p.sub_categories ?? []).join(' '),
     (p.tags ?? []).join(' '), (p.people ?? []).join(' '),
     p.source?.title ?? '', p.source?.author ?? '', p.source?.edition ?? '',
     sourceText,
