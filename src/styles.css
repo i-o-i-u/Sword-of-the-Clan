@@ -5068,3 +5068,18 @@ a { transition: color 0.15s; }
   font-size: 12.5px;
   line-height: 1.8;
 }
+
+/* صفُّ أزرار القائمة في الإعدادات: الزيادةُ وإعادةُ المبدئيّ */
+.kinds-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.kinds-restore {
+  padding: 8px 15px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.kinds-restore:not(:disabled):hover { color: var(--accent); border-color: var(--accent); }
+.kinds-restore:disabled { opacity: 0.55; }

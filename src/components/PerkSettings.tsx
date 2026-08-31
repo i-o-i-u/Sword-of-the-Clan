@@ -29,7 +29,8 @@ import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { IconChoice } from './IconPicker'
 import {
-  PERKS_COUNT, countLabel, perkCategoriesOf, perkKindsOf,
+  DEFAULT_PERK_CATEGORIES, DEFAULT_PERK_KINDS, PERKS_COUNT, countLabel,
+  perkCategoriesOf, perkKindsOf,
   type PerkCategory, type PerkFigure, type PerkKindDef,
 } from '../lib/types'
 import {
@@ -145,6 +146,44 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
 
   const ready = !clash.kinds && !clash.cats && !clash.figures
 
+  /**
+   * ما نقص من القائمة المبدئيّة. **والإعادةُ زيادةٌ لا استبدال**: يُردّ
+   * الناقصُ وحدَه ويبقى ما بناه صاحبُ المكتبة على حاله — فمن حذف نوعًا
+   * واحدًا لا يُهدَم عليه عملُه ليستردَّه.
+   */
+  const missingKinds = useMemo(
+    () => DEFAULT_PERK_KINDS.filter((d) => !kinds.some((k) => k.name.trim() === d.name)),
+    [kinds],
+  )
+  const missingCats = useMemo(() => {
+    const has = new Set(cats.map((c) => c.name.trim()))
+    return DEFAULT_PERK_CATEGORIES.filter((d) => !has.has(d.name))
+  }, [cats])
+
+  function restoreKinds() {
+    setKinds([...kinds, ...missingKinds.map((d) => ({ ...d }))])
+  }
+
+  function restoreCats() {
+    const next = [...cats]
+    // الرئيسُ أوّلًا ليجد الفرعُ مِسماكَ رئيسه، ثم الفروع
+    const uidOfName = new Map(
+      next.filter((c) => !c.parentUid).map((c) => [c.name.trim(), c.uid]),
+    )
+    for (const d of missingCats.filter((d) => !d.parent)) {
+      const u = uid()
+      next.push({ uid: u, id: '', name: d.name, icon: d.icon, parentUid: '' })
+      uidOfName.set(d.name, u)
+    }
+    for (const d of missingCats.filter((d) => d.parent)) {
+      next.push({
+        uid: uid(), id: '', name: d.name, icon: d.icon,
+        parentUid: uidOfName.get(d.parent) ?? '',
+      })
+    }
+    setCats(next)
+  }
+
   async function save() {
     if (!ready || saving) return
     setSaving(true)
@@ -259,13 +298,20 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                 })}
               </div>
 
-              <button
-                type="button"
-                style={ghostButtonStyle}
-                onClick={() => setKinds([...kinds, { id: '', name: '', icon: '', hint: '' }])}
-              >
-                + نوعٌ جديد
-              </button>
+              <div className="kinds-foot">
+                <button
+                  type="button"
+                  style={ghostButtonStyle}
+                  onClick={() => setKinds([...kinds, { id: '', name: '', icon: '', hint: '' }])}
+                >
+                  + نوعٌ جديد
+                </button>
+                <RestoreButton
+                  n={missingKinds.length}
+                  what="الأنواع"
+                  onRestore={restoreKinds}
+                />
+              </div>
             </>
           )}
 
@@ -365,15 +411,22 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                 })}
               </div>
 
-              <button
-                type="button"
-                style={ghostButtonStyle}
-                onClick={() => setCats([
-                  ...cats, { uid: uid(), id: '', name: '', icon: '', parentUid: '' },
-                ])}
-              >
-                + تصنيفٌ جديد
-              </button>
+              <div className="kinds-foot">
+                <button
+                  type="button"
+                  style={ghostButtonStyle}
+                  onClick={() => setCats([
+                    ...cats, { uid: uid(), id: '', name: '', icon: '', parentUid: '' },
+                  ])}
+                >
+                  + تصنيفٌ جديد
+                </button>
+                <RestoreButton
+                  n={missingCats.length}
+                  what="التصنيفات"
+                  onRestore={restoreCats}
+                />
+              </div>
             </>
           )}
 
@@ -449,6 +502,35 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
         </footer>
       </div>
     </Overlay>
+  )
+}
+
+/**
+ * زرُّ إعادة القائمة المبدئيّة.
+ *
+ * والقائمةُ المبدئيّة تُعرض ما لم تُحرَّر، فإذا حُرِّرت لم تعد أبدًا — وذاك
+ * هو الصواب: الفارغُ عن قصدٍ يبقى فارغًا. فبقي أن يكون لها بابٌ يُقصَد
+ * قصدًا، وهذا هو.
+ *
+ * **وهي زيادةٌ لا استبدال**: يُردّ الناقصُ وحدَه ويبقى ما بناه صاحبُ المكتبة
+ * على حاله. وما رُدّ لا يُحفظ حتى يُضغط «حفظ»، كسائر ما في النافذة — فله أن
+ * يرى ما عاد قبل أن يُثبته.
+ */
+function RestoreButton(
+  { n, what, onRestore }: { n: number; what: string; onRestore: () => void },
+) {
+  return (
+    <button
+      type="button"
+      className="kinds-restore"
+      disabled={n === 0}
+      title={n === 0
+        ? `المبدئيّةُ كلُّها موجودة`
+        : `يُردّ ما نقص من ${what} المبدئيّة (${n})، ولا يُحذف ما زدتَه`}
+      onClick={onRestore}
+    >
+      {n === 0 ? 'المبدئيّةُ كلُّها موجودة' : `أعِد المبدئيّةَ الناقصة (${n})`}
+    </button>
   )
 }
 
