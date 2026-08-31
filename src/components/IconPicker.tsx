@@ -115,7 +115,7 @@ export default function IconPicker(
                 onClick={() => onPick(def.key)}
                 title={def.label}
               >
-                <Icon name={def.key} size={22} />
+                <Icon name={def.key} size={24} />
                 <span>{def.label}</span>
               </button>
             ))}

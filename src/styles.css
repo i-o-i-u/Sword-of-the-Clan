@@ -21,6 +21,21 @@
   --danger: oklch(0.5 0.15 28);
   --cover-bg: oklch(0.9 0.02 65);
 
+
+  /* ------------------------------------------------ ألوان الأيقونات
+   * لوحةٌ ثمانيّة تصبغ بها أيقوناتُ الأنواع والتصنيفات (`lib/icons.tsx`).
+   * وهي مكسورةُ الإشراق قليلًا لتجاور لونَ المكتبة الترابيّ ولا تصرخ فوقه،
+   * وثمانيةٌ لا أكثر: كثرةُ الألوان في الشبكة الواحدة تُذهب دلالتَها.
+   */
+  --ic-gold: oklch(0.62 0.13 72);
+  --ic-green: oklch(0.52 0.11 152);
+  --ic-purple: oklch(0.5 0.13 300);
+  --ic-teal: oklch(0.55 0.09 202);
+  --ic-blue: oklch(0.52 0.11 250);
+  --ic-rose: oklch(0.55 0.14 20);
+  --ic-brown: oklch(0.5 0.08 55);
+  --ic-slate: oklch(0.46 0.03 250);
+
   --heading-font: 'Kitab', 'Amiri', serif;
   --body-font: 'Kitab', 'Amiri', serif;
   --ui-scale: 1;
@@ -3958,6 +3973,16 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
   --star: oklch(0.78 0.13 78);
   --danger: oklch(0.68 0.15 28);
   --cover-bg: oklch(0.33 0.02 50);
+
+  /* والأرضُ الداكنة تبتلع اللونَ المكسور، فتُرفع إشراقُه ويُخفَّف قتامُه */
+  --ic-gold: oklch(0.8 0.13 78);
+  --ic-green: oklch(0.75 0.13 155);
+  --ic-purple: oklch(0.74 0.13 300);
+  --ic-teal: oklch(0.76 0.1 200);
+  --ic-blue: oklch(0.74 0.11 250);
+  --ic-rose: oklch(0.75 0.13 22);
+  --ic-brown: oklch(0.72 0.08 60);
+  --ic-slate: oklch(0.72 0.03 250);
 
   /* والظلُّ على الأرض الداكنة لا يُرى إلا إذا اشتدّ سوادُه */
   --shadow-1: 0 1px 2px oklch(0 0 0 / 0.28), 0 2px 8px oklch(0 0 0 / 0.22);

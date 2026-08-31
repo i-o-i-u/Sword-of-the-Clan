@@ -83,7 +83,8 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       <header className="perk-head">
         {perk.kinds.map((kind) => (
           <span key={kind} className={`perk-kind perk-kind-${KIND_TONE[kind] ?? 'plain'}`}>
-            <Icon name={iconOfKind(kind)} size={12} />
+            {/* والشارةُ المصمتة أرضُها لونُ المكتبة، فلا يُقاتَل لونٌ بلون */}
+            <Icon name={iconOfKind(kind)} size={12} plain={KIND_TONE[kind] === 'solid'} />
             {kind}
           </span>
         ))}

@@ -317,7 +317,7 @@ function Feed(
             onClick={() => setFilter({ ...filter, kind: filter.kind === k.name ? '' : k.name })}
             style={facetStyle(filter.kind === k.name)}
           >
-            <Icon name={k.icon} size={13} />
+            <Icon name={k.icon} size={13} plain={filter.kind === k.name} />
             {k.name}
           </button>
         ))}
@@ -465,7 +465,7 @@ function TallyGrid(
             <button type="button" className="tally-head" onClick={() => onPick(row)}>
               {row.icon && (
                 <span className="tally-icon" aria-hidden="true">
-                  <Icon name={row.icon} size={20} />
+                  <Icon name={row.icon} size={26} />
                 </span>
               )}
               <span className="tally-name">{row.name}</span>
@@ -480,7 +480,7 @@ function TallyGrid(
                     type="button"
                     onClick={() => (onPickChild ?? onPick)(kid)}
                   >
-                    {kid.icon && <Icon name={kid.icon} size={13} />}
+                    {kid.icon && <Icon name={kid.icon} size={14} />}
                     {kid.name}
                     <span>{formatNumber(kid.count)}</span>
                   </button>
@@ -534,7 +534,7 @@ function Notebooks({ rows }: { rows: Tally[] }) {
               onClick={() => navigate({ name: 'notebook', id: row.id! })}
             >
               <span className="tally-icon" aria-hidden="true">
-                <Icon name={row.icon || 'notebook'} size={20} />
+                <Icon name={row.icon || 'notebook'} size={26} />
               </span>
               <span className="tally-name">{row.name}</span>
               <span className="tally-count">

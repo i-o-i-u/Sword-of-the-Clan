@@ -212,7 +212,8 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                   style={chipStyle(d.kinds.includes(k.name))}
                   title={k.hint || undefined}
                 >
-                  <Icon name={k.icon} size={14} />
+                  {/* المضغوطةُ أرضُها لونُ المكتبة، فتلبس الأيقونةُ لونَه */}
+                  <Icon name={k.icon} size={14} plain={d.kinds.includes(k.name)} />
                   {k.name}
                 </button>
               ))}
@@ -279,7 +280,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                   onClick={() => toggle('categories', c.name)}
                   style={chipStyle(d.categories.includes(c.name))}
                 >
-                  <Icon name={c.icon} size={14} />
+                  <Icon name={c.icon} size={14} plain={d.categories.includes(c.name)} />
                   {c.name}
                 </button>
               ))}
@@ -302,7 +303,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                     style={chipStyle(d.subCategories.includes(c.name))}
                     title={`من ${c.parent}`}
                   >
-                    <Icon name={c.icon} size={14} />
+                    <Icon name={c.icon} size={14} plain={d.subCategories.includes(c.name)} />
                     {c.name}
                   </button>
                 ))}
