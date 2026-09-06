@@ -400,6 +400,7 @@ const figureRow = v.object({
   name: v.string(),
   death: v.optional(v.string()),
   note: v.optional(v.string()),
+  icon: v.optional(v.string()),
 })
 
 export const savePerkFigures = mutation({
@@ -416,10 +417,12 @@ export const savePerkFigures = mutation({
       if (doc) {
         kept.add(doc._id)
         if (doc.name !== name) await syncRename(ctx, 'people', doc.name, name)
-        await ctx.db.patch(doc._id, { name, death: row.death ?? '', note: row.note ?? '' })
+        await ctx.db.patch(doc._id, {
+          name, death: row.death ?? '', note: row.note ?? '', icon: row.icon ?? '',
+        })
       } else {
         kept.add(await ctx.db.insert('perk_figures', {
-          name, death: row.death ?? '', note: row.note ?? '',
+          name, death: row.death ?? '', note: row.note ?? '', icon: row.icon ?? '',
         }))
       }
     }
@@ -445,7 +448,7 @@ export const findOrCreatePerkFigure = mutation({
       .first()
     if (found) return found._id
     return await ctx.db.insert('perk_figures', {
-      name: trimmed, death: (death ?? '').trim(), note: '',
+      name: trimmed, death: (death ?? '').trim(), note: '', icon: '',
     })
   },
 })

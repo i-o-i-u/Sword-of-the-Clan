@@ -59,7 +59,17 @@ export interface PerkFigure {
   /** وفاتُه إن عُرفت، نصًّا: «ت ٢٩١ هـ» */
   death: string
   note: string
+  /**
+   * مفتاحُ أيقونته من مكتبة الأيقونات، كما لكلّ نوعٍ وتصنيفٍ وكرّاسة
+   * أيقونتُها. وفراغُها يُرسم شخصًا (`FIGURE_ICON`) لا يُترك بياضًا: بابُ
+   * الأعلام شبكةٌ كشبكتَي التصنيفات والكرّاسات، فبطاقةٌ عارية بينها تُرى
+   * ناقصةً لا هادئة.
+   */
+  icon: string
 }
+
+/** أيقونةُ العَلَم حين لا يُختار له رمز */
+export const FIGURE_ICON = 'person'
 
 /** كرّاسة: مسألةٌ يُجمع لها المتفرِّق من الفوائد */
 export interface Notebook {
@@ -571,12 +581,135 @@ export interface BookWork {
 }
 
 /** مصدرُ الفائدة حين لا يكون من كتب المكتبة، يُكتب نصًّا كما يُكتب في العزو */
+/**
+ * جنسُ مصدر الفائدة حين لا يكون كتابًا من الفهرس.
+ *
+ * والكنّاشُ لا يُملأ من الكتب وحدها: منه ما يُسمع من شيخٍ في مجلسه، ومنه ما
+ * يُقرأ في صفحةٍ على الشبكة، ومنه ما يُنقل عن منشورِ صاحبٍ في مواقع التواصل،
+ * ومنه ما يُلتقط من درسٍ مسجَّل. وهذه كلُّها مصادرُ تُعزى إليها الفائدةُ كما
+ * يُعزى إلى الكتاب، فلا تُترك بلا عزوٍ ولا تُقحَم في صورة الكتاب.
+ *
+ * **والكتابُ هو الأصلُ فيها**، وهو قيمةُ ما فُهرس قبل هذا الباب: مستنداتُ
+ * القاعدة القديمة لا `kind` فيها، فتُقرأ كتبًا في `api.toPerk`.
+ *
+ * ولكلّ جنسٍ ألفاظُ حقوله: صاحبُ الكتاب «مؤلِّفه»، وصاحبُ السماع «من سُمع
+ * منه»، وصاحبُ المنشور «صاحبُ الحساب» — فلا يُسأل الفاهرسُ عن «المؤلِّف»
+ * وهو إنما سمع كلامًا في مجلس.
+ */
+export const SOURCE_BOOK = 'كتاب'
+
+export interface PerkSourceKindDef {
+  /** المحفوظ في `source.kind`، وهو المعروض في النموذج */
+  name: string
+  /** مفتاحُ أيقونته من مكتبة الأيقونات */
+  icon: string
+  /** شرحُه، يُعرض تحت اختياره فلا يلتبس جنسٌ بجنس */
+  hint: string
+  /** ما يُعلَّم به في البطاقة، فيُعرف جنسُ المصدر بالنظر قبل القراءة */
+  badge: string
+  titleLabel: string
+  whoLabel: string
+  /** موضعُه: مجلسُه أو الموقعُ الذي نُشر فيه. وفراغُه: لا يُسأل عنه. */
+  whereLabel: string
+  /** تاريخُه: تاريخُ السماع أو الاطّلاع أو النشر. وفراغُه: لا يُسأل. */
+  dateLabel: string
+  /** موضعُ الفائدة منه، لِما ليس بكتاب: «د ١٢:٤٠». وفراغُه: لا موضعَ له. */
+  spotLabel: string
+  /** أله رابطٌ يُفتح؟ */
+  hasUrl: boolean
+  /** الكتابُ وحدَه له وفاةُ مؤلِّفٍ وطبعةٌ ومجلَّدٌ وصفحة */
+  isBook: boolean
+}
+
+export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
+  {
+    name: SOURCE_BOOK,
+    icon: 'open-book',
+    hint: 'كتابٌ ليس في فهرس المكتبة: قُرئ في مكتبةٍ عامّة، أو في نسخةٍ إلكترونيّة، أو في كتابٍ مستعار',
+    badge: 'ليس في المكتبة',
+    titleLabel: 'عنوان الكتاب',
+    whoLabel: 'مؤلِّفه',
+    whereLabel: '',
+    dateLabel: '',
+    spotLabel: '',
+    hasUrl: false,
+    isBook: true,
+  },
+  {
+    name: 'سماع',
+    icon: 'listen',
+    hint: 'ما سُمع مشافهةً: من شيخٍ، أو في درسٍ، أو مجلسِ علمٍ أو محاضرة',
+    badge: 'سماعًا',
+    titleLabel: 'موضوعُه',
+    whoLabel: 'من سُمع منه',
+    whereLabel: 'مجلسُه أو درسُه',
+    dateLabel: 'تاريخُ سماعه',
+    spotLabel: '',
+    hasUrl: false,
+    isBook: false,
+  },
+  {
+    name: 'شبكة',
+    icon: 'web-page',
+    hint: 'صفحةٌ على الإنترنت: مقالٌ، أو مدوّنة، أو ملتقًى، أو موسوعة',
+    badge: 'من الشبكة',
+    titleLabel: 'عنوان الصفحة',
+    whoLabel: 'كاتبُها',
+    whereLabel: 'الموقع',
+    dateLabel: 'تاريخُ الاطّلاع',
+    spotLabel: '',
+    hasUrl: true,
+    isBook: false,
+  },
+  {
+    name: 'تواصل',
+    icon: 'social',
+    hint: 'منشورٌ في مواقع التواصل: تغريدةٌ، أو منشورٌ في صفحةٍ أو قناة',
+    badge: 'من مواقع التواصل',
+    titleLabel: 'موضوعُه',
+    whoLabel: 'صاحبُ الحساب',
+    whereLabel: 'الموقع أو القناة',
+    dateLabel: 'تاريخُ نشره',
+    spotLabel: '',
+    hasUrl: true,
+    isBook: false,
+  },
+  {
+    name: 'تسجيل',
+    icon: 'recording',
+    hint: 'درسٌ أو محاضرةٌ أو لقاءٌ مسجَّل، مسموعًا كان أو مرئيًّا',
+    badge: 'من تسجيل',
+    titleLabel: 'عنوانُه',
+    whoLabel: 'المُلقي',
+    whereLabel: 'سلسلتُه أو قناتُه',
+    dateLabel: 'تاريخُه',
+    spotLabel: 'موضعُه منه',
+    hasUrl: true,
+    isBook: false,
+  },
+]
+
+/** جنسُ المصدر بمفتاحه. وما لا يُعرف فكتاب: ذاك أصلُ ما فُهرس قبل الأجناس. */
+export function sourceKindOf(kind: string | undefined | null): PerkSourceKindDef {
+  return PERK_SOURCE_KINDS.find((k) => k.name === kind) ?? PERK_SOURCE_KINDS[0]
+}
+
 export interface PerkSource {
+  /** جنسُه من `PERK_SOURCE_KINDS`. وفراغُه: كتاب. */
+  kind: string
   title: string
+  /** صاحبُه: مؤلِّفُ الكتاب، أو من سُمع منه، أو صاحبُ المنشور */
   author: string
-  /** وفاةُ مؤلِّفه إن وُجدت، نصًّا: «ت ٢٩١ هـ» */
+  /** وفاةُ مؤلِّفه إن وُجدت، نصًّا: «ت ٢٩١ هـ». للكتاب وحدَه. */
   death: string
+  /** طبعتُه. للكتاب وحدَه. */
   edition: string
+  /** رابطُه، لِما كان على الشبكة. يُفتح في لسانٍ جديد. */
+  url: string
+  /** موضعُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، أو القناة */
+  venue: string
+  /** تاريخُه كما يُكتب: تاريخُ السماع أو الاطّلاع أو النشر */
+  date: string
 }
 
 /** هامشٌ في نصّ الفائدة: مِسماكُه في النصّ ونصُّه تحته */
@@ -944,11 +1077,26 @@ export interface CountForms {
 }
 
 export function countLabel(n: number, forms: CountForms): string {
-  if (!Number.isFinite(n) || n <= 0) return forms.none
-  if (n === 1) return forms.one
-  if (n === 2) return forms.two
-  if (n <= 10) return `${formatNumber(n)} ${forms.few}`
-  return `${formatNumber(n)} ${forms.many}`
+  const { value, label } = countParts(n, forms)
+  return value ? `${value} ${label}` : label
+}
+
+/**
+ * المعدودُ مقسومًا: رقمُه على حِدَة ولفظُه على حِدَة. وهي `countLabel` نفسُها
+ * مفصولةً، لموضعٍ يُبرَز فيه الرقمُ على لفظه — كلوحِ العدد في صدر الكنّاش.
+ *
+ * **والواحدُ والاثنان لا رقمَ لهما**: «فائدةٌ واحدة» و«فائدتان» صيغتان لا
+ * يتقدَّمهما عدد، فيبقى اللفظُ وحده ويخلو موضعُ الرقم. وذاك أصحُّ من «١
+ * فائدةً» — وهو ما كان في ألواح الصدر، تُلحَم فيها الأرقامُ بالأسماء بلا
+ * صيغة، فيُقرأ «٢ فائدةً» و«١ عَلَمًا».
+ *
+ * وهي والقاعدةُ واحدة: من عرض عددًا مع اسمه فمن ههنا لا بقالبٍ نصّيّ.
+ */
+export function countParts(n: number, forms: CountForms): { value: string; label: string } {
+  if (!Number.isFinite(n) || n <= 0) return { value: '', label: forms.none }
+  if (n === 1) return { value: '', label: forms.one }
+  if (n === 2) return { value: '', label: forms.two }
+  return { value: formatNumber(n), label: n <= 10 ? forms.few : forms.many }
 }
 
 export const BOOKS_COUNT: CountForms = {
@@ -971,6 +1119,22 @@ export const PRESSES_COUNT: CountForms = {
 
 export const PERKS_COUNT: CountForms = {
   none: 'لا فائدة', one: 'فائدةٌ واحدة', two: 'فائدتان', few: 'فوائدَ', many: 'فائدةً',
+}
+
+/** أعلامُ الكنّاش: من ذُكر في فائدة */
+export const FIGURES_COUNT: CountForms = {
+  none: 'لا عَلَم', one: 'عَلَمٌ واحد', two: 'عَلَمان', few: 'أعلامٍ', many: 'عَلَمًا',
+}
+
+/** ما أفاد: كتبُ المكتبة وما قُرئ أو سُمع من خارجها */
+export const SOURCES_COUNT: CountForms = {
+  none: 'لا مصدر', one: 'مصدرٌ واحد أفاد', two: 'مصدران أفادا',
+  few: 'مصادرَ أفادت', many: 'مصدرًا أفاد',
+}
+
+/** ما بلغ النجومَ الثلاث */
+export const GEMS_COUNT: CountForms = {
+  none: 'لا نفيسة', one: 'نفيسةٌ واحدة', two: 'نفيستان', few: 'نفائسَ', many: 'نفيسةً',
 }
 
 export const QUOTES_COUNT: CountForms = {

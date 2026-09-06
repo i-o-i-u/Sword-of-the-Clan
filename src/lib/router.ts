@@ -23,14 +23,34 @@ export type Route =
   | { name: 'matns' }
   // «الفوائد والمقتطفات» بابٌ ذو أبواب، فلكلّ بابٍ منها موضعٌ في الرابط
   // يُشارَك ويُعاد إليه — ولولاه لعاد كلُّ رابطٍ إلى صدر القسم.
-  | { name: 'perks'; tab?: string }
+  //
+  // **وما رُشِّح به كذلك**: من ضغط عَلَمًا أو كرّاسةً أو مصدرًا فقد قصد
+  // موضعًا بعينه من الكنّاش، فحقُّه أن يُشارَك ويُعاد إليه كما يُشارَك الباب.
+  // وأمّا البحثُ والنفاسةُ والترتيبُ فحالُ القارئ في لحظته لا موضعٌ يُقصد،
+  // فلا تُكتب في الرابط ولا يُثقَل بها.
+  | { name: 'perks'; tab?: string; pick?: { field: string; value: string } }
   | { name: 'perk'; id: string }
   // والكرّاسةُ صفحةٌ بنفسها: منها تُضاف الفوائدُ الداخلة فيها
   | { name: 'notebook'; id: string }
 
+/** ما يُرشَّح به الكنّاش من الرابط، ويُكتب فيه. انظر `Route.perks`. */
+const PERK_PICKS = ['kind', 'category', 'subCategory', 'person', 'notebook', 'tag', 'source']
+
 export function parseHash(hash: string): Route {
-  const path = hash.replace(/^#\/?/, '').split('?')[0]
+  const raw = hash.replace(/^#\/?/, '')
+  const path = raw.split('?')[0]
   const [head, id] = path.split('/')
+
+  if (head === 'perks') {
+    const params = new URLSearchParams(raw.split('?')[1] ?? '')
+    const field = PERK_PICKS.find((k) => params.get(k))
+    return {
+      name: 'perks',
+      ...(id ? { tab: id } : {}),
+      ...(field ? { pick: { field, value: params.get(field)! } } : {}),
+    }
+  }
+
   switch (head) {
     case 'browse': return { name: 'browse' }
     case 'book': return id ? { name: 'book', id } : { name: 'browse' }
@@ -48,7 +68,6 @@ export function parseHash(hash: string): Route {
     case 'people': return { name: 'people' }
     case 'series': return { name: 'series' }
     case 'matns': return { name: 'matns' }
-    case 'perks': return id ? { name: 'perks', tab: id } : { name: 'perks' }
     case 'perk': return id ? { name: 'perk', id } : { name: 'perks' }
     case 'notebook': return id ? { name: 'notebook', id } : { name: 'perks', tab: 'notebooks' }
     default: return { name: 'landing' }
@@ -70,7 +89,11 @@ export function hashFor(route: Route): string {
     case 'people': return '#/people'
     case 'series': return '#/series'
     case 'matns': return '#/matns'
-    case 'perks': return route.tab ? `#/perks/${route.tab}` : '#/perks'
+    case 'perks': {
+      const base = route.tab ? `#/perks/${route.tab}` : '#/perks'
+      if (!route.pick?.value) return base
+      return `${base}?${route.pick.field}=${encodeURIComponent(route.pick.value)}`
+    }
     case 'perk': return `#/perk/${route.id}`
     case 'notebook': return `#/notebook/${route.id}`
     default: return '#/'

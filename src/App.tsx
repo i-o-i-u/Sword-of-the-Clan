@@ -180,7 +180,7 @@ export default function App() {
           {route.name === 'people' && canSeeAuthors && <People />}
           {route.name === 'series' && <Series />}
           {route.name === 'matns' && <Matns />}
-          {route.name === 'perks' && <Perks tab={route.tab} />}
+          {route.name === 'perks' && <Perks tab={route.tab} pick={route.pick} />}
           {route.name === 'perk' && <PerkPage perkId={route.id} />}
           {route.name === 'notebook' && <NotebookPage notebookId={route.id} />}
         </Suspense>

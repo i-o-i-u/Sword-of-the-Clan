@@ -443,6 +443,15 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                   const n = row.id ? figureCount(row.name) : 0
                   return (
                     <div key={row.id || `new-${i}`} className="kinds-row kinds-row-wide">
+                      {/* وللعَلَم أيقونتُه كما لكلّ نوعٍ وتصنيفٍ وكرّاسة،
+                          وفراغُها يُرسم شخصًا في شبكة الأعلام لا بياضًا */}
+                      <IconChoice
+                        value={row.icon}
+                        label={row.name || 'العَلَم'}
+                        onChange={(icon) => setFigures(figures.map(
+                          (x, j) => (j === i ? { ...x, icon } : x),
+                        ))}
+                      />
                       <input
                         value={row.name}
                         onChange={(e) => setFigures(figures.map(
@@ -478,7 +487,7 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                 type="button"
                 style={ghostButtonStyle}
                 onClick={() => setFigures([
-                  ...figures, { id: '', name: '', death: '', note: '' },
+                  ...figures, { id: '', name: '', death: '', note: '', icon: '' },
                 ])}
               >
                 + عَلَمٌ جديد

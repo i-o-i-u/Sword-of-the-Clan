@@ -3,7 +3,7 @@
 //
 // وهو بابٌ ذو أبواب، لا صفحةً واحدة تُسرَد فيها الفوائدُ تحت عناوين كتبها
 // كما كان. فالفائدةُ لا تُطلب من جهةٍ واحدة: تُطلب من تصنيفها، ومن العَلَم
-// الذي ذُكر فيها، ومن الكرّاسة التي جُمعت لها، ومن الكتاب الذي خرجت منه —
+// الذي ذُكر فيها، ومن الكرّاسة التي جُمعت لها، ومن مصدرها الذي خرجت منه —
 // ولكلِّ طالبٍ بابُه:
 //
 //   • الفوائد     — كلُّها مجموعةً، تُصفَّى وتُرتَّب وتُقرأ بثلاث طرائق.
@@ -11,37 +11,44 @@
 //   • الأعلام    — كلُّ عَلَمٍ ذُكر في فائدة، يجتمع به ما تفرَّق عنه.
 //   • الكرّاسات  — مسائلُ تُفتح ثم يُجمع لها المتفرِّق، **ومن صفحة الكرّاسة
 //     تُضاف الفوائدُ الداخلة فيها** لا من نموذج الفائدة.
+//   • المصادر    — كلُّ ما أفاد: كتبُ الفهرس، وما قُرئ أو سُمع من خارجها.
 //   • النفائس    — ما بلغ من الفوائد النجومَ الثلاث، وهي خلاصةُ الكنّاش.
 //
-// ولكلّ بابٍ موضعُه من الرابط (`#/perks/topics`) فيُشارَك ويُعاد إليه، ولكلّ
-// فائدةٍ صفحتُها (`#/perk/:id`)، ولكلّ كرّاسةٍ صفحتُها (`#/notebook/:id`).
+// ولكلّ بابٍ موضعُه من الرابط (`#/perks/topics`) فيُشارَك ويُعاد إليه، **وما
+// رُشِّح به كذلك** (`#/perks?person=…`): من ضغط عَلَمًا أو كرّاسةً فقد قصد
+// موضعًا بعينه، فحقُّه أن يُشارَك. ولكلّ فائدةٍ صفحتُها (`#/perk/:id`)،
+// ولكلّ كرّاسةٍ صفحتُها (`#/notebook/:id`).
 //
 // وما حجبه الخادم عن الزائر لا يصل هذه الصفحة أصلًا: فوائدُ الكتاب المخفيّ
 // لا تُرسَل، ومفتاحُ «الفوائد والمقتطفات» في تبويب الزوار يُسقطها كلَّها.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { hashFor, navigate } from '../lib/router'
 import { Icon } from '../lib/icons'
 import { QUICK_OPTS, normalizeText } from '../lib/search'
 import {
-  EMPTY_FILTER, PERK_SORTS, filterIsOn, filterPerks, notebookTallies, perkDate,
-  perkPeople, perkSources, perkTags, perkTopics, sortPerks, sourceTitle,
-  type PerkFilter, type PerkSort, type Tally,
+  EMPTY_FILTER, PERK_SORTS, PICK_FIELDS, activeFilters, filterIsOn, filterPerks,
+  isPickField,
+  notebookTallies, perkDate, perkPeople, perkSources, perkTags, perkTopics,
+  sortPerks, sourceTitle,
+  type PerkFilter, type PerkSort, type PickField, type Tally,
 } from '../lib/perks'
 import {
-  PERKS_COUNT, countLabel, formatNumber, perkCategoriesOf, perkKindsOf,
-  type Notebook, type Perk, type PerkKindDef,
+  FIGURES_COUNT, GEMS_COUNT, PERKS_COUNT, SOURCES_COUNT, CATEGORIES_COUNT,
+  countLabel, countParts, formatNumber, perkCategoriesOf, perkKindsOf,
+  type CountForms, type Notebook, type Perk, type PerkKindDef,
 } from '../lib/types'
 import PerkCard from '../components/PerkCard'
 import Prose from '../components/Prose'
+import RichText from '../components/RichText'
 import PerkEditor from '../components/PerkEditor'
 import PerkSettings from '../components/PerkSettings'
 import { IconChoice } from '../components/IconPicker'
 import {
   BackButton, ClearIcon, EmptyState, GearIcon, GridIcon, HashIcon, OpenBookIcon,
-  OwnerIcon, PerkIcon, ScrollIcon, SearchIcon, TableIcon, VerifyIcon,
+  OwnerIcon, PerkIcon, QuoteIcon, ScrollIcon, SearchIcon, TableIcon, VerifyIcon,
   facetStyle, ghostButtonStyle, inputStyle, primaryButtonStyle, viewToggleStyle,
 } from '../components/ui'
 
@@ -51,6 +58,7 @@ const TABS = [
   { key: 'topics', label: 'التصنيفات', icon: GridIcon },
   { key: 'people', label: 'الأعلام', icon: OwnerIcon },
   { key: 'notebooks', label: 'الكرّاسات', icon: OpenBookIcon },
+  { key: 'sources', label: 'المصادر', icon: QuoteIcon },
   { key: 'gems', label: 'النفائس', icon: VerifyIcon },
 ] as const
 
@@ -63,9 +71,12 @@ const VIEWS = [
 
 type ViewKey = typeof VIEWS[number]['key']
 
-export default function Perks({ tab = '' }: { tab?: string }) {
+export default function Perks(
+  { tab = '', pick: picked }: { tab?: string; pick?: { field: string; value: string } },
+) {
   const {
-    perks, notebooks, perkKinds, perkCategories, bookById, settings, isOwner, canEdit,
+    perks, notebooks, perkKinds, perkCategories, perkFigures, bookById, settings,
+    isOwner, canEdit,
   } = useLibrary()
   const canSee = isOwner || settings.visibility.perks
 
@@ -87,15 +98,15 @@ export default function Perks({ tab = '' }: { tab?: string }) {
 
   /**
    * ينتقل إلى باب «الفوائد» ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان: عَلَمًا في
-   * «الأعلام»، أو تصنيفًا في «التصنيفات»، أو رُقعةً على بطاقة فائدة.
+   * «الأعلام»، أو تصنيفًا في «التصنيفات»، أو مصدرًا في «المصادر»، أو رُقعةً
+   * على بطاقة فائدة.
    *
-   * والترشيحُ يُوضَع قبل الانتقال ولا يُخلى بعده: إخلاؤه إنما يكون بضغط
-   * القارئ على بابٍ من التبويب — وذلك في `openTab` — لا بمجرَّد تبدُّل
-   * المسار، وإلّا محا هذا ما وضعه ذاك.
+   * **والترشيحُ يُكتب في الرابط**، فيُشارَك ويُعاد إليه، ويرجع القارئُ إليه
+   * بزرّ الرجوع كما يرجع إلى أيّ موضع. وكان حالًا في الذاكرة وحدها: يُنقَل
+   * القارئُ إلى قائمةٍ لا يدلّ رابطُها عليها، فإن نسخه لم يُصب صاحبُه شيئًا.
    */
-  function pick(field: keyof PerkFilter, value: string | number) {
-    setFilter({ ...EMPTY_FILTER, [field]: value })
-    if (tab) navigate({ name: 'perks' })
+  function pick(field: PickField, value: string) {
+    navigate({ name: 'perks', pick: { field, value } })
   }
 
   /** بابٌ يُفتح من التبويب: يُخلي الترشيحَ — البابُ نفسُه ترشيحٌ قائم */
@@ -104,8 +115,48 @@ export default function Perks({ tab = '' }: { tab?: string }) {
     navigate(key ? { name: 'perks', tab: key } : { name: 'perks' })
   }
 
+  /**
+   * يُنظِّف الرابطَ ممّا رُفع من الترشيح: لا يدّعي بابًا قد أُغلق، ولا يُقيَّد
+   * ذلك في تاريخ التصفُّح — فمن رفع شرطًا لم يخطُ خطوةً يرجع عنها. والحالُ
+   * لا يُعاد بناؤها، فالإخلاءُ وقع في موضعه.
+   */
+  function forgetPick() {
+    if (!picked) return
+    window.history.replaceState(
+      null, '', hashFor(tab ? { name: 'perks', tab } : { name: 'perks' }),
+    )
+  }
+
+  /** يرفع شرطًا واحدًا، ويبقى ما سواه: رفعُ شرطٍ ليس رفعًا للعمل كلِّه */
+  function dropFilter(field: keyof PerkFilter) {
+    setFilter((prev) => ({ ...prev, [field]: field === 'minRating' ? 0 : '' }))
+    if (picked?.field === field) forgetPick()
+  }
+
+  function clearFilter() {
+    setFilter(EMPTY_FILTER)
+    forgetPick()
+  }
+
+  /**
+   * ما في الرابط هو الترشيحُ القائم. ولا يُمسّ ما سواه من حال القارئ —
+   * بحثُه وترتيبُه ونفاستُه — إلا حين يجيء بترشيحٍ جديد: عندئذٍ يُبتدأ
+   * الأمرُ من رأسه، فهو قاصدٌ بابًا آخر لا مُضيفٌ شرطًا.
+   */
+  useEffect(() => {
+    if (picked && isPickField(picked.field)) {
+      setFilter({ ...EMPTY_FILTER, [picked.field]: picked.value })
+    } else {
+      setFilter((prev) => ({ ...prev, ...Object.fromEntries(
+        PICK_FIELDS.map((k) => [k, '']),
+      ) }))
+    }
+  }, [picked?.field, picked?.value])
+
   const topics = useMemo(() => perkTopics(perks, cats), [perks, cats])
-  const people = useMemo(() => perkPeople(perks), [perks])
+  // والأعلامُ من جدولها لا من الفوائد وحدها: فيها وفياتُهم وأيقوناتُهم،
+  // ومنها يُعرض من سُجِّل ولم تُنسَب إليه فائدةٌ بعد
+  const people = useMemo(() => perkPeople(perks, perkFigures), [perks, perkFigures])
   const books = useMemo(() => notebookTallies(notebooks, perks), [notebooks, perks])
   const tags = useMemo(() => perkTags(perks), [perks])
   const sources = useMemo(() => perkSources(perks, bookById), [perks, bookById])
@@ -123,8 +174,9 @@ export default function Perks({ tab = '' }: { tab?: string }) {
       {/*
         ترويسةُ القسم: قسمٌ قائمٌ بنفسه له اسمُه وأبوابُه وأدواتُه، لا صفحةٌ
         في المكتبة. فترويستُه تحمل ما تحمله ترويسةُ قسم: التعريفَ به،
-        وأعدادَه، وأبوابَه الخمسة، وأدواتِ صاحبه — الفائدةَ الجديدة
-        وإعداداتِ الأنواع والتصنيفات.
+        وأعدادَه، وأبوابَه الستّة، وأدواتِ صاحبه — الفائدةَ الجديدة
+        وإعداداتِ الأنواع والتصنيفات. **وكلُّ لوحِ عددٍ فيها بابُه**: هو
+        عددُ ما فيه، فالضغطُ عليه يفتحه — وكان يعدّ ولا يدلّ.
       */}
       <header className="kunnash-head">
         <div className="kunnash-brand">
@@ -162,11 +214,19 @@ export default function Perks({ tab = '' }: { tab?: string }) {
           <>
             {perks.length > 0 && (
             <div className="perks-tally">
-              <Tile value={perks.length} label="فائدةً" />
-              <Tile value={sources.length} label="كتابًا أفاد" />
-              <Tile value={topics.filter((t) => t.count > 0).length} label="تصنيفًا" />
-              <Tile value={people.length} label="عَلَمًا" />
-              <Tile value={gems.length} label="من النفائس" />
+              <Tile n={perks.length} forms={PERKS_COUNT} onOpen={() => openTab('')} />
+              <Tile n={sources.length} forms={SOURCES_COUNT} onOpen={() => openTab('sources')} />
+              <Tile
+                n={topics.filter((t) => t.count > 0).length}
+                forms={CATEGORIES_COUNT}
+                onOpen={() => openTab('topics')}
+              />
+              <Tile
+                n={people.filter((t) => t.count > 0).length}
+                forms={FIGURES_COUNT}
+                onOpen={() => openTab('people')}
+              />
+              <Tile n={gems.length} forms={GEMS_COUNT} onOpen={() => openTab('gems')} />
             </div>
             )}
 
@@ -189,7 +249,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
 
       {!canSee ? (
         <EmptyState title="الفوائد والمقتطفات غير معروضة" />
-      ) : perks.length === 0 && (tab === '' || tab === 'gems' || tab === 'people') ? (
+      ) : perks.length === 0 && (tab === '' || tab === 'gems' || tab === 'sources') ? (
         <EmptyState
           title="لم تُقيَّد فائدةٌ بعد"
           hint={canEdit
@@ -202,6 +262,7 @@ export default function Perks({ tab = '' }: { tab?: string }) {
             <Feed
               perks={shown}
               total={tab === 'gems' ? gems.length : perks.length}
+              gemsTab={tab === 'gems'}
               filter={filter}
               setFilter={setFilter}
               sort={sort}
@@ -213,6 +274,8 @@ export default function Perks({ tab = '' }: { tab?: string }) {
               kinds={kinds}
               onEdit={canEdit ? setEditing : undefined}
               onPick={pick}
+              onDrop={dropFilter}
+              onClear={clearFilter}
               emptyTitle={tab === 'gems'
                 ? 'لم تُوسَم فائدةٌ بالنجوم الثلاث بعد'
                 : 'لا مطابق'}
@@ -232,13 +295,24 @@ export default function Perks({ tab = '' }: { tab?: string }) {
           {tab === 'people' && (
             <TallyGrid
               rows={people}
-              hint="كلُّ عَلَمٍ ذُكر في فائدة. واضغط الاسمَ يجتمع لك ما يتعلَّق به وحده."
+              hint="سجلُّ الأعلام: من ذُكر في فائدة، ومعه وفاتُه إن عُرفت. ويُسجَّل العَلَمُ من نموذج الفائدة أوّلَ مرّةٍ يُكتب اسمُه. واضغط الاسمَ يجتمع لك ما يتعلَّق به وحده."
               onPick={(row) => pick('person', row.name)}
-              empty="لم يُذكر عَلَمٌ في فائدةٍ بعد."
+              empty="لم يُسجَّل عَلَمٌ بعد."
             />
           )}
 
           {tab === 'notebooks' && <Notebooks rows={books} />}
+
+          {/* والمصدرُ بابٌ كسائر الأبواب: كان صدرُ القسم يعدّ ما أفاد ولا
+              يدلّ عليه، وكان في الترشيح حقلٌ للكتاب لا يضعه شيء */}
+          {tab === 'sources' && (
+            <TallyGrid
+              rows={sources}
+              hint="كلُّ ما أفاد: كتبُ الفهرس، وما قُرئ أو سُمع من خارجها — من شيخٍ في مجلسه، أو صفحةٍ على الشبكة، أو منشورٍ أو تسجيل. ولكلٍّ شارةُ جنسه."
+              onPick={(row) => pick('source', row.name)}
+              empty="لم يُقيَّد من مصدرٍ بعد."
+            />
+          )}
         </>
       )}
 
@@ -256,10 +330,12 @@ export default function Perks({ tab = '' }: { tab?: string }) {
 
 // ------------------------------------------------- بابُ الفوائد: مجموعةً
 function Feed(
-  { perks, total, filter, setFilter, sort, setSort, view, setView, topics, tags,
-    kinds, onEdit, onPick, emptyTitle }: {
+  { perks, total, gemsTab, filter, setFilter, sort, setSort, view, setView, topics,
+    tags, kinds, onEdit, onPick, onDrop, onClear, emptyTitle }: {
     perks: Perk[]
     total: number
+    /** بابُ النفائس: القائمةُ مُرشَّحةٌ به قبل الشريط، فلا يُعرض مُنتقي النفاسة */
+    gemsTab: boolean
     filter: PerkFilter
     setFilter: (f: PerkFilter) => void
     sort: PerkSort
@@ -270,12 +346,16 @@ function Feed(
     tags: Tally[]
     kinds: PerkKindDef[]
     onEdit?: (perk: Perk) => void
-    onPick: (field: keyof PerkFilter, value: string | number) => void
+    onPick: (field: PickField, value: string) => void
+    /** يرفع شرطًا واحدًا من الترشيح، ويُنظِّف الرابطَ منه إن كان فيه */
+    onDrop: (field: keyof PerkFilter) => void
+    onClear: () => void
     emptyTitle: string
   },
 ) {
-  const { bookById } = useLibrary()
+  const { bookById, notebooks } = useLibrary()
   const on = filterIsOn(filter)
+  const chips = activeFilters(filter, notebooks)
 
   return (
     <>
@@ -338,20 +418,27 @@ function Feed(
           aria-label="التصنيف"
         >
           <option value="">كلّ التصنيفات</option>
-          {topics.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+          {/* والبابُ الفارغ يُعرض في شبكة التصنيفات — «بابٌ فارغٌ خبر» —
+              وأمّا ههنا فخيارٌ لا مطابقَ له، فلا يُعرض */}
+          {topics.filter((t) => t.count > 0 || t.name === filter.category)
+            .map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
         </select>
 
-        <select
-          value={String(filter.minRating)}
-          onChange={(e) => setFilter({ ...filter, minRating: Number(e.target.value) })}
-          className="perks-select"
-          aria-label="النفاسة"
-        >
-          <option value="0">كلُّ النفاسات</option>
-          <option value="1">★ فما فوق</option>
-          <option value="2">★★ فما فوق</option>
-          <option value="3">★★★ النفائس</option>
-        </select>
+        {/* والنفاسةُ لا تُسأل في باب النفائس: القائمةُ مُرشَّحةٌ بالنجوم الثلاث
+            قبل الشريط، فخياراتُه الأربعة كلُّها بلا أثر */}
+        {!gemsTab && (
+          <select
+            value={String(filter.minRating)}
+            onChange={(e) => setFilter({ ...filter, minRating: Number(e.target.value) })}
+            className="perks-select"
+            aria-label="النفاسة"
+          >
+            <option value="0">كلُّ النفاسات</option>
+            <option value="1">★ فما فوق</option>
+            <option value="2">★★ فما فوق</option>
+            <option value="3">★★★ النفائس</option>
+          </select>
+        )}
 
         <select
           value={sort}
@@ -387,11 +474,38 @@ function Feed(
         </div>
       )}
 
+      {/*
+        الترشيحُ القائم مقروءًا، شارةً لكلّ شرط.
+
+        **وهذا ما كان ينقص الباب**: العَلَمُ والفرعُ والكرّاسةُ والمصدرُ
+        تُرشَّح بها القائمةُ وليس في الشريط ما يُظهرها — لا رُقعةَ لها ولا
+        مُنتقي — فيقف القارئُ على قائمةٍ نقصت لا يدري بأيّ شيءٍ نقصت. وكلُّ
+        شارةٍ تُرفع وحدَها، فرفعُ شرطٍ ليس رفعًا لعمله كلِّه.
+      */}
+      {chips.length > 0 && (
+        <div className="perks-active">
+          <span className="perks-active-label">المعروضُ مُرشَّحٌ بـ</span>
+          {chips.map((chip) => (
+            <button
+              key={`${chip.field}:${chip.value}`}
+              type="button"
+              className="perks-active-chip"
+              onClick={() => onDrop(chip.field)}
+              title={`ارفع هذا الشرط: ${chip.label}`}
+            >
+              <span className="perks-active-name">{chip.label}</span>
+              <span className="perks-active-value">{chip.value}</span>
+              <ClearIcon size={11} />
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="perks-count">
         {on && (
-          <button type="button" className="perks-clear" onClick={() => setFilter(EMPTY_FILTER)}>
+          <button type="button" className="perks-clear" onClick={onClear}>
             <ClearIcon size={12} />
-            ارفع الترشيح
+            ارفع الترشيح كلَّه
           </button>
         )}
         <span>
@@ -419,13 +533,35 @@ function Feed(
           ))}
         </ol>
       ) : view === 'reading' ? (
-        /* مطالعةٌ متّصلة: النصوصُ وحدها يتلو بعضُها بعضًا كصفحةِ كتاب، ولكلٍّ
-           عزوُه تحته. لمن أراد أن يقرأ الكنّاش لا أن يبحث فيه. */
+        /*
+          مطالعةٌ متّصلة: النصوصُ وحدها يتلو بعضُها بعضًا كصفحةِ كتاب، ولكلٍّ
+          عزوُه تحته. لمن أراد أن يقرأ الكنّاش لا أن يبحث فيه.
+
+          **والنصُّ ههنا منسَّقٌ بهوامشه** كما في البطاقة سواءً بسواء. وكان
+          يُعرض مجرَّدًا (`Prose` على `p.text`)، فيقع أنّ الوجهَ الموضوعَ
+          للقراءة هو أقلُّ الوجوه وفاءً للنصّ: يسقط منه التنسيقُ الذي من
+          أجله بُني المُحرِّر، **وتسقط الهوامشُ بأسرها** — فمِسماكُ الهامش
+          `<sup>` فارغٌ لا نصَّ فيه، رقمُه عدٌّ في ملف الأنماط، فلا يُبقي منه
+          التجريدُ أثرًا ولا تُرسم نصوصُه تحته — فتُقرأ الفائدةُ ذاتُ الهوامش
+          كأنّها بلا هامش ولا علامةَ على النقص.
+
+          ويُعرض معه تعليقُ المُقيِّد: هو من الفائدة، وفصلُه عن النصّ إنما هو
+          كي لا يُخلَط بكلام صاحبه لا كي يُطوى عن قارئها.
+        */
         <div className="perk-reading">
           {perks.map((p) => (
             <section key={p.id}>
               {p.title && <h3>{p.title}</h3>}
-              <Prose text={p.text} />
+              <RichText html={p.text_html} text={p.text} footnotes={p.footnotes} />
+              {p.comment && (
+                <div className="perk-comment">
+                  <span className="perk-comment-tag">
+                    <OwnerIcon size={11} />
+                    تعليقي
+                  </span>
+                  <Prose text={p.comment} />
+                </div>
+              )}
               <footer>
                 <button type="button" onClick={() => navigate({ name: 'perk', id: p.id })}>
                   {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'الفائدة'}
@@ -475,7 +611,12 @@ function TallyGrid(
                   <Icon name={row.icon} size={26} />
                 </span>
               )}
-              <span className="tally-name">{row.name}</span>
+              <span className="tally-text">
+                <span className="tally-name">{row.name}</span>
+                {/* خبرُه تحت اسمه: وفاةُ العَلَم، أو جنسُ المصدر. وهو ما لا
+                    تحمله الفائدةُ نفسها وإنما يُقرأ من جدوله. */}
+                {row.note && <span className="tally-note">{row.note}</span>}
+              </span>
               <span className="tally-count">{countLabel(row.count, PERKS_COUNT)}</span>
             </button>
 
@@ -589,14 +730,26 @@ function Notebooks({ rows }: { rows: Tally[] }) {
   )
 }
 
-/** لوحُ عددٍ مفرد في صدر الصفحة. وما كان صفرًا لا يُعرض — ليس خبرًا. */
-function Tile({ value, label }: { value: number; label: string }) {
-  if (value <= 0) return null
+/**
+ * لوحُ عددٍ مفرد في صدر الصفحة. وما كان صفرًا لا يُعرض — ليس خبرًا.
+ *
+ * **ولفظُه من `countParts` لا بقالبٍ نصّيّ**: كان كلُّ لوحٍ يلحم رقمَه باسمه
+ * بيده على صيغةٍ واحدة — «فائدةً»، «عَلَمًا» — وتلك صيغةُ التمييز لا تصحّ
+ * إلّا من أحدَ عشرَ إلى تسعةٍ وتسعين، فيُقرأ في المكتبة الناشئة «١ فائدةً»
+ * و«٢ عَلَمًا». وهو اللحنُ الذي أقيمت له `countLabel` في هذه الواجهة كلِّها،
+ * فلم يشذّ عنها إلّا هذا الموضع.
+ *
+ * **ولكلّ لوحٍ بابُه**: هو عددُ ما فيه، فالضغطُ عليه يفتحه. وكان يعدّ ولا
+ * يدلّ.
+ */
+function Tile({ n, forms, onOpen }: { n: number; forms: CountForms; onOpen: () => void }) {
+  if (n <= 0) return null
+  const { value, label } = countParts(n, forms)
   return (
-    <div className="perks-tile">
-      <span className="perks-tile-value">{formatNumber(value)}</span>
+    <button type="button" className="perks-tile" onClick={onOpen}>
+      {value && <span className="perks-tile-value">{value}</span>}
       <span className="perks-tile-label">{label}</span>
-    </div>
+    </button>
   )
 }
 

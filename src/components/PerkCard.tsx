@@ -20,8 +20,9 @@ import RichText from './RichText'
 import { Icon } from '../lib/icons'
 import { perkCitation, perkLocation } from '../lib/citation'
 import { perkDate, perkLink, sourceAuthor, sourceTitle } from '../lib/perks'
+import type { PickField } from '../lib/perks'
 import {
-  PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, type Perk,
+  PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, sourceKindOf, type Perk,
 } from '../lib/types'
 import {
   CopyButton, HashIcon, LinkIcon, OpenBookIcon, OwnerIcon, PencilIcon,
@@ -36,7 +37,7 @@ interface Props {
   full?: boolean
   onEdit?: (perk: Perk) => void
   /** الضغطُ على وسمٍ أو عَلَمٍ يجمع ما تحته. ومن لم يمرّره فهي نصٌّ لا رابط */
-  onPick?: (field: 'person' | 'tag' | 'category' | 'subCategory' | 'notebook', value: string) => void
+  onPick?: (field: PickField, value: string) => void
 }
 
 export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Props) {
@@ -51,6 +52,9 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const title = sourceTitle(perk, book)
   const writer = sourceAuthor(perk, book)
   const place = perkLocation(perk)
+  // جنسُ المصدر: كتابٌ من خارج الفهرس، أو سماعٌ، أو صفحةُ شبكة، أو منشور،
+  // أو تسجيل. ولكلٍّ ألفاظُ حقوله وشارتُه. وما كان من الفهرس فكتابٌ ساكت.
+  const sourceKind = sourceKindOf(perk.source?.kind)
 
   // والأيقونةُ تُطلب من المُحرَّر ومن المبدئيّ جميعًا: ما لم يُحرَّر بعدُ
   // تُعرض أنواعُه وتصنيفاتُه المبدئيّة، فلو قُرئ من الجدول وحدَه لبقيت
@@ -67,7 +71,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const folded = long && !full && !open
 
   const chip = (
-    field: 'person' | 'tag' | 'category' | 'subCategory' | 'notebook',
+    field: PickField,
     value: string,
     className: string,
     body: React.ReactNode = value,
@@ -203,8 +207,16 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
           {writer && (
             <span className="perk-source-author">
               {writer}
-              {perk.source?.death ? ` (${perk.source.death})` : ''}
+              {/* والوفاةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
+              {sourceKind.isBook && perk.source?.death ? ` (${perk.source.death})` : ''}
             </span>
+          )}
+          {/* موضعُه وتاريخُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، ومتى */}
+          {perk.source?.venue && (
+            <span className="perk-source-note">{perk.source.venue}</span>
+          )}
+          {perk.source?.date && (
+            <span className="perk-source-note">{perk.source.date}</span>
           )}
           {perk.source?.edition && (
             <span className="perk-source-edition">{perk.source.edition}</span>
@@ -216,9 +228,26 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
                 {place}
               </span>
             )}
-            {/* «ليس في المكتبة» خبرٌ يهمّ القارئ: يعرف أيطلبه من الرفّ أم
-                يطلبه من غيره. ولا يُقال «في المكتبة» — ذاك هو الأصل ههنا. */}
-            {!book && <span className="perk-outside">ليس في المكتبة</span>}
+            {sourceKind.hasUrl && perk.source?.url && (
+              <a
+                className="perk-source-url"
+                href={perk.source.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <LinkIcon size={11} />
+                افتح المصدر
+              </a>
+            )}
+            {/* جنسُ المصدر خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره، وهل
+                هو كتابٌ أصلًا أم كلامٌ سُمع في مجلس أو نُقل عن منشور. ولا
+                يُقال «في المكتبة» — ذاك هو الأصل ههنا فلا يُخبَر عنه. */}
+            {!book && (
+              <span className="perk-outside">
+                <Icon name={sourceKind.icon} size={11} />
+                {sourceKind.badge}
+              </span>
+            )}
           </span>
         </div>
       )}

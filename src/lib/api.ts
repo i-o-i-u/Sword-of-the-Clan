@@ -9,7 +9,7 @@ import { convex } from './convexClient'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import {
-  DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY,
+  DEFAULT_SETTINGS_EXTRAS, DEFAULT_VISIBILITY, SOURCE_BOOK,
   type Author, type Book, type BookWork, type Category, type LandingImage,
   type LandingQuote, type Loan, type Notebook, type Perk, type PerkCategory,
   type PerkFigure, type PerkKindDef, type PerkSource, type Publisher,
@@ -109,7 +109,16 @@ function toPerk(row: Record<string, unknown>): Perk {
     rating: (row.rating as number) ?? 0,
     notebook_ids: (row.notebook_ids as string[]) ?? [],
     comment: (row.comment as string) ?? '',
-    source: src ? { title: '', author: '', death: '', edition: '', ...src } : null,
+    // ومصدرُ ما ليس في المكتبة صار أجناسًا — كتابٌ وسماعٌ وشبكةٌ وتواصلٌ
+    // وتسجيل — فما قُيِّد قبلها لا `kind` له، وهو كتابٌ بالضرورة: ذاك كلُّ
+    // ما كان يُقبل يومئذٍ. ويُسدّ ههنا مرّةً واحدة فلا تحرسه الواجهةُ في كل
+    // موضعٍ تقرؤه.
+    source: src
+      ? {
+        kind: SOURCE_BOOK, title: '', author: '', death: '', edition: '',
+        url: '', venue: '', date: '', ...src,
+      }
+      : null,
   }
 }
 
@@ -146,6 +155,7 @@ export async function fetchPerkFigures(_owner: boolean): Promise<PerkFigure[]> {
     name: (r.name as string) ?? '',
     death: (r.death as string) ?? '',
     note: (r.note as string) ?? '',
+    icon: (r.icon as string) ?? '',
   }))
 }
 
@@ -300,7 +310,7 @@ export async function savePerkCategories(rows: PerkCategory[]): Promise<void> {
 export async function savePerkFigures(rows: PerkFigure[]): Promise<void> {
   await convex.mutation(api.catalog.savePerkFigures, {
     rows: rows.map((r) => ({
-      id: r.id || undefined, name: r.name, death: r.death, note: r.note,
+      id: r.id || undefined, name: r.name, death: r.death, note: r.note, icon: r.icon,
     })),
   })
 }

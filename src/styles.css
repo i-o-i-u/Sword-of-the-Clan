@@ -58,6 +58,15 @@
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 
   /*
+   * ما بين الأيقونة واسمها في الرُّقَع والشارات كلِّها.
+   *
+   * وكان كلُّ موضعٍ يجتهد لنفسه — ثلاثةٌ ههنا وأربعةٌ هناك وخمسةٌ في ثالث —
+   * وشارةُ النوع لم تكن صفًّا أصلًا فلصق رمزُها باسمه لصوقًا. فتُوحَّد ههنا
+   * كما وُحِّدت الظلالُ ومنحنى الحركة، فلا تختلف المسافةُ في البطاقة الواحدة.
+   */
+  --icon-gap: 6px;
+
+  /*
    * ربعُ الحزب: مربَّعان متقاطعان، وهو أشهرُ ما زُخرفت به المصاحف وأبسطُه.
    * يُستعمل قناعًا (mask) لا صورةً ملوَّنة، فيُصبغ بلون المكتبة ويتبع
    * المظاهر الثلاثة بلا نسخةٍ لكلّ مظهر. وهو محرفٌ في الملف لا ملفٌّ
@@ -3109,57 +3118,6 @@ body::after {
 .kunnash-head .perks-tabs { margin: 4px -24px 0; padding-inline: 24px; border-bottom: none; }
 .kunnash-head .perks-tally { margin-top: 16px; }
 
-/* -------------------------------------------------------------- الصدر */
-.perks-hero {
-  position: relative;
-  overflow: hidden;
-  margin-bottom: 22px;
-  padding: 22px 24px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: linear-gradient(
-    to left,
-    color-mix(in oklch, var(--accent) 9%, var(--surface)),
-    var(--surface) 62%
-  );
-  box-shadow: var(--shadow-1);
-}
-
-.perks-hero-head {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.perks-hero-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: color-mix(in oklch, var(--accent) 14%, transparent);
-  color: var(--accent-soft);
-}
-
-.perks-hero h1 {
-  margin: 0 0 5px;
-  font-family: var(--heading-font);
-  font-size: 27px;
-  font-weight: 700;
-}
-.perks-hero p {
-  margin: 0;
-  max-width: 62ch;
-  font-size: 13.5px;
-  line-height: 1.85;
-  color: var(--muted);
-}
-
 .perks-new {
   margin-inline-start: auto;
   padding: 10px 18px;
@@ -3186,6 +3144,7 @@ body::after {
   margin-top: 18px;
 }
 
+/* ولكلّ لوحٍ بابُه: هو عددُ ما فيه، فالضغطُ عليه يفتحه */
 .perks-tile {
   display: flex;
   align-items: baseline;
@@ -3194,14 +3153,20 @@ body::after {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
+  transition: border-color 0.16s, color 0.16s, transform 0.16s var(--ease);
 }
+.perks-tile:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.perks-tile:hover .perks-tile-label { color: var(--text); }
 .perks-tile-value {
   font-family: var(--heading-font);
   font-size: 18px;
   font-weight: 700;
   color: var(--accent-soft);
 }
-.perks-tile-label { font-size: 12px; color: var(--muted); }
+.perks-tile-label { font-size: 12px; color: var(--muted); transition: color 0.16s; }
 
 /* ------------------------------------------------------------ التبويب */
 .perks-tabs {
@@ -3319,6 +3284,43 @@ body::after {
   border-bottom: 1px dashed var(--border);
 }
 
+/*
+ * شارةُ كلِّ شرطٍ قائم من الترشيح.
+ *
+ * والعَلَمُ والفرعُ والكرّاسةُ والمصدرُ تُرشَّح بها القائمةُ من أبوابها ومن
+ * رُقَع البطاقة، وليس في الشريط ما يُظهرها — لا رُقعةَ لها ولا مُنتقي — فكان
+ * القارئُ يقف على قائمةٍ نقصت لا يدري بأيّ شيءٍ نقصت. فههنا تُقرأ، ومن كلٍّ
+ * يُرفع شرطُها وحدَه.
+ */
+.perks-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in oklch, var(--accent) 28%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--accent) 6%, transparent);
+}
+.perks-active-label { font-size: 12px; color: var(--muted); }
+
+.perks-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  transition: border-color 0.16s, color 0.16s;
+}
+.perks-active-chip:hover { border-color: var(--danger); color: var(--danger); }
+.perks-active-chip svg { flex: none; opacity: 0.6; }
+.perks-active-name { color: var(--muted); font-size: 11px; }
+.perks-active-value { font-weight: 700; }
+
 .perks-count {
   display: flex;
   align-items: center;
@@ -3388,7 +3390,17 @@ body::after {
   margin-bottom: 10px;
 }
 
+/*
+ * شارةُ النوع. **وهي صفٌّ لا كتلة**: في جوفها أيقونةٌ واسم، فلمّا كانت
+ * كتلةً صارت الأيقونةُ حرفًا في السطر — لاصقةً بأوّل الاسم لا فاصلَ بينهما،
+ * واقفةً على خطّ الكتابة لا في وسط الشارة. وهي أخصُّ ما يُرى في البطاقة،
+ * فذاك أوّلُ ما تقع عليه العين. وأخواتُها `.perk-chip` و`.perk-token`
+ * وسائرُ الرُّقَع صفوفٌ بفواصلها من قبل، فانفردت هذه بالخلل.
+ */
 .perk-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
   padding: 3px 11px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -3398,6 +3410,7 @@ body::after {
   font-weight: 700;
   white-space: nowrap;
 }
+.perk-kind svg { flex: none; }
 /* لونُ الشارة يتبع النوع، ولا تُلوَّن الأنواعُ كلُّها: كثرةُ الألوان في
    الصفحة الواحدة تُذهب دلالتَها */
 .perk-kind-solid {
@@ -3419,7 +3432,7 @@ body::after {
 .perk-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--icon-gap);
   padding: 3px 11px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -3506,7 +3519,7 @@ button.perk-chip:hover {
 .perk-comment-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--icon-gap);
   margin-bottom: 5px;
   font-size: 11px;
   font-weight: 700;
@@ -3541,7 +3554,25 @@ button.perk-chip:hover {
 .perk-source-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 .perk-source-author { color: var(--text); }
+/* موضعُ السماع وتاريخُه، والموقعُ الذي نُشر فيه: خبرٌ هادئ دون الاسم */
+.perk-source-note { color: var(--muted); font-size: 12px; }
 .perk-source-edition { flex-basis: 100%; font-size: 12px; line-height: 1.8; }
+
+.perk-source-url {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
+  padding: 2px 9px;
+  border: 1px solid color-mix(in oklch, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  color: var(--accent-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.perk-source-url:hover { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.perk-source-url svg { flex: none; }
 
 .perk-source-tail {
   display: inline-flex;
@@ -3553,7 +3584,7 @@ button.perk-chip:hover {
 .perk-place {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--icon-gap);
   padding: 2px 9px;
   border-radius: 999px;
   background: var(--header);
@@ -3563,15 +3594,20 @@ button.perk-chip:hover {
 }
 .perk-place svg { flex: none; color: var(--accent-soft); }
 
-/* «ليس في المكتبة» خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره.
-   ولا يُقال «في المكتبة» — ذاك هو الأصل ههنا فلا يُخبَر عنه. */
+/* جنسُ المصدر خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره، وهل هو كتابٌ
+   أصلًا أم كلامٌ سُمع في مجلس أو نُقل عن منشور. ولا يُقال «في المكتبة» —
+   ذاك هو الأصل ههنا فلا يُخبَر عنه. */
 .perk-outside {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
   padding: 2px 9px;
   border: 1px dashed var(--border);
   border-radius: 999px;
   font-size: 11px;
   white-space: nowrap;
 }
+.perk-outside svg { flex: none; }
 
 /* ------------------------------------------------- الأعلام والوسوم */
 .perk-marks {
@@ -3598,7 +3634,7 @@ button.perk-person:hover { color: var(--accent); border-color: var(--accent); }
 .perk-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--icon-gap);
   padding: 3px 10px;
   border: none;
   border-radius: 7px;
@@ -3723,9 +3759,11 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
   border-color: color-mix(in oklch, var(--accent) 30%, var(--border));
 }
 
+/* والصفُّ يستوي على وسطه لا على خطّ الكتابة: الأيقونةُ ٢٦ والاسمُ ١٦، فلو
+   حُوذيا بالخطّ لعلا الرمزُ عن اسمه */
 .tally-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 14px 16px;
@@ -3733,7 +3771,10 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
   background: none;
   text-align: start;
 }
+.tally-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .tally-name { font-family: var(--heading-font); font-size: 16px; font-weight: 700; }
+/* خبرُه تحت اسمه: وفاةُ العَلَم، أو جنسُ المصدر */
+.tally-note { font-size: 11.5px; color: var(--muted); }
 .tally-count { flex: none; font-size: 11.5px; color: var(--accent-soft); }
 
 .tally-kids {
@@ -3745,7 +3786,7 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
 .tally-kids button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--icon-gap);
   padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -3785,7 +3826,16 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
  * يُمرَّر — فإذا لم تسع النافذةُ الشاشةَ وقع الذيلُ تحت حافّتها فلا يُبلغ
  * زرُّ الحفظ. والقسمةُ ثلاثًا تجعل الذيلَ خارج الممرَّر أصلًا، فلا يغيب.
  */
-.perk-editor {
+/*
+ * لوحُ النموذج ولوحُ المُنتقي: أرضٌ وحدٌّ واستدارةٌ وظلّ، مكتوبةٌ مرّةً لهما.
+ *
+ * **وكان المُنتقي بلا أرضٍ أصلًا** — لم يكن فيه إلّا `width` — فتظهر الصفحةُ
+ * من ورائه بين رُقَعه وشبكته، وتُرى بطاقاتُ الأيقونات معلَّقةً في الهواء على
+ * كلامٍ لا يخصُّها. ويخرج صدرُه المصبوغ عن استدارةٍ لا وجود لها، فيُرى له
+ * ركنٌ قائمٌ في لوحٍ مستدير.
+ */
+.perk-editor,
+.icon-picker {
   width: min(760px, 100%);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -3868,7 +3918,7 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
 .perk-token {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--icon-gap);
   padding: 4px 11px;
   border: 1px solid var(--accent-soft);
   border-radius: 999px;
@@ -3930,9 +3980,27 @@ button.perk-tag:hover { background: var(--accent); color: var(--on-accent); }
 /* ------------------------------------------- الكنّاش على الشاشات الضيّقة */
 @media (max-width: 720px) {
   .perks-page { padding: 20px 14px; }
-  .perks-hero { padding: 18px 16px; border-radius: 14px; }
-  .perks-hero h1 { font-size: 22px; }
-  .perks-new { margin-inline-start: 0; width: 100%; }
+
+  /*
+   * ترويسةُ القسم على الشاشة الضيّقة.
+   *
+   * وكانت هذه القواعدُ على `.perks-hero`، وهو صنفٌ رُفع من الصفحة يوم صارت
+   * الترويسةُ `.kunnash-head` ولم يتبعه ملفُّ الأنماط — فبقيت الترويسةُ على
+   * الجوّال بمقاسها على الحاسوب: حاشيتُها ٢٤، وعنوانُها ٢٧، ومِسماها ٥٢.
+   * وعلى عرض ٣٧٥ لا يتّسع السطرُ للمِسمى والاسم معًا (`flex-basis: 260px`)
+   * فينكسر كلٌّ إلى سطر، ثم الأزرار، ثم خمسةُ ألواح، ثم ستّةُ أبواب — صدرٌ
+   * يأكل الشاشة قبل أن تُرى فائدة.
+   */
+  .kunnash-head { padding: 16px 16px 0; border-radius: 14px; }
+  .kunnash-brand { gap: 12px; }
+  .kunnash-mark { width: 42px; height: 42px; border-radius: 12px; }
+  .kunnash-name { flex-basis: 100%; }
+  .kunnash-name h1 { font-size: 22px; }
+  .kunnash-head .perks-tabs { margin-inline: -16px; padding-inline: 16px; }
+  .kunnash-head .perks-tally { margin-top: 12px; }
+  /* وأدواتُ صاحب المكتبة صفٌّ تامّ، والزرُّ يملؤه والتِّرسُ في طرفه */
+  .kunnash-tools { flex-basis: 100%; }
+  .perks-new { flex: 1; margin-inline-start: 0; }
   .perks-bar { flex-wrap: wrap; }
   .perks-views { width: 100%; justify-content: flex-end; }
   .perk { padding: 15px 16px 12px; }
@@ -4886,7 +4954,6 @@ a { transition: color 0.15s; }
 .icon-choice-on { border-style: solid; color: var(--accent); }
 .icon-choice:hover { color: var(--accent); border-color: var(--accent); }
 
-.icon-picker { width: min(760px, 100%); }
 .icon-picker-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -4896,8 +4963,48 @@ a { transition: color 0.15s; }
   gap: 12px;
   padding: 16px 20px 20px;
 }
+
+/*
+ * البحثُ والأبوابُ يلزمان صدرَ الجوف ولا يجريان معه.
+ *
+ * ومئةٌ وثمانون أيقونةً لا تُمسح في شاشةٍ واحدة، فلو جرى الحقلُ والأبوابُ مع
+ * الشبكة لغابا في أوّل تمريرة، فيُطالَب القارئُ بأن يعود إلى الصدر كلَّما
+ * أراد بابًا. وحاشيتُه مطروحةٌ من نفسه (`margin` سالبة) ليمتدّ إلى حرفَي
+ * اللوح، فلا يُرى تحته شريطٌ من الشبكة يمرّ في الفراغ.
+ */
+.icon-picker-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: -16px -20px 0;
+  padding: 16px 20px 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
 .icon-picker-search { flex: none; }
 .icon-picker-groups { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* اسمُ الباب فوق شبكته: يُعرف موضعُ الأيقونة من بابها وهو يُمرَّر */
+.icon-picker-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 -4px;
+  font-family: var(--heading-font);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.icon-picker-group::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 
 .icon-grid {
   display: grid;

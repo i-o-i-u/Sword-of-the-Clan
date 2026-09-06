@@ -18,7 +18,7 @@ import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import { formatIsbn, isbnInfo } from '../lib/isbn'
 import {
-  BOOKS_COUNT, COPIES_COUNT, LANGUAGES, STATUSES, STATUS_UNKNOWN,
+  BOOKS_COUNT, COPIES_COUNT, LANGUAGES, PERKS_COUNT, STATUSES, STATUS_UNKNOWN,
   WORK_PHRASES, contributorLabel, countLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
   type Author, type Book, type Perk, type ReadingStatus, type WithinTitle,
@@ -1421,8 +1421,14 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
           <div className="book-perks-head">
             <div>
               <h2>ما قُيِّد منه من فوائد</h2>
+              {/* والعددُ يُوصَل باسمه من `countLabel` لا بقالبٍ نصّيّ: «١ نقل»
+                  و«٢ تحرير» لحن، وإنما «نقلٌ واحد» و«تحريران». وأنواعُ الفوائد
+                  يزيدها صاحبُ المكتبة ويُسمّيها، فلا تُعرف صيغُ معدودها —
+                  فيُقال «من نوع كذا» ويسلم اللفظ. */}
               <p>
-                {counts.map(({ kind, n }) => `${formatNumber(n)} ${kind}`).join('، و')}
+                {counts
+                  .map(({ kind, n }) => `${countLabel(n, PERKS_COUNT)} من «${kind}»`)
+                  .join('، و')}
               </p>
             </div>
             <div className="book-perks-tools">

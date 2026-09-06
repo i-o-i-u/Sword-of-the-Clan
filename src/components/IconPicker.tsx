@@ -59,6 +59,14 @@ export default function IconPicker(
     })
   }, [group, query])
 
+  /** المعروضُ مقسومًا على أبوابه، وما خلا منها بابٌ لا يُعرض له صدر */
+  const sections = useMemo(
+    () => ICON_GROUPS
+      .map((name) => ({ name, items: shown.filter((i) => i.group === name) }))
+      .filter((s) => s.items.length > 0),
+    [shown],
+  )
+
   return (
     <Overlay onClose={onClose} align="flex-start">
       <div className="icon-picker overlay-sheet">
@@ -68,35 +76,45 @@ export default function IconPicker(
         </header>
 
         <div className="icon-picker-body thin-scroll">
-          <div className="perks-search icon-picker-search">
-            <SearchIcon size={16} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث عن أيقونة: «ميزان»، «مصحف»، «شجرة»…"
-              aria-label="ابحث عن أيقونة"
-              autoFocus
-            />
-            {query && (
-              <button type="button" onClick={() => setQuery('')} aria-label="امسح البحث">
-                <ClearIcon size={14} />
+          {/* الحقلُ والأبوابُ في صدر الجوف لا يجريان معه: الشبكةُ تُمرَّر
+              طويلًا، ولو غابا لطُولب القارئُ بالعودة إلى الصدر لكلّ باب */}
+          <div className="icon-picker-bar">
+            <div className="perks-search icon-picker-search">
+              <SearchIcon size={16} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="ابحث عن أيقونة: «ميزان»، «مصحف»، «شجرة»…"
+                aria-label="ابحث عن أيقونة"
+                autoFocus
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery('')} aria-label="امسح البحث">
+                  <ClearIcon size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="icon-picker-groups">
+              <button type="button" onClick={() => setGroup('')} style={chipStyle(!group)}>
+                الكلّ
               </button>
-            )}
+              {ICON_GROUPS.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGroup(g)}
+                  style={chipStyle(group === g)}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="icon-picker-groups">
-            <button type="button" onClick={() => setGroup('')} style={chipStyle(!group)}>
-              الكلّ
-            </button>
-            {ICON_GROUPS.map((g) => (
-              <button key={g} type="button" onClick={() => setGroup(g)} style={chipStyle(group === g)}>
-                {g}
-              </button>
-            ))}
-          </div>
-
+          {/* ورفعُ الأيقونة خيارٌ قائم: بابٌ بلا رمزٍ خيرٌ من رمزٍ لا يدلّ
+              عليه. وموضعُه فوق الأبواب لأنه ليس من بابٍ منها. */}
           <div className="icon-grid">
-            {/* ورفعُ الأيقونة خيارٌ قائم: بابٌ بلا رمزٍ خيرٌ من رمزٍ لا يدلّ عليه */}
             <button
               type="button"
               className={value ? 'icon-cell' : 'icon-cell icon-cell-on'}
@@ -106,20 +124,29 @@ export default function IconPicker(
               <ClearIcon size={18} />
               <span>بلا أيقونة</span>
             </button>
-
-            {shown.map((def) => (
-              <button
-                key={def.key}
-                type="button"
-                className={def.key === value ? 'icon-cell icon-cell-on' : 'icon-cell'}
-                onClick={() => onPick(def.key)}
-                title={def.label}
-              >
-                <Icon name={def.key} size={24} />
-                <span>{def.label}</span>
-              </button>
-            ))}
           </div>
+
+          {/* والأيقوناتُ تُعرض تحت أسماء أبوابها لا مسرودةً سردًا: مئةٌ
+              وثمانون في شبكةٍ واحدة لا تُقرأ ولا يُعرف موضعُ الواحدة منها */}
+          {sections.map((section) => (
+            <div key={section.name}>
+              <p className="icon-picker-group">{section.name}</p>
+              <div className="icon-grid">
+                {section.items.map((def) => (
+                  <button
+                    key={def.key}
+                    type="button"
+                    className={def.key === value ? 'icon-cell icon-cell-on' : 'icon-cell'}
+                    onClick={() => onPick(def.key)}
+                    title={`${def.label} — ${def.group}`}
+                  >
+                    <Icon name={def.key} size={24} />
+                    <span>{def.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
 
           {shown.length === 0 && (
             <p className="perk-hint">لا أيقونةَ بهذا الاسم. جرِّب كلمةً أعمّ.</p>

@@ -66,7 +66,15 @@ export const viewToggleStyle = (active: boolean): CSSProperties => ({
   whiteSpace: 'nowrap',
 })
 
+/**
+ * الرُّقعةُ المضغوطة وغيرُها. وهي صفٌّ لا كتلة (`inline-flex`) لأنّ في جوفها
+ * أيقونةً واسمًا: لو تُركت كتلةً لصار الرمزُ حرفًا في السطر لاصقًا بأوّل
+ * الاسم لا فاصلَ بينهما، ولوقف على خطّ الكتابة لا في وسط الرُّقعة.
+ */
 export const chipStyle = (on: boolean): CSSProperties => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
   border: on ? '1px solid var(--accent)' : '1px solid var(--border)',
   background: on ? 'oklch(0.42 0.09 45 / 0.12)' : 'none',
   color: on ? 'var(--text)' : 'var(--muted)',

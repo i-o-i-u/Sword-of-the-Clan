@@ -11,10 +11,19 @@
 //   • **الكرّاسة** تُضاف من صفحة الكرّاسة نفسها — الكرّاسةُ تقوم بعد أن
 //     يجتمع لها شيء، فتُجمع إليها الفوائدُ مما قُيِّد لا مما يُقيَّد.
 //
-// وقسمُ المصدر شطران لا شطرٌ واحد: الفائدةُ إمّا من كتابٍ في الفهرس فيكفي
-// اختيارُه — بياناتُه كلُّها مسجَّلة —، وإمّا من كتابٍ ليس فيه فيُكتب عزوُه
-// نصًّا. وهذا الشطرُ الثاني هو الذي يُبقي في الكنّاش ما قُرئ في مكتبةٍ عامّة
-// أو في نسخةٍ إلكترونيّة أو في كتابٍ مستعار.
+// وقسمُ المصدر شطران: الفائدةُ إمّا من كتابٍ في الفهرس فيكفي اختيارُه —
+// بياناتُه كلُّها مسجَّلة —، وإمّا من غيره فيُكتب عزوُه نصًّا.
+//
+// **والشطرُ الثاني أجناس** (`PERK_SOURCE_KINDS`): الكنّاشُ لا يُملأ من الكتب
+// وحدها. منه ما يُسمع من شيخٍ في مجلسه، ومنه ما يُقرأ في صفحةٍ على الشبكة،
+// ومنه ما يُنقل عن منشورِ صاحبٍ في مواقع التواصل، ومنه ما يُلتقط من درسٍ
+// مسجَّل. وكان الشطرُ كتابًا لا غير، فمن سمع فائدةً من شيخه لم يجد لها في
+// النموذج موضعًا إلّا أن يدّعيَها كتابًا.
+//
+// **ولكلّ جنسٍ ألفاظُ حقوله**: صاحبُ الكتاب «مؤلِّفه»، وصاحبُ السماع «من
+// سُمع منه»، وصاحبُ المنشور «صاحبُ الحساب» — فلا يُسأل الفاهرسُ عن
+// «المؤلِّف» وهو إنما سمع كلامًا في مجلس. وما لا يُسأل عنه لا يُعرض حقلُه:
+// الوفاةُ والطبعةُ والمجلَّدُ للكتاب وحدَه، والرابطُ لِما كان على الشبكة.
 
 import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
@@ -26,7 +35,8 @@ import {
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
-  perkCategoriesOf, perkKindsOf, type Perk,
+  PERK_SOURCE_KINDS, SOURCE_BOOK, perkCategoriesOf, perkKindsOf, sourceKindOf,
+  type Perk,
 } from '../lib/types'
 import {
   ClearIcon, CloseButton, Combobox, Overlay, chipStyle, ghostButtonStyle,
@@ -50,10 +60,15 @@ interface Draft {
   comment: string
   fromLibrary: boolean
   bookName: string
+  /** جنسُ المصدر حين لا يكون من الفهرس، من `PERK_SOURCE_KINDS` */
+  sourceKind: string
   sourceTitle: string
   sourceAuthor: string
   sourceDeath: string
   sourceEdition: string
+  sourceUrl: string
+  sourceVenue: string
+  sourceDate: string
   volume: string
   page: string
   categories: string[]
@@ -93,10 +108,14 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     // الجديدةُ من الفهرس افتراضًا: أكثرُ ما يُقيَّد إنما يُقيَّد من كتب البيت
     fromLibrary: perk ? perk.book_id !== null : true,
     bookName: startBook?.title ?? '',
+    sourceKind: perk?.source?.kind || SOURCE_BOOK,
     sourceTitle: perk?.source?.title ?? '',
     sourceAuthor: perk?.source?.author ?? '',
     sourceDeath: perk?.source?.death ?? '',
     sourceEdition: perk?.source?.edition ?? '',
+    sourceUrl: perk?.source?.url ?? '',
+    sourceVenue: perk?.source?.venue ?? '',
+    sourceDate: perk?.source?.date ?? '',
     volume: perk?.volume ?? '',
     page: perk?.page ?? '',
     categories: perk?.categories ?? [],
@@ -139,7 +158,13 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
   // النصُّ وحده هو اللازم: عنوانُ الفائدة قد لا يخطر لصاحبها ساعةَ يقيّدها،
   // وليس للنموذج أن يحبس فائدةً عن الكنّاش من أجل عنوان
-  const ready = !!text.trim() && (d.fromLibrary ? !!chosen : !!d.sourceTitle.trim())
+  /** جنسُ المصدر المختار، وبه تُعرف حقولُه وألفاظُها */
+  const sk = useMemo(() => sourceKindOf(d.sourceKind), [d.sourceKind])
+
+  // والعنوانُ لا يلزم في كل جنس: ما سُمع في مجلسٍ قد لا عنوانَ له، وإنما
+  // يُعرف بمن سُمع منه — فيكفي أحدُهما، ولا تُحبَس الفائدةُ عن الكنّاش
+  const ready = !!text.trim()
+    && (d.fromLibrary ? !!chosen : !!(d.sourceTitle.trim() || d.sourceAuthor.trim()))
 
   async function save() {
     if (!ready || saving) return
@@ -157,7 +182,8 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       footnotes: orderedFootnotes(html, d.footnotes),
       comment: d.comment.trim(),
       page: d.page.trim(),
-      volume: d.volume.trim(),
+      // والمجلَّدُ للكتاب وحدَه: ما سُمع في مجلسٍ لا مجلَّدَ له
+      volume: (d.fromLibrary || sk.isBook) ? d.volume.trim() : '',
       categories: d.categories,
       // فرعٌ رُفع رئيسُه بعد اختياره لا يبقى: الفرعُ لا يقوم بغير رئيسه
       sub_categories: d.subCategories.filter(
@@ -165,13 +191,19 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       ),
       people: d.people,
       tags: d.tags,
+      // وما لا يُسأل عنه في هذا الجنس لا يُحفظ: طبعةٌ لمنشورٍ في التواصل
+      // خبرٌ لا معنى له، ولو بقيت من جنسٍ سابقٍ لعُرضت في البطاقة
       source: d.fromLibrary
         ? null
         : {
+          kind: sk.name,
           title: d.sourceTitle.trim(),
           author: d.sourceAuthor.trim(),
-          death: d.sourceDeath.trim(),
-          edition: d.sourceEdition.trim(),
+          death: sk.isBook ? d.sourceDeath.trim() : '',
+          edition: sk.isBook ? d.sourceEdition.trim() : '',
+          url: sk.hasUrl ? d.sourceUrl.trim() : '',
+          venue: sk.whereLabel ? d.sourceVenue.trim() : '',
+          date: sk.dateLabel ? d.sourceDate.trim() : '',
         },
     }
 
@@ -332,6 +364,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 onClick={() => set('fromLibrary', true)}
                 style={chipStyle(d.fromLibrary)}
               >
+                <Icon name="shelf" size={14} plain={d.fromLibrary} />
                 من كتب المكتبة
               </button>
               <button
@@ -339,7 +372,8 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 onClick={() => set('fromLibrary', false)}
                 style={chipStyle(!d.fromLibrary)}
               >
-                من كتابٍ ليس فيها
+                <Icon name="link-ref" size={14} plain={!d.fromLibrary} />
+                من غيرها
               </button>
             </div>
           </div>
@@ -354,15 +388,36 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 placeholder="اكتب أوّل العنوان…"
                 emptyHint={
                   d.bookName.trim() && !chosen
-                    ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من كتابٍ ليس فيها».'
+                    ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من غيرها».'
                     : undefined
                 }
               />
             </label>
           ) : (
             <>
+              {/* جنسُ المصدر: به تُعرف حقولُه وألفاظُها، فلا يُسأل الفاهرسُ عن
+                  «المؤلِّف» وهو إنما سمع كلامًا في مجلس */}
+              <div className="perk-field perk-field-wide">
+                <span className="perk-field-label">جنسُه</span>
+                <div className="perk-kinds">
+                  {PERK_SOURCE_KINDS.map((k) => (
+                    <button
+                      key={k.name}
+                      type="button"
+                      onClick={() => set('sourceKind', k.name)}
+                      style={chipStyle(d.sourceKind === k.name)}
+                      title={k.hint}
+                    >
+                      <Icon name={k.icon} size={14} plain={d.sourceKind === k.name} />
+                      {k.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="perk-hint">{sk.hint}.</p>
+              </div>
+
               <label className="perk-field">
-                <span className="perk-field-label">عنوان الكتاب</span>
+                <span className="perk-field-label">{sk.titleLabel}</span>
                 <input
                   value={d.sourceTitle}
                   onChange={(e) => set('sourceTitle', e.target.value)}
@@ -370,54 +425,103 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 />
               </label>
               <label className="perk-field">
-                <span className="perk-field-label">مؤلِّفه</span>
+                <span className="perk-field-label">{sk.whoLabel}</span>
                 <input
                   value={d.sourceAuthor}
                   onChange={(e) => set('sourceAuthor', e.target.value)}
-                  placeholder="أبو العبَّاس ثعلب"
+                  placeholder={sk.isBook ? 'أبو العبَّاس ثعلب' : ''}
                   style={inputStyle}
                 />
               </label>
-              <label className="perk-field">
-                <span className="perk-field-label">وفاتُه</span>
-                <input
-                  value={d.sourceDeath}
-                  onChange={(e) => set('sourceDeath', e.target.value)}
-                  placeholder="ت ٢٩١ هـ — إن عُرفت"
-                  style={inputStyle}
-                />
-              </label>
-              <label className="perk-field">
-                <span className="perk-field-label">طبعتُه</span>
-                <input
-                  value={d.sourceEdition}
-                  onChange={(e) => set('sourceEdition', e.target.value)}
-                  placeholder="تحقيقُه ودارُه وبلدُه وسنتُه، سطرًا واحدًا كما يُكتب في الحاشية"
-                  style={inputStyle}
-                />
-              </label>
+
+              {/* والوفاةُ والطبعةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
+              {sk.isBook && (
+                <>
+                  <label className="perk-field">
+                    <span className="perk-field-label">وفاتُه</span>
+                    <input
+                      value={d.sourceDeath}
+                      onChange={(e) => set('sourceDeath', e.target.value)}
+                      placeholder="ت ٢٩١ هـ — إن عُرفت"
+                      style={inputStyle}
+                    />
+                  </label>
+                  <label className="perk-field">
+                    <span className="perk-field-label">طبعتُه</span>
+                    <input
+                      value={d.sourceEdition}
+                      onChange={(e) => set('sourceEdition', e.target.value)}
+                      placeholder="تحقيقُه ودارُه وبلدُه وسنتُه، سطرًا واحدًا كما يُكتب في الحاشية"
+                      style={inputStyle}
+                    />
+                  </label>
+                </>
+              )}
+
+              {sk.whereLabel && (
+                <label className="perk-field">
+                  <span className="perk-field-label">{sk.whereLabel}</span>
+                  <input
+                    value={d.sourceVenue}
+                    onChange={(e) => set('sourceVenue', e.target.value)}
+                    style={inputStyle}
+                  />
+                </label>
+              )}
+              {sk.dateLabel && (
+                <label className="perk-field">
+                  <span className="perk-field-label">{sk.dateLabel}</span>
+                  <input
+                    value={d.sourceDate}
+                    onChange={(e) => set('sourceDate', e.target.value)}
+                    placeholder="١٥ رجب ١٤٤٧ هـ"
+                    style={inputStyle}
+                  />
+                </label>
+              )}
+              {sk.hasUrl && (
+                <label className="perk-field perk-field-wide">
+                  <span className="perk-field-label">رابطُه</span>
+                  <input
+                    value={d.sourceUrl}
+                    onChange={(e) => set('sourceUrl', e.target.value)}
+                    placeholder="https://…"
+                    dir="ltr"
+                    inputMode="url"
+                    style={inputStyle}
+                  />
+                </label>
+              )}
             </>
           )}
 
-          <label className="perk-field">
-            <span className="perk-field-label">المجلَّد</span>
-            <input
-              value={d.volume}
-              onChange={(e) => set('volume', e.target.value)}
-              placeholder="٤"
-              inputMode="numeric"
-              style={inputStyle}
-            />
-          </label>
-          <label className="perk-field">
-            <span className="perk-field-label">الصفحة</span>
-            <input
-              value={d.page}
-              onChange={(e) => set('page', e.target.value)}
-              placeholder="٨٥"
-              style={inputStyle}
-            />
-          </label>
+          {/* والموضعُ يتبع جنسَ المصدر: الكتابُ مجلَّدٌ وصفحة، والتسجيلُ دقيقةٌ
+              تُكتب كما هي، وما سواهما لا موضعَ له يُسأل عنه */}
+          {(d.fromLibrary || sk.isBook) && (
+            <label className="perk-field">
+              <span className="perk-field-label">المجلَّد</span>
+              <input
+                value={d.volume}
+                onChange={(e) => set('volume', e.target.value)}
+                placeholder="٤"
+                inputMode="numeric"
+                style={inputStyle}
+              />
+            </label>
+          )}
+          {(d.fromLibrary || sk.isBook || sk.spotLabel) && (
+            <label className="perk-field">
+              <span className="perk-field-label">
+                {(d.fromLibrary || sk.isBook) ? 'الصفحة' : sk.spotLabel}
+              </span>
+              <input
+                value={d.page}
+                onChange={(e) => set('page', e.target.value)}
+                placeholder={(d.fromLibrary || sk.isBook) ? '٨٥' : 'د ١٢:٤٠'}
+                style={inputStyle}
+              />
+            </label>
+          )}
 
           {/* ------------------------------------- ٤. أعلامُها ووسومُها */}
           <span className="perk-part">أعلامُها ووسومُها</span>

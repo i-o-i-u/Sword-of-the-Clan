@@ -5,7 +5,8 @@
 
 import { toArabicDigits, yearLabel } from './hijri'
 import { pressesLine } from './editions'
-import type { Author, Book, Perk } from './types'
+import { sourceKindOf } from './types'
+import type { Author, Book, Perk, PerkSource } from './types'
 
 /**
  * صياغةُ الصفة في جريدة المراجع: هناك تُذكر بالمصدر لا بالوصف — «تحقيق
@@ -78,15 +79,58 @@ export function citationOf(book: Book, author: Author | null): string {
   return `${parts.join('، ')}.`
 }
 
-/** موضعُ الفائدة من كتابها: «ج٤، ص٨٥»، أو «ص٨٥» لمن لا مجلَّدَ له */
+/**
+ * موضعُ الفائدة من مصدرها: «ج٤، ص٨٥»، أو «ص٨٥» لمن لا مجلَّدَ له.
+ *
+ * **وذاك للكتاب وحدَه**: ما سُمع في مجلسٍ لا صفحةَ له، والتسجيلُ موضعُه منه
+ * دقيقةٌ تُكتب كما هي — «د ١٢:٤٠» — فلا يُقال فيها «ص».
+ */
 export function perkLocation(perk: Perk): string {
-  const volume = (perk.volume ?? '').trim()
   const page = perk.page.trim()
+  if (perk.source && !sourceKindOf(perk.source.kind).isBook) {
+    return page ? toArabicDigits(page) : ''
+  }
+
+  const volume = (perk.volume ?? '').trim()
   const parts = [
     volume && `ج${toArabicDigits(volume)}`,
     page && `ص${toArabicDigits(page)}`,
   ].filter(Boolean)
   return parts.join('، ')
+}
+
+/**
+ * عزوُ ما ليس بكتابٍ من الفهرس: كتابٌ من خارجها، أو سماعٌ، أو صفحةُ شبكة،
+ * أو منشور، أو تسجيل. ولكلٍّ ترتيبُه كما يُكتب في الحاشية:
+ *
+ *   • الكتابُ  — عنوانُه، فمؤلِّفُه (ووفاتُه بين قوسين)، فطبعتُه.
+ *   • السماعُ  — «سماعًا من فلان»، فالمجلس، فالتاريخ. والصدارةُ لمن سُمع
+ *     منه لا للموضوع: العهدةُ عليه، وهو المطلوبُ في العزو.
+ *   • ما سواه — عنوانُه، فصاحبُه، فالموقع، فالرابط، فالتاريخ.
+ *
+ * وما لم يُسجَّل يسقط من السطر ولا يُترك له موضعٌ فارغ، كما في `citationOf`.
+ */
+function sourceCitation(source: PerkSource): string {
+  const kind = sourceKindOf(source.kind)
+  const title = source.title.trim()
+  const who = source.author.trim()
+  const death = source.death.trim()
+  // ووفاةُ المؤلِّف بين قوسين بعد اسمه، كما تُكتب في الحاشية
+  const named = [who, death].filter(Boolean).join(' ').replace(/^(.+?) (ت .+)$/, '$1 ($2)')
+
+  const parts = kind.name === 'سماع'
+    ? [who && `سماعًا من ${who}`, title, source.venue.trim(), source.date.trim()]
+    : [
+      title,
+      kind.isBook ? named : who,
+      kind.isBook ? source.edition.trim() : source.venue.trim(),
+      kind.hasUrl ? source.url.trim() : '',
+      source.date.trim(),
+    ]
+
+  // وجنسُه يُذكر إن لم يبقَ من السطر ما يدلّ عليه
+  const line = parts.filter(Boolean).join('، ')
+  return `${line || kind.badge}.`
 }
 
 /**
@@ -101,13 +145,7 @@ export function perkCitation(
 ): string {
   const source = book
     ? citationOf(book, author)
-    : [
-      (perk.source?.title ?? '').trim(),
-      // ووفاةُ المؤلِّف بين قوسين بعد اسمه، كما تُكتب في الحاشية
-      [(perk.source?.author ?? '').trim(), (perk.source?.death ?? '').trim()]
-        .filter(Boolean).join(' ').replace(/^(.+?) (ت .+)$/, '$1 ($2)'),
-      (perk.source?.edition ?? '').trim(),
-    ].filter(Boolean).join('، ') + '.'
+    : (perk.source ? sourceCitation(perk.source) : '')
 
   const place = perkLocation(perk)
   const tail = place ? `${source.replace(/\.$/, '')}، ${place}.` : source
