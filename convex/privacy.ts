@@ -147,6 +147,11 @@ function bookFieldHider(book: Doc<'books'>, s: Settings) {
   )
 }
 
+/** أمخفيٌّ هذا الحقلُ من هذا الكتاب عن الزائر؟ بالدرجات الثلاث */
+export function bookFieldHidden(book: Doc<'books'>, s: Settings, field: string): boolean {
+  return bookFieldHider(book, s)(field)
+}
+
 /**
  * الكتب الظاهرة للزائر: ناقصةَ المخفيّة بعينها، وناقصةَ ما كان في تصنيفٍ
  * مخفيّ — رئيسِه أو فرعِه — وناقصةَ كتبِ مؤلِّفٍ مخفيّ.
@@ -207,7 +212,14 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     use_spine:    hidden('spine')        ? false : book.use_spine,
     missing_volumes: hidden('missingVolumes') ? [] : (book.missing_volumes ?? []),
     tags:         hidden('tags')         ? [] : book.tags,
-    contributors: hidden('contributors') ? [] : book.contributors,
+    // ومن أُخفي من الأشخاص بعينه لا يبقى اسمُه على كتب غيره: مؤلِّفًا
+    // مشارِكًا كان أو ذا صفة. وكان يُخفى من سجلّه ويبقى مكتوبًا على الكتب.
+    co_authors: (book.co_authors ?? []).filter(
+      (c) => !c.author_id || !s.hidden_author_ids.includes(c.author_id),
+    ),
+    contributors: hidden('contributors') ? [] : (book.contributors ?? []).filter(
+      (c) => !c.person_id || !s.hidden_author_ids.includes(c.person_id),
+    ),
     series:       hidden('series')       ? '' : book.series,
     series_no:    hidden('seriesNo')     ? '' : book.series_no,
     // إخفاءُ اسم الدار يفكّ الكتابَ عن سجلّها أيضًا، وإلا دلّت الصلةُ على ما
@@ -267,7 +279,12 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     is_collection: book.is_collection ?? false,
     // وما طُبع معه أو فيه يُخفى جملةً بمفتاحٍ واحد: هو خبرٌ واحدٌ في بابه،
     // ولا معنى لعرض عنوانٍ مضمومٍ بلا صاحبه.
-    within_titles: hidden('within')      ? [] : (book.within_titles ?? []),
+    within_titles: hidden('within')      ? [] : (book.within_titles ?? []).map((t) => ({
+      ...t,
+      contributors: (t.contributors ?? []).filter(
+        (c) => !c.person_id || !s.hidden_author_ids.includes(c.person_id),
+      ),
+    })),
     within_book_id: hidden('within')     ? null : (book.within_book_id ?? null),
     within_pages: hidden('within')       ? '' : (book.within_pages ?? ''),
     // الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث، لا خبرٌ عنه، فتمرّ كما هي

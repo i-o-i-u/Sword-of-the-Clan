@@ -16,7 +16,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { goBack, navigate, setLeaveGuard, useLeaveGuard } from '../lib/router'
 import {
   BINDINGS, CONDITIONS, CONTRIBUTOR_ROLES, DEFAULT_CONDITION, ISSUE_BY_LABEL,
   ISSUE_HINTS, ISSUE_KINDS, LANGUAGES,
@@ -353,6 +353,19 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   )
   const [saving, setSaving] = useState(false)
 
+  /**
+   * أفي النموذج ما لم يُحفظ؟ فإن كان سُئل صاحبُه قبل أن يغادره — بتبويبٍ في
+   * الرأس، أو بزرّ الرجوع، أو بإغلاق اللسان. وكان يغادره بلا سؤال، فيضيع
+   * ما كتبه من نموذجٍ طويلٍ في نقرةٍ واحدةٍ على غير قصد.
+   *
+   * ويُعلَّم بأوّل كتابةٍ أو نقرةٍ على زرٍّ في النموذج: حقولُه أكثرُ من أن
+   * يُقارَن كلٌّ منها بأصله، والسؤالُ بعد لمسةٍ لم تُغيِّر شيئًا أهونُ من
+   * ضياع ما كُتب.
+   */
+  const [dirty, setDirty] = useState(false)
+  useLeaveGuard(dirty && !saving, 'في النموذج ما لم يُحفظ بعد. أتغادره وتُهمله؟')
+  const markDirty = () => { if (!dirty) setDirty(true) }
+
   /** صلاتُ هذا الكتاب المحفوظة، تُعرض في التعديل ويمكن فكُّها */
   const savedWorks = editing ? works.filter((w) => w.book_id === editing.id) : []
 
@@ -461,99 +474,105 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     if (!ready || saving) return
     setSaving(true)
     try {
-      /** يُنشئ سجلَّ المؤلِّف أو يُلحق به، ويحفظ وفاتَه في صفحته */
-      const saveAuthor = async (row: AuthorRow) => {
-        const author = await api.findOrCreateAuthor(row.name)
-        await api.setAuthorDeath(author.id, {
-          death: row.alive || row.approx ? null : parseNumber(row.death),
-          era: 'هـ',
-          alive: row.alive,
-          approx: row.approx,
-          text: row.text.trim(),
+      // الأسماءُ كلُّها — المؤلِّفون والمشارِكون ومؤلِّفو العناوين المضمومة
+      // ومشارِكوهم — تُجمع في طلبٍ واحد إلى سجلّ الأشخاص (`ensureAuthors`):
+      // يُنشأ ما لم يكن، وتُحفظ وفاةُ من كُتبت وفاتُه. وكانت نداءً لكل اسمٍ
+      // ينتظر سابقَه، فمجموعةٌ فيها عشرون عنوانًا كانت خمسين رحلةً إلى الخادم.
+      // والجوابُ على ترتيب الطلب، فيُقرأ منه بالموضع.
+      const people: { name: string; death?: api.DeathInput }[] = []
+      const ask = (name: string, death?: AuthorRow) => {
+        people.push({
+          name,
+          death: death && {
+            death: death.alive || death.approx ? null : parseNumber(death.death),
+            era: 'هـ',
+            alive: death.alive,
+            approx: death.approx,
+            text: death.text.trim(),
+          },
         })
-        return author
+        return people.length - 1
       }
 
-      // المؤلِّفون: يُنشأون أو يُلحق بهم، وتُحفظ وفاةُ كلٍّ في صفحته.
-      // والمجموعةُ لا مؤلِّف لها — عنوانُها اسمُ المجموعة — فلا يُكتب لها.
+      // المؤلِّفون. والمجموعةُ لا مؤلِّف لها — عنوانُها اسمُ المجموعة.
       const filled = collection ? [] : authorRows.filter((r) => r.name.trim())
-      const saved: { author_id: string; name: string }[] = []
-      for (const row of filled) {
-        const author = await saveAuthor(row)
-        saved.push({ author_id: author.id, name: author.name })
-      }
-      const [mainAuthor, ...coAuthors] = saved
+      const authorAt = filled.map((row) => ask(row.name, row))
 
       // المشاركون: لكلٍّ سجلُّه في سجلّ الأشخاص — وهو جدول المؤلِّفين نفسه —
-      // فتُجمع في صفحةٍ واحدة تحقيقاتُه ومؤلَّفاتُه، ويُصاب اسمُه بالبحث في
-      // حقل المؤلِّف كما يُصاب في حقل الصفة.
+      // فتُجمع في صفحةٍ واحدة تحقيقاتُه ومؤلَّفاتُه.
       const filledContribs = contribRows.filter((c) => c.name.trim())
-      const contributors: Contributor[] = []
-      for (const row of filledContribs) {
-        const person = await api.findOrCreateAuthor(row.name)
-        contributors.push({
-          role: row.role,
-          name: person.name,
-          // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
-          scope: (row.scope ?? '').trim(),
-          person_id: person.id,
-        })
-      }
+      const contribAt = filledContribs.map((c) => ask(c.name))
 
-      // العناوينُ المضمومة: لكلٍّ مؤلِّفُه وذوو صفاته في سجلّ الأشخاص نفسِه،
-      // فالنوويُّ مؤلِّفٌ في المكتبة وإن لم تكن أربعونه إلا عنوانًا في مجموع،
-      // وله صفحتُه كسائر المؤلِّفين. وما لا عنوانَ له يسقط.
-      const savedWithin: WithinTitle[] = []
-      for (const row of withinRows.filter((r) => r.title.trim())) {
-        let authorId: string | null = null
-        let authorName = ''
-        if (row.author.name.trim()) {
-          const person = await saveAuthor(row.author)
-          authorId = person.id
-          authorName = person.name
-        }
+      // العناوينُ المضمومة: لكلٍّ مؤلِّفُه وذوو صفاته في السجلّ نفسِه، فالنوويُّ
+      // مؤلِّفٌ في المكتبة وإن لم تكن أربعونه إلا عنوانًا في مجموع. وما لا
+      // عنوانَ له يسقط.
+      const withinFilled = withinRows.filter((r) => r.title.trim())
+      const withinAt = withinFilled.map((row) => ({
+        author: row.author.name.trim() ? ask(row.author.name, row.author) : -1,
+        contributors: row.contributors.filter((c) => c.name.trim()).map((c) => ({
+          role: c.role, at: ask(c.name),
+        })),
+      }))
 
-        const rowContribs: Contributor[] = []
-        for (const c of row.contributors.filter((c) => c.name.trim())) {
-          const person = await api.findOrCreateAuthor(c.name)
-          rowContribs.push({ role: c.role, name: person.name, scope: '', person_id: person.id })
-        }
+      // والدُّور كذلك في طلبٍ واحد: الأولى تُنشأ بمكانها أوّل مرة، ثم يأتي
+      // مكانُها منها في كل كتابٍ بعده. والمشارِكةُ لا يُكتب لها مكانٌ من هنا —
+      // مكانُ الدار في سجلّها، ويُعدَّل من صفحتها وحدها.
+      const filledPresses = coPresses.filter((c) => c.name.trim())
+      const [savedPeople, savedPressRows] = await Promise.all([
+        api.ensureAuthors(people),
+        api.ensurePublishers([
+          ...(publisherName.trim() ? [{ name: publisherName, place }] : []),
+          ...filledPresses.map((c) => ({ name: c.name, place: '' })),
+        ]),
+      ])
 
-        savedWithin.push({
+      const saved = authorAt.map((i) => ({
+        author_id: savedPeople[i].id, name: savedPeople[i].name,
+      }))
+      const [mainAuthor, ...coAuthors] = saved
+
+      const contributors: Contributor[] = filledContribs.map((row, k) => ({
+        role: row.role,
+        name: savedPeople[contribAt[k]].name,
+        // نطاقُ عمله من الكتاب يُحفظ إن كُتب، والفراغُ فيه: الكتاب كلّه
+        scope: (row.scope ?? '').trim(),
+        person_id: savedPeople[contribAt[k]].id,
+      }))
+
+      const savedWithin: WithinTitle[] = withinFilled.map((row, k) => {
+        const at = withinAt[k]
+        const person = at.author >= 0 ? savedPeople[at.author] : null
+        return {
           title: row.title.trim(),
-          author_id: authorId,
-          author_name: authorName,
-          contributors: rowContribs,
+          author_id: person?.id ?? null,
+          author_name: person?.name ?? '',
+          contributors: at.contributors.map((c) => ({
+            role: c.role,
+            name: savedPeople[c.at].name,
+            scope: '',
+            person_id: savedPeople[c.at].id,
+          })),
           category: row.category.trim(),
           // الفرعُ لا يُحفظ بغير رئيسه، ههنا كما في الكتاب نفسه
           sub_category: row.category.trim() ? row.sub_category.trim() : '',
           is_matn: row.is_matn,
           at: row.at.trim(),
-        })
-      }
+        }
+      })
 
-      // الدار: تُنشأ بمكانها أوّل مرة، ثم يأتي مكانُها منها في كل كتابٍ بعده
       let publisherId: string | null = null
       let publisherPlace = place.trim()
+      const pressRows = [...savedPressRows]
       if (publisherName.trim()) {
-        const row = await api.findOrCreatePublisher(publisherName, place)
+        const row = pressRows.shift()!
         publisherId = row.id
         publisherPlace = row.place
       }
-
-      // والدُّورُ المشارِكة لكلٍّ سجلُّها كالأولى: يحمل الغلافُ شعارَ الدارَين
-      // معًا، فلكلٍّ صفحتُها وكتبُها. ولا يُكتب لها مكانٌ من هنا — مكانُ الدار
-      // في سجلّها لا في الكتاب، ويُعدَّل من صفحتها وحدها.
-      const filledPresses = coPresses.filter((c) => c.name.trim())
-      const savedPresses: CoPublisher[] = []
-      for (const row of filledPresses) {
-        const press = await api.findOrCreatePublisher(row.name, '')
-        savedPresses.push({
-          publisher_id: press.id,
-          name: press.name,
-          scope: (row.scope ?? '').trim(),
-        })
-      }
+      const savedPresses: CoPublisher[] = filledPresses.map((row, k) => ({
+        publisher_id: pressRows[k].id,
+        name: pressRows[k].name,
+        scope: (row.scope ?? '').trim(),
+      }))
 
       const trimmedCategory = category.trim()
       // الفرعُ لا يُحفظ بغير رئيسه: من رفع الرئيسَ رُفع فرعُه معه
@@ -677,6 +696,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
       if (newWorks.length) await api.insertWorks(id, newWorks)
       await reload()
+      // حُفظ الكتاب، فلا يُسأل صاحبُه عن مغادرة نموذجٍ لم يبقَ فيه ما يضيع
+      setLeaveGuard(null)
+      setDirty(false)
       navigate({ name: 'book', id })
     } catch (err) {
       await run(async () => { throw err })
@@ -688,7 +710,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   return (
     <main className="app-main" style={{ maxWidth: 900, margin: '0 auto', padding: 32 }}>
       {editing && (
-        <BackButton label="العودة إلى صفحة الكتاب" onClick={() => navigate({ name: 'book', id: editing.id })} />
+        <BackButton label="العودة إلى صفحة الكتاب" onClick={() => goBack({ name: 'book', id: editing.id })} />
       )}
 
       <h1 style={{ fontFamily: 'var(--heading-font)', fontSize: 28, fontWeight: 700, margin: '0 0 6px' }}>
@@ -702,6 +724,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
 
       <form
         onSubmit={handleSubmit}
+        onInputCapture={markDirty}
+        onChangeCapture={markDirty}
+        onClickCapture={(e) => {
+          const button = (e.target as HTMLElement).closest('button')
+          if (button && button.type !== 'submit') markDirty()
+        }}
         className="add-grid"
         style={{
           ...cardStyle, display: 'grid', gridTemplateColumns: '210px minmax(0,1fr)',
@@ -2200,7 +2228,7 @@ function CategoryPicker(
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { e.preventDefault(); commit(parent) }
-          if (e.key === 'Escape') { setDraft(''); setAdding(null) }
+          if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setAdding(null) }
         }}
         placeholder={parent ? `اسم الفرع الجديد تحت «${parent}»` : 'اسم التصنيف الرئيس الجديد'}
         style={{ ...inputStyle, flex: '1 1 200px', width: 'auto' }}

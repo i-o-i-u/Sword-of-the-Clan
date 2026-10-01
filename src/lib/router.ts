@@ -123,18 +123,152 @@ export function shortBookLink(id: string, ids: string[]): string {
   return `${origin}${pathname}#/b/${shortBookId(id, ids)}`
 }
 
+// ---------------------------------------------------------------- الانتقال
+//
+// ثلاثُ خصالٍ في الانتقال لم تكن:
+//
+//  ١. **موضعُ القارئ يُحفظ ويُردّ إليه بالرجوع.** كان كلُّ تبدُّلٍ في الرابط
+//     يصعد بالصفحة إلى أعلاها، فمن تصفّح الفهرس إلى منتصفه ثم فتح كتابًا
+//     ورجع، وجد الفهرسَ من أوّله. فالآن يُحفظ موضعُ كل رابطٍ ساعةَ يُغادَر،
+//     فإن رُجع إليه بزرّ الرجوع رُدَّ القارئُ إليه، وإن قُصد قصدًا جديدًا
+//     بدأ من أعلاه.
+//  ٢. **الرجوعُ رجوعٌ حقًّا** (`goBack`): زرُّ «العودة» في الصفحات كان ينتقل
+//     إلى صفحةٍ مسمّاة، فيكتب في التاريخ خطوةً جديدة ولا يردّ ما كان.
+//  ٣. **حارسُ المغادرة** (`setLeaveGuard`): نموذجٌ فيه ما لم يُحفظ يُسأل
+//     صاحبُه قبل أن يغادره، بزرٍّ في الرأس كان أو بزرّ الرجوع في المتصفّح.
+
+/** موضعُ التمرير لكل رابطٍ ساعةَ غادره القارئ */
+const scrollMemory = new Map<string, number>()
+
+/** الانتقالُ القادم قصدٌ جديد لا رجوع: يبدأ من أعلى الصفحة */
+let freshNavigation = false
+
+/** كم خطوةً خطاها القارئُ داخل الموقع: بها يُعرف أفي التاريخ ما يُرجَع إليه */
+let depth = 0
+
+/** حارسُ المغادرة: يُسأل قبل كل انتقال، فإن أعاد `false` بقي القارئُ حيث هو */
+let leaveGuard: (() => boolean) | null = null
+
+export function setLeaveGuard(guard: (() => boolean) | null) {
+  leaveGuard = guard
+}
+
+/**
+ * يحرس صفحةً فيها ما لم يُحفظ: ما دام `active` سُئل القارئُ قبل أن يغادرها
+ * — بانتقالٍ في الموقع، أو بزرّ الرجوع، أو بإغلاق اللسان وتحديثه.
+ */
+export function useLeaveGuard(active: boolean, message: string) {
+  useEffect(() => {
+    if (!active) return
+    setLeaveGuard(() => window.confirm(message))
+    const onUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      setLeaveGuard(null)
+      window.removeEventListener('beforeunload', onUnload)
+    }
+  }, [active, message])
+}
+
 export function navigate(route: Route) {
+  if (leaveGuard && !leaveGuard()) return
   const target = hashFor(route)
-  if (window.location.hash !== target) window.location.hash = target
-  else window.dispatchEvent(new HashChangeEvent('hashchange'))
+  freshNavigation = true
+  if (window.location.hash !== target) {
+    depth++
+    window.location.hash = target
+  } else {
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  }
+}
+
+/**
+ * يرجع خطوةً في التاريخ إن كانت قبلها خطوةٌ في الموقع، وإلا انتقل إلى
+ * `fallback`: من دخل صفحةَ كتابٍ من رابطٍ أُرسل إليه لا يُرجَع به خارج الموقع.
+ */
+export function goBack(fallback: Route) {
+  if (depth > 0) {
+    if (leaveGuard && !leaveGuard()) return
+    // الحارسُ سُئل ههنا، فلا يُسأل مرّةً ثانية حين يتبدّل الرابط. والصفحةُ
+    // التي نصبته ترفعه عند مغادرتها، فلا يُردّ.
+    leaveGuard = null
+    window.history.back()
+  } else {
+    navigate(fallback)
+  }
+}
+
+/**
+ * خصائصُ رابطٍ إلى مسار: `href` حقيقيّ — فيُفتح في لسانٍ جديد بالزرّ الأوسط
+ * ويُنسخ ويُبلَغ بلوحة المفاتيح — ونقرٌ عاديّ يمرّ بـ`navigate`.
+ */
+export function linkTo(route: Route) {
+  return {
+    href: hashFor(route),
+    onClick: (e: { preventDefault: () => void; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; button?: number }) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || (e.button !== undefined && e.button !== 0)) return
+      e.preventDefault()
+      navigate(route)
+    },
+  }
+}
+
+/** ما يحتاجه عنصرٌ يُنقر وليس رابطًا ولا زرًّا (صفُّ جدول): تركيزٌ ومفتاحان */
+export function pressable(onPress: () => void, role: 'link' | 'button' = 'link') {
+  return {
+    role,
+    tabIndex: 0,
+    onClick: onPress,
+    onKeyDown: (e: { key: string; preventDefault: () => void }) => {
+      if (e.key === 'Enter' || (role === 'button' && e.key === ' ')) {
+        e.preventDefault()
+        onPress()
+      }
+    },
+  }
+}
+
+/** يُردّ القارئُ إلى موضعه بعد أن تُرسم الصفحة — وقد تحتاج رسمتين أو ثلاثًا */
+function restoreScroll(y: number) {
+  let tries = 0
+  const step = () => {
+    window.scrollTo({ top: y })
+    // الصفحةُ لم تبلغ طولَها بعد (قطعةٌ تُجلب، أو قائمةٌ تُرسم على دفعات)
+    if (Math.abs(window.scrollY - y) > 2 && tries++ < 30) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
 }
 
 export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash))
   useEffect(() => {
-    const onChange = () => {
+    const onChange = (e: Event) => {
+      const old = (e as HashChangeEvent).oldURL
+      const oldHash = old ? new URL(old).hash : ''
+
+      // الرجوعُ بزرّ المتصفّح يمرّ بالحارس كذلك. ولا يُلغى تبدُّلُ الرابط،
+      // فيُعاد الرابطُ إلى ما كان عليه بلا انتقال — والصفحةُ لم تتبدّل أصلًا
+      if (!freshNavigation && leaveGuard && !leaveGuard()) {
+        window.history.pushState(null, '', old)
+        depth++
+        return
+      }
+
+      if (oldHash !== window.location.hash) scrollMemory.set(oldHash, window.scrollY)
       setRoute(parseHash(window.location.hash))
-      window.scrollTo({ top: 0 })
+
+      const saved = scrollMemory.get(window.location.hash)
+      if (!freshNavigation && saved !== undefined) {
+        // رجوعٌ أو تقدُّمٌ في التاريخ: يُردّ القارئُ إلى حيث كان
+        restoreScroll(saved)
+      } else {
+        window.scrollTo({ top: 0 })
+      }
+      if (!freshNavigation && depth > 0) depth--
+      freshNavigation = false
     }
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)

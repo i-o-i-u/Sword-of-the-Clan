@@ -85,7 +85,7 @@ const loadingBox = (
 
 export default function App() {
   const route = useRoute()
-  const { loading, error, setError, isOwner, canEdit, settings } = useLibrary()
+  const { loading, error, setError, isOwner, canEdit, settings, roleReady } = useLibrary()
 
   // نصّ حقل البحث السريع في الرأس ينتقل إلى اللوحة عند فتحها
   const [search, setSearch] = useState<{ open: boolean; query: string }>(
@@ -108,15 +108,26 @@ export default function App() {
     setShowSettings(false)
   }, [route])
 
-  // مسارٌ لا يملكه هذا الزائر يُردّ إلى التصفّح
+  // مسارٌ لا يملكه هذا الزائر يُردّ إلى التصفّح.
+  //
+  // ولا يُحكم بذلك قبل أن يُعرف الدور: البياناتُ تُطلب بهويّة زائرٍ قبل أن
+  // تستقرّ الجلسة، فلو حُكم ساعتئذٍ لطُرد صاحبُ المكتبة من نموذج التعديل
+  // كلّما حدّث الصفحة — ولم يكن زائرًا قطّ، وإنما لم يُعرف بعد.
   useEffect(() => {
+    if (!roleReady) return
     if ((route.name === 'add' || route.name === 'edit') && !canEdit) navigate({ name: 'browse' })
     // صفحةُ «المحقِّقون ونحوهم» تعرض تراجمَ أشخاصٍ كصفحة المؤلِّفين، فحكمُها
     // حكمُها: من حجب صفحاتِ التراجم حجبها معها
     if ((route.name === 'authors' || route.name === 'author' || route.name === 'people')
       && !canSeeAuthors) navigate({ name: 'browse' })
     if (route.name === 'stats' && !canSeeStats) navigate({ name: 'browse' })
-  }, [route, canEdit, canSeeAuthors, canSeeStats])
+  }, [route, canEdit, canSeeAuthors, canSeeStats, roleReady])
+
+  /** مسارٌ قد يكون لصاحب المكتبة وحده ولم يُعرف الدورُ بعد: يُنتظر ولا يُرسم فارغًا */
+  const awaitingRole = !roleReady && (
+    route.name === 'add' || route.name === 'edit' || route.name === 'stats'
+    || route.name === 'authors' || route.name === 'author' || route.name === 'people'
+  )
 
   // لا تُغلق نافذة الإعدادات عند الخروج: للزائر نافذتُه المبسّطة، والعرض
   // نفسه يتفرّع على isOwner فلا يبقى لغير المالك سبيلٌ إلى إعدادات المكتبة.
@@ -134,20 +145,16 @@ export default function App() {
       {error && (
         <div
           role="alert"
-          style={{
-            maxWidth: 1320, margin: '16px auto 0', padding: '10px 16px',
-            background: 'oklch(0.95 0.04 28)', color: 'oklch(0.4 0.13 28)',
-            border: '1px solid oklch(0.8 0.08 28)', borderRadius: 10,
-            fontSize: 13, display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', gap: 12,
-          }}
+          // تنبيهٌ عائمٌ في أسفل الشاشة لا سطرٌ في أعلى الصفحة: كان يقع تحت
+          // الرأس فلا يراه من حفظ نموذجًا وهو في آخره
+          className="app-alert"
         >
           <span>{error}</span>
           <button
             type="button"
             onClick={() => setError(null)}
             aria-label="إخفاء التنبيه"
-            style={{ border: 'none', background: 'none', color: 'inherit', fontSize: 16, lineHeight: 1 }}
+            className="app-alert-close"
           >
             ×
           </button>
@@ -165,7 +172,7 @@ export default function App() {
           onOpenSearch={openSearch}
           onOpenLogin={() => setShowLogin(true)}
         />
-      ) : loading ? loadingBox : (
+      ) : loading || awaitingRole ? loadingBox : (
         <Suspense fallback={loadingBox}>
           {route.name === 'about' && <About />}
           {route.name === 'browse' && <Browse />}

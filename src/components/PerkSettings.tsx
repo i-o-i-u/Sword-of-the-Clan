@@ -201,13 +201,21 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
       // فرعٌ مُحي اسمُ رئيسه لا يُحفظ فرعًا ليتيمٍ، بل يُرفع رئيسًا
       .map((c) => (c.parent ? c : { ...c, parent: '' }))
 
-    await run(async () => {
+    const ok = await run(async () => {
       await api.savePerkKinds(kinds.filter((k) => k.name.trim()))
       await api.savePerkCategories(flat)
       await api.savePerkFigures(figures.filter((f) => f.name.trim()))
     })
-    await reload()
     setSaving(false)
+    // والنافذةُ لا تُغلق على إخفاق: ما حُرِّر فيها باقٍ ليُعاد حفظُه
+    if (!ok) return
+    await reload()
+    onClose()
+  }
+
+  /** الإغلاقُ بلا حفظ يُستأذن فيه إن كان في النافذة ما حُرِّر */
+  function requestClose() {
+    if (dirty.current && !window.confirm('فيه تعديلاتٌ لم تُحفظ بعد. أتُغلق النافذة وتُهملها؟')) return
     onClose()
   }
 
@@ -216,11 +224,11 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
   const mains = cats.filter((c) => !c.parentUid)
 
   return (
-    <Overlay onClose={onClose} align="flex-start">
+    <Overlay onClose={requestClose} align="flex-start" label="إعدادات الفوائد">
       <div className="perk-editor overlay-sheet" style={{ width: 'min(720px, 100%)' }}>
         <header className="perk-editor-head">
           <h2>إعدادات الفوائد</h2>
-          <CloseButton onClose={onClose} />
+          <CloseButton onClose={requestClose} />
         </header>
 
         <div className="perk-editor-body thin-scroll" style={{ gridTemplateColumns: '1fr' }}>
@@ -497,7 +505,7 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
         </div>
 
         <footer className="perk-editor-foot">
-          <button type="button" onClick={onClose} className="perk-save" style={ghostButtonStyle}>
+          <button type="button" onClick={requestClose} className="perk-save" style={ghostButtonStyle}>
             إلغاء
           </button>
           <button

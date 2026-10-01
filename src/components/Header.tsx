@@ -3,10 +3,13 @@
 //
 // لا زرَّ لدخول صاحب المكتبة هنا: مدخله مخفيٌّ في صورة صفحة الهبوط
 // (ثلاث نقراتٍ عليها)، فلا يرى الزائر بابًا لا يخصّه.
+//
+// والتبويباتُ روابطُ لا أزرار: تُفتح في لسانٍ جديد بالزرّ الأوسط، ويُعلَم
+// المختارُ منها بـ`aria-current` فيقرؤه قارئُ الشاشة.
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate, type Route } from '../lib/router'
+import { linkTo, type Route } from '../lib/router'
 import { THEME_LABELS } from '../lib/theme'
 import { LIBRARY_NAME } from '../lib/types'
 import {
@@ -23,6 +26,7 @@ interface Props {
 export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
   const { isOwner, canEdit, settings, cycleTheme } = useLibrary()
   const [quick, setQuick] = useState('')
+  const ref = useRef<HTMLElement>(null)
 
   const vis = settings.visibility
   const showAuthorsTab = isOwner || vis.authors
@@ -36,6 +40,24 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
   // هنا مرّتين.
   const onLanding = route.name === 'landing'
 
+  // ارتفاعُ الرأس يُقاس ويُكتب في `--header-h`: عليه تلتصق ترويسةُ الجدول
+  // وعمودُ التصفُّح تحته، ومنه يُطرح ارتفاعُ الهبوط. وكان ثابتًا في ملف
+  // الأنماط (٧٠) والرأسُ يلتفّ صفَّين وثلاثةً على الشاشات الأضيق.
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver !== 'function') return
+    const root = document.documentElement
+    const write = () => {
+      // في المقاس المكبَّر بـ`zoom` يُقاس الرأسُ بوحدات الصفحة المكبَّرة نفسها
+      const scale = parseFloat(getComputedStyle(root).getPropertyValue('--ui-scale')) || 1
+      root.style.setProperty('--header-h', `${Math.round(el.getBoundingClientRect().height / scale)}px`)
+    }
+    write()
+    const ro = new ResizeObserver(write)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   /** حقل البحث يسلّم ما كُتب فيه إلى لوحة البحث ثم يفرغ */
   function submitQuick(e: FormEvent) {
     e.preventDefault()
@@ -47,13 +69,13 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
     /* علامةُ الرأس المزدحم: صاحبُ المكتبة يرى فوق ما يراه الزائرُ أربعةَ
        عناصر — اسمَه، ووضعَ التصفُّح، والخروجَ، وإضافةَ كتاب — فلا يسعه من
        العرض ما يسع الزائرَ. وبها يلتفّ الرأسُ عنده قبل أن يلتفّ عنده. */
-    <header className="app-header" data-owner={isOwner && !onLanding ? '' : undefined}>
-      <div className="brand" onClick={() => navigate({ name: 'landing' })}>
+    <header ref={ref} className="app-header" data-owner={isOwner && !onLanding ? '' : undefined}>
+      <a className="brand" {...linkTo({ name: 'landing' })} aria-label={`${LIBRARY_NAME} — الصفحة الأولى`}>
         <span className="brand-badge">
-          <img src={resolveAsset('assets/logo.svg') ?? ''} alt="شعار المكتبة" />
+          <img src={resolveAsset('assets/logo.svg') ?? ''} alt="" />
         </span>
         <span className="brand-name">{LIBRARY_NAME}</span>
-      </div>
+      </a>
 
       <form className="quick-search" onSubmit={submitQuick} role="search">
         <SearchIcon size={15} />
@@ -65,67 +87,56 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
         />
       </form>
 
-      <nav className="head-nav">
-        <button
-          type="button"
-          onClick={() => navigate({ name: 'landing' })}
-          className={navClass(route.name === 'landing')}
-        >
-          <HomeIcon size={17} />
+      <nav className="head-nav" aria-label="أبواب المكتبة">
+        <Tab to={{ name: 'landing' }} on={route.name === 'landing'} icon={<HomeIcon size={17} />}>
           الصفحة الأولى
-        </button>
+        </Tab>
 
-        <button type="button" onClick={() => navigate({ name: 'browse' })} className={navClass(onBrowse)}>
-          <BooksIcon size={17} />
+        <Tab to={{ name: 'browse' }} on={onBrowse} icon={<BooksIcon size={17} />}>
           {/* اسمُه دعوةٌ ما دمتَ خارجها، فإذا صرتَ فيها صار وصفًا لما تفعل */}
           {onBrowse ? 'تصفُّح المكتبة' : 'الدخول إلى المكتبة'}
-        </button>
+        </Tab>
 
         {showAuthorsTab && (
-          <button type="button" onClick={() => navigate({ name: 'authors' })} className={navClass(onAuthors)}>
-            <QuillIcon size={17} />
+          <Tab to={{ name: 'authors' }} on={onAuthors} icon={<QuillIcon size={17} />}>
             المؤلِّفون
-          </button>
+          </Tab>
         )}
 
-        <button
-          type="button"
-          onClick={() => navigate({ name: 'publishers' })}
-          className={navClass(route.name === 'publishers' || route.name === 'publisher')}
+        <Tab
+          to={{ name: 'publishers' }}
+          on={route.name === 'publishers' || route.name === 'publisher'}
+          icon={<PressIcon size={17} />}
         >
-          <PressIcon size={17} />
           دُوْر النَّشْر
-        </button>
+        </Tab>
 
         {/* «الفوائد» بابٌ من أبواب الموقع لا صفحةً جانبيّة: قسمٌ قائمٌ
             بنفسه له ترويستُه وأبوابُه، فمدخلُه من هنا كسائر الأقسام.
             واسمُه في الرأس «الفوائد» اختصارًا — والاسمُ التامّ في صدره. */}
         {showPerksTab && (
-          <button
-            type="button"
-            onClick={() => navigate({ name: 'perks' })}
-            className={navClass(route.name === 'perks' || route.name === 'perk')}
+          <Tab
+            to={{ name: 'perks' }}
+            on={route.name === 'perks' || route.name === 'perk' || route.name === 'notebook'}
+            icon={<PerkIcon size={17} />}
           >
-            <PerkIcon size={17} />
             الفوائد
-          </button>
+          </Tab>
         )}
 
-        <button
-          type="button"
-          onClick={() => navigate({ name: 'about' })}
-          className={navClass(route.name === 'about' || route.name === 'stats')}
+        <Tab
+          to={{ name: 'about' }}
+          on={route.name === 'about' || route.name === 'stats'}
+          icon={<LibraryIcon size={17} />}
         >
-          <LibraryIcon size={17} />
           عن المكتبة
-        </button>
+        </Tab>
 
         {/* الإحصائيات لم تعد في الرأس — مدخلها من داخل «عن المكتبة» */}
         {canEdit && !onLanding && (
-          <button type="button" onClick={() => navigate({ name: 'add' })} className={navClass(route.name === 'add')}>
-            <BookPlusIcon size={17} />
+          <Tab to={{ name: 'add' }} on={route.name === 'add'} icon={<BookPlusIcon size={17} />}>
             إضافة كتاب
-          </button>
+          </Tab>
         )}
       </nav>
 
@@ -159,4 +170,17 @@ export default function Header({ route, onOpenSearch, onOpenSettings }: Props) {
   )
 }
 
-const navClass = (active: boolean) => (active ? 'head-tab head-tab-on' : 'head-tab')
+function Tab(
+  { to, on, icon, children }: { to: Route; on: boolean; icon: ReactNode; children: ReactNode },
+) {
+  return (
+    <a
+      {...linkTo(to)}
+      className={on ? 'head-tab head-tab-on' : 'head-tab'}
+      aria-current={on ? 'page' : undefined}
+    >
+      {icon}
+      {children}
+    </a>
+  )
+}

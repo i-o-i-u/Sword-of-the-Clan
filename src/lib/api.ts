@@ -6,6 +6,7 @@
 // الاعتماد عليه أصلًا كان خطأً: الخادم لا يصدّق دعوى العميل أنه المالك.
 
 import { convex } from './convexClient'
+import { shrinkImage } from './imageResize'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import {
@@ -70,19 +71,6 @@ function toBook(row: Record<string, unknown>): Book {
   }
 }
 
-export async function fetchBooks(_owner: boolean): Promise<Book[]> {
-  const rows = await convex.query(api.library.books, {})
-  return (rows as unknown as Record<string, unknown>[]).map(toBook)
-}
-
-export async function fetchAuthors(_owner: boolean): Promise<Author[]> {
-  return (await convex.query(api.library.authors, {})) as unknown as Author[]
-}
-
-export async function fetchWorks(_owner: boolean): Promise<BookWork[]> {
-  return (await convex.query(api.library.works, {})) as unknown as BookWork[]
-}
-
 /**
  * الفوائد. حقولُها المستجدّة اختياريّةٌ في المخطّط — في القاعدة فوائدُ كُتبت
  * قبلها — فتُسدّ ههنا مرّةً واحدة، ولا تُترك الواجهةُ تحرس كلَّ حقلٍ في كل
@@ -122,81 +110,90 @@ function toPerk(row: Record<string, unknown>): Perk {
   }
 }
 
-export async function fetchPerks(_owner: boolean): Promise<Perk[]> {
-  const rows = await convex.query(api.library.perks, {})
-  return (rows as unknown as Record<string, unknown>[]).map(toPerk)
-}
+type Row = Record<string, unknown>
 
-/** أنواعُ الفوائد كما حُرِّرت. وفراغُها: لم تُحرَّر بعد، فيُعرض المبدأ. */
-export async function fetchPerkKinds(_owner: boolean): Promise<PerkKindDef[]> {
-  const rows = await convex.query(api.library.perkKinds, {}) as Record<string, unknown>[]
-  return rows.map((r) => ({
-    id: r.id as string,
-    name: (r.name as string) ?? '',
-    icon: (r.icon as string) ?? '',
-    hint: (r.hint as string) ?? '',
-  }))
-}
+const toPerkKind = (r: Row): PerkKindDef => ({
+  id: r.id as string,
+  name: (r.name as string) ?? '',
+  icon: (r.icon as string) ?? '',
+  hint: (r.hint as string) ?? '',
+})
 
-export async function fetchPerkCategories(_owner: boolean): Promise<PerkCategory[]> {
-  const rows = await convex.query(api.library.perkCategories, {}) as Record<string, unknown>[]
-  return rows.map((r) => ({
-    id: r.id as string,
-    name: (r.name as string) ?? '',
-    parent: (r.parent as string) ?? '',
-    icon: (r.icon as string) ?? '',
-  }))
-}
+const toPerkCategory = (r: Row): PerkCategory => ({
+  id: r.id as string,
+  name: (r.name as string) ?? '',
+  parent: (r.parent as string) ?? '',
+  icon: (r.icon as string) ?? '',
+})
 
-export async function fetchPerkFigures(_owner: boolean): Promise<PerkFigure[]> {
-  const rows = await convex.query(api.library.perkFigures, {}) as Record<string, unknown>[]
-  return rows.map((r) => ({
-    id: r.id as string,
-    name: (r.name as string) ?? '',
-    death: (r.death as string) ?? '',
-    note: (r.note as string) ?? '',
-    icon: (r.icon as string) ?? '',
-  }))
-}
+const toPerkFigure = (r: Row): PerkFigure => ({
+  id: r.id as string,
+  name: (r.name as string) ?? '',
+  death: (r.death as string) ?? '',
+  note: (r.note as string) ?? '',
+  icon: (r.icon as string) ?? '',
+})
 
-export async function fetchNotebooks(_owner: boolean): Promise<Notebook[]> {
-  const rows = await convex.query(api.library.perkNotebooks, {}) as Record<string, unknown>[]
-  return rows.map((r) => ({
-    id: r.id as string,
-    name: (r.name as string) ?? '',
-    note: (r.note as string) ?? '',
-    icon: (r.icon as string) ?? '',
-    created_at: (r.created_at as string) ?? '',
-  }))
-}
+const toNotebook = (r: Row): Notebook => ({
+  id: r.id as string,
+  name: (r.name as string) ?? '',
+  note: (r.note as string) ?? '',
+  icon: (r.icon as string) ?? '',
+  created_at: (r.created_at as string) ?? '',
+})
 
-export async function fetchLoans(_owner: boolean): Promise<Loan[]> {
-  return (await convex.query(api.library.loans, {})) as unknown as Loan[]
-}
-
-export async function fetchPublishers(_owner: boolean): Promise<Publisher[]> {
-  return (await convex.query(api.library.publishers, {})) as unknown as Publisher[]
-}
-
-export async function fetchCategories(_owner: boolean): Promise<Category[]> {
-  return await convex.query(api.library.categories, {})
-}
-
-export async function fetchLandingImages(_owner: boolean): Promise<LandingImage[]> {
-  return (await convex.query(api.library.landingImages, {})) as unknown as LandingImage[]
-}
-
-export async function fetchLandingQuotes(_owner: boolean): Promise<LandingQuote[]> {
-  return (await convex.query(api.library.landingQuotes, {})) as unknown as LandingQuote[]
-}
-
-export async function fetchSettings(_owner: boolean): Promise<Settings> {
-  const row = (await convex.query(api.library.settings, {})) as Record<string, unknown>
+function toSettings(row: Row): Settings {
   // الحقول المستجدّة اختياريّة في المخطّط، فقد يعود المستند القديم بلا بعضها
   return {
     ...DEFAULT_SETTINGS_EXTRAS,
     ...(row as unknown as Settings),
     visibility: { ...DEFAULT_VISIBILITY, ...((row.visibility as object) ?? {}) },
+  }
+}
+
+/** المكتبةُ كلُّها كما تقرؤها الواجهة */
+export interface LibrarySnapshot {
+  books: Book[]
+  authors: Author[]
+  works: BookWork[]
+  perks: Perk[]
+  loans: Loan[]
+  publishers: Publisher[]
+  categories: Category[]
+  landingImages: LandingImage[]
+  landingQuotes: LandingQuote[]
+  settings: Settings
+  perkKinds: PerkKindDef[]
+  perkCategories: PerkCategory[]
+  perkFigures: PerkFigure[]
+  notebooks: Notebook[]
+}
+
+/**
+ * المكتبةُ كلُّها في استعلامٍ واحد (`library.snapshot`).
+ *
+ * كانت أربعةَ عشرَ استعلامًا عند كل تحميل وبعد كل حفظ، وكلٌّ منها يقرأ جدولَ
+ * الكتب في الخادم من أوّله ليعرف ما يظهر منه — فصارت واحدًا يقرؤه مرّةً.
+ * والسدُّ ههنا كما كان: `toBook` و`toPerk` وأخواتُهما.
+ */
+export async function fetchSnapshot(): Promise<LibrarySnapshot> {
+  const r = await convex.query(api.library.snapshot, {})
+  const rows = (x: unknown) => x as Row[]
+  return {
+    books: rows(r.books).map(toBook),
+    authors: r.authors as unknown as Author[],
+    works: r.works as unknown as BookWork[],
+    perks: rows(r.perks).map(toPerk),
+    loans: r.loans as unknown as Loan[],
+    publishers: r.publishers as unknown as Publisher[],
+    categories: r.categories,
+    landingImages: r.landingImages as unknown as LandingImage[],
+    landingQuotes: r.landingQuotes as unknown as LandingQuote[],
+    settings: toSettings(r.settings as unknown as Row),
+    perkKinds: rows(r.perkKinds).map(toPerkKind),
+    perkCategories: rows(r.perkCategories).map(toPerkCategory),
+    perkFigures: rows(r.perkFigures).map(toPerkFigure),
+    notebooks: rows(r.perkNotebooks).map(toNotebook),
   }
 }
 
@@ -370,6 +367,46 @@ export async function setAuthorDeath(
   })
 }
 
+/** وفاةُ الرجل كما تُكتب من النموذج، وتُحفظ مع اسمه في `ensureAuthors` */
+export interface DeathInput {
+  death: number | null
+  era?: string
+  alive: boolean
+  approx: boolean
+  text: string
+}
+
+/**
+ * أسماءُ نموذج الكتاب كلُّها في نداءٍ واحد: يُنشأ ما لم يكن، وتُحفظ وفاةُ من
+ * كُتبت وفاتُه. والجوابُ على ترتيب الطلب، والنداءُ معاملةٌ واحدة: يقع كلُّه
+ * أو لا يقع منه شيء.
+ */
+export async function ensureAuthors(
+  rows: { name: string; death?: DeathInput }[],
+): Promise<{ id: string; name: string }[]> {
+  if (rows.length === 0) return []
+  return await convex.mutation(api.catalog.ensureAuthors, {
+    rows: rows.map((r) => ({
+      name: r.name,
+      death: r.death && {
+        death: r.death.death,
+        era: (r.death.era as 'هـ' | 'م' | 'ق.هـ' | 'ق.م' | undefined) ?? undefined,
+        alive: r.death.alive,
+        death_approx: r.death.approx,
+        death_text: r.death.text,
+      },
+    })),
+  })
+}
+
+/** دُورُ النموذج في نداءٍ واحد، على ترتيب الطلب */
+export async function ensurePublishers(
+  rows: { name: string; place?: string }[],
+): Promise<{ id: string; name: string; place: string }[]> {
+  if (rows.length === 0) return []
+  return await convex.mutation(api.catalog.ensurePublishers, { rows })
+}
+
 export async function findOrCreatePublisher(name: string, place: string): Promise<Publisher> {
   return (await convex.mutation(
     api.catalog.findOrCreatePublisher, { name, place },
@@ -439,13 +476,15 @@ export async function removeLandingQuote(id: string): Promise<void> {
  * يرفع صورةً ويعيد رابطها. تخزين Convex بلا مجلّدات، فوسيط `folder` يبقى
  * للتوافق مع مواضع النداء ولا أثر له.
  */
-export async function uploadImage(_folder: string, file: File): Promise<string> {
+export async function uploadImage(folder: string, file: File): Promise<string> {
+  // تُصغَّر قبل الرفع: الصورةُ تُرفع مرّةً ويُنزِّلها كلُّ زائر
+  const body = await shrinkImage(file, folder)
   const uploadUrl = await convex.mutation(api.images.generateUploadUrl, {})
 
   const res = await fetch(uploadUrl, {
     method: 'POST',
-    headers: { 'Content-Type': file.type },
-    body: file,
+    headers: { 'Content-Type': body.type || file.type },
+    body,
   })
   if (!res.ok) throw new Error(`تعذّر رفع الصورة (${res.status}).`)
 

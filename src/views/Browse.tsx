@@ -5,17 +5,23 @@
 // وأدوات الصفحة ثلاثٌ لا تختلط: طرق العرض أزرارٌ بأيقوناتها، والترتيب قائمة،
 // والتصفيات لوحةٌ تُفتح — كي لا يزدحم الشريط بما لا يُستعمل في كل زيارة.
 
-import { Suspense, lazy, useMemo, useState } from 'react'
+import {
+  Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState,
+} from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { linkTo, navigate } from '../lib/router'
+import { useViewState } from '../lib/viewState'
 import { deathLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
 import {
   ALL_SEARCH_KEYS, DEFAULT_SEARCH_KEYS, QUICK_OPTS, SEARCH_FIELDS,
-  matchBook, matchWithin, type SearchOptions,
+  bookTexts, matchTexts, normalizeText, withinText, type SearchOptions,
 } from '../lib/search'
 import {
-  bookCount, withinLabelOf, withinTitlesOf,
+  bookCount, isCollection, withinLabelOf, withinTitlesOf,
 } from '../lib/editions'
+
+/** ما يُرسم من الكتب في كل دفعة */
+const PAGE = 60
 import {
   ARABIC_LETTERS, CATEGORY_SPINE, SORT_OPTIONS, STATUSES, STATUS_DOT, VIEW_OPTIONS,
   STATUS_UNKNOWN, VOLUMES_COUNT,
@@ -27,7 +33,8 @@ import {
 import ImageSlot from '../components/ImageSlot'
 import SideDoors from '../components/SideDoors'
 import {
-  CabinetIcon, CalculatorIcon, ChartIcon, EmptyState, FilterIcon, GridIcon,
+  CabinetIcon, CalculatorIcon, ChartIcon, ChevronIcon, EmptyState, FilterIcon, GridIcon,
+  MoreSentinel,
   HashIcon, HourglassIcon, OpenBookIcon, OwnerIcon, PagesIcon, PressIcon,
   SearchIcon, ShelfIcon, Stars, SuggestIcon, TableIcon, TagIcon,
   ToggleRow, VerifyIcon, VolumesIcon, WithinIcon,
@@ -60,26 +67,34 @@ const VIEW_ICONS: Record<ViewMode, (p: { size?: number }) => JSX.Element> = {
 export default function Browse() {
   const { books, authorById, categories, mainCategories, settings, isOwner } = useLibrary()
 
-  const [filterCabinet, setFilterCabinet] = useState(ALL)
-  const [filterCategory, setFilterCategory] = useState(ALL)
-  const [filterSub, setFilterSub] = useState(ALL)
-  const [filterStatus, setFilterStatus] = useState(ALL)
-  const [filterPlace, setFilterPlace] = useState(ALL)
-  const [filterRating, setFilterRating] = useState(0)
-  const [filterCentury, setFilterCentury] = useState(0)
-  const [filterLetter, setFilterLetter] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
+  // حالُ الفهرس كما تركه القارئ تبقى بعد مغادرته (`useViewState`): كانت
+  // تموت بفتح كتابٍ، فيعود القارئُ إلى فهرسٍ لا ترشيحَ فيه ولا بحث
+  const [filterCabinet, setFilterCabinet] = useViewState('browse.cabinet', ALL)
+  const [filterCategory, setFilterCategory] = useViewState('browse.category', ALL)
+  const [filterSub, setFilterSub] = useViewState('browse.sub', ALL)
+  const [filterStatus, setFilterStatus] = useViewState('browse.status', ALL)
+  const [filterPlace, setFilterPlace] = useViewState('browse.place', ALL)
+  const [filterRating, setFilterRating] = useViewState('browse.rating', 0)
+  const [filterCentury, setFilterCentury] = useViewState('browse.century', 0)
+  const [filterLetter, setFilterLetter] = useViewState('browse.letter', '')
+  const [showFilters, setShowFilters] = useViewState('browse.showFilters', false)
+  /** عمودُ التصفُّح على الشاشة الضيّقة: مطويٌّ حتى يُطلب، فلا يسبق الكتبَ */
+  const [sideOpen, setSideOpen] = useState(false)
 
-  const [query, setQuery] = useState('')
-  const [sortBy, setSortBy] = useState<SortKey>('authorDeath')
-  const [viewMode, setViewMode] = useState<ViewMode>(settings.default_view)
+  const [query, setQuery] = useViewState('browse.query', '')
+  const [sortBy, setSortBy] = useViewState<SortKey>('browse.sort', 'authorDeath')
+  const [viewMode, setViewMode] = useViewState<ViewMode>('browse.view', settings.default_view)
 
   const [showCalculator, setShowCalculator] = useState(false)
-  const [advanced, setAdvanced] = useState(false)
-  const [opts, setOpts] = useState<SearchOptions>({
+  const [advanced, setAdvanced] = useViewState('browse.advanced', false)
+  const [opts, setOpts] = useViewState<SearchOptions>('browse.opts', {
     caseSensitive: false, respectHamza: false, exact: false, anyOrder: true,
   })
-  const [fields, setFields] = useState<string[]>(DEFAULT_SEARCH_KEYS)
+  const [fields, setFields] = useViewState<string[]>('browse.fields', DEFAULT_SEARCH_KEYS)
+
+  // البحثُ يجري على قيمةٍ مؤجَّلة: الحقلُ يتبع الأصابع فورًا، والفهرسُ يُرشَّح
+  // بعدها حين يفرغ المتصفّح — فلا تتقطّع الكتابةُ على فهرسٍ كبير
+  const deferredQuery = useDeferredValue(query)
 
   const canUseAdvanced = isOwner || settings.visibility.advSearch
   const advancedOn = advanced && canUseAdvanced
@@ -97,7 +112,7 @@ export default function Browse() {
     return y == null || y <= 0 ? 0 : Math.ceil(y / 100)
   }, [authorById])
 
-  const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no === filterCabinet
+  const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no.trim() === filterCabinet
   // التصنيف يُصفّى برئيسه، ثم بفرعه إن اختير — والاثنان محفوظان في الكتاب
   const passCategoryOf = (category: string, sub: string) =>
     (filterCategory === ALL || category === filterCategory)
@@ -109,19 +124,46 @@ export default function Browse() {
   const passRating = (b: Book) => filterRating === 0 || b.rating >= filterRating
   const passCentury = (b: Book) => filterCentury === 0 || centuryOf(b) === filterCentury
   const passLetter = (b: Book) => !filterLetter || titleInitial(b.title) === filterLetter
-  const passSearch = (b: Book) => matchBook(b, query.trim(), searchOpts, searchKeys)
+
+  // ------------------------------------------------------------- البحث
+  // نصوصُ كل كتابٍ وعناوينِه المضمومة تُطبَّع مرّةً واحدة وتُحفظ، ثم يُحسب
+  // من البحث جوابٌ واحدٌ لكل كتاب. وكان كلُّ حرفٍ يُعيد تطبيعَ الفهرس كلِّه —
+  // خمسةَ عشرَ حقلًا لكل كتاب — ثم يُعيده لعدّاد كل دولابٍ وتصنيف.
+  const texts = useMemo(
+    () => new Map(books.map((b) => [b.id, bookTexts(b, searchOpts, searchKeys)])),
+    [books, searchOpts, searchKeys],
+  )
+  const withinTexts = useMemo(
+    () => new Map(books.map((b) => [b.id, withinTitlesOf(b).map((t) => withinText(t, searchOpts))])),
+    [books, searchOpts],
+  )
+  const needle = useMemo(
+    () => normalizeText(deferredQuery.trim(), searchOpts),
+    [deferredQuery, searchOpts],
+  )
+  /** الكتبُ التي أصابها البحثُ في نفسها، أو `null` إن لم يكن بحث */
+  const searchHits = useMemo(() => {
+    if (!needle) return null
+    const hits = new Set<string>()
+    for (const [id, t] of texts) if (matchTexts(t, needle, searchOpts)) hits.add(id)
+    return hits
+  }, [texts, needle, searchOpts])
+  const withinHit = (b: Book, i: number) => !needle
+    || matchTexts([withinTexts.get(b.id)?.[i] ?? ''], needle, searchOpts)
+
+  const passSearch = (b: Book) => !searchHits || searchHits.has(b.id)
 
   /**
    * العنوانُ المضموم يُصفَّى بما ينفرد به: تصنيفُه وحرفُه ونصُّ البحث فيه.
    * وأمّا الدولابُ والحالةُ والبلد فبيانات ضامِّه، لا يُسأل عنها مرَّتين.
    */
-  const passWithin = (t: WithinTitle, except?: 'cabinet' | 'category') =>
+  const passWithin = (b: Book, t: WithinTitle, i: number, except?: 'cabinet' | 'category') =>
     (except === 'category' || passCategoryOf(t.category ?? '', t.sub_category ?? ''))
     && (!filterLetter || titleInitial(t.title) === filterLetter)
-    && matchWithin(t, query.trim(), searchOpts)
+    && withinHit(b, i)
 
   /** ما يُعرض من عناوين الكتاب المضمومة على المرشِّحات القائمة */
-  const shownWithin = (b: Book) => withinTitlesOf(b).filter((t) => passWithin(t))
+  const shownWithin = (b: Book) => withinTitlesOf(b).filter((t, i) => passWithin(b, t, i))
 
   /**
    * كل المرشِّحات، ويجوز استثناء واحدٍ منها لحساب عدّاد وجهه.
@@ -133,7 +175,7 @@ export default function Browse() {
     if (!(except === 'cabinet' || passCabinet(b))) return false
     if (!(passStatus(b) && passPlace(b) && passRating(b) && passCentury(b))) return false
     const own = (except === 'category' || passCategory(b)) && passLetter(b) && passSearch(b)
-    return own || withinTitlesOf(b).some((t) => passWithin(t, except))
+    return own || withinTitlesOf(b).some((t, i) => passWithin(b, t, i, except))
   }
 
   const sorter = useMemo(() => {
@@ -160,7 +202,7 @@ export default function Browse() {
     () => books.filter((b) => passes(b)).sort(sorter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, filterCabinet, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
-      filterCentury, filterLetter, query, searchOpts, searchKeys, sorter],
+      filterCentury, filterLetter, searchHits, withinTexts, needle, sorter],
   )
 
   /**
@@ -173,6 +215,36 @@ export default function Browse() {
     () => (viewMode === 'shelf' ? filtered : filtered.filter((b) => !b.edition_of)),
     [filtered, viewMode],
   )
+
+  /**
+   * عددُ ما يُعرض من البطاقات: الكتبُ المعروضة وما ظهر من عناوينها المضمومة،
+   * والمجموعةُ لا تُعدّ — المعدودُ ما طُبع فيها. وكان «نتائج البحث» يَعُدّ
+   * السجلّاتِ قبل أن تسقط منها النشراتُ الأخرى، فيقول عددًا والشبكةُ أقلّ.
+   */
+  const shownCount = useMemo(
+    () => listed.reduce(
+      (n, b) => n + (isCollection(b) ? 0 : 1) + shownWithin(b).length, 0,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [listed, filterCategory, filterSub, filterLetter, needle, withinTexts],
+  )
+
+  // --------------------------------------------------------- الرسمُ على دفعات
+  // الشبكةُ والجدولُ يُرسمان دفعةً بعد دفعة: ستّون كتابًا، فإذا بلغ القارئُ
+  // آخرَها رُسمت التي تليها. وكان الفهرسُ كلُّه يُرسم مرّةً واحدة — ألفا
+  // بطاقةٍ بصورها — مع كل حرفٍ في البحث. والعددُ المرسوم محفوظٌ مع حال
+  // الصفحة، فمن رجع من كتابٍ وجد ما كان مرسومًا ورُدّ إلى موضعه منه.
+  const [limit, setLimit] = useViewState('browse.limit', PAGE)
+  const filterKey = [filterCabinet, filterCategory, filterSub, filterStatus, filterPlace,
+    filterRating, filterCentury, filterLetter, needle, sortBy, viewMode].join('|')
+  const lastKey = useRef(filterKey)
+  useEffect(() => {
+    if (lastKey.current === filterKey) return
+    lastKey.current = filterKey
+    setLimit(PAGE)
+  }, [filterKey, setLimit])
+  const page = useMemo(() => listed.slice(0, limit), [listed, limit])
+  const more = () => setLimit((n) => n + PAGE)
 
   /** فروعُ التصنيف المختار، ولا تُعرض إلا إذا اختير رئيسُها */
   const subCategories = useMemo(
@@ -217,11 +289,11 @@ export default function Browse() {
     () => [ALL, ...cabinets].map((name) => ({
       name,
       label: name === ALL ? 'كل الدواليب' : `دولاب ${name}`,
-      count: books.filter((b) => (name === ALL || b.cabinet_no === name) && passes(b, 'cabinet')).length,
+      count: books.filter((b) => (name === ALL || b.cabinet_no.trim() === name) && passes(b, 'cabinet')).length,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, cabinets, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
-      filterCentury, filterLetter, query, searchOpts, searchKeys],
+      filterCentury, filterLetter, searchHits, withinTexts, needle],
   )
 
   const categoryFacets = useMemo(
@@ -232,7 +304,7 @@ export default function Browse() {
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, mainCategories, filterCabinet, filterStatus, filterPlace, filterRating,
-      filterCentury, filterLetter, query, searchOpts, searchKeys],
+      filterCentury, filterLetter, searchHits, withinTexts, needle],
   )
 
   /**
@@ -272,10 +344,29 @@ export default function Browse() {
         display: 'grid', gridTemplateColumns: '240px 1fr', gap: 28, alignItems: 'start',
       }}
     >
+      {/* عمودُ التصفُّح: لاصقٌ بحدِّ الشاشة على الحاسوب ويُمرَّر في نفسه إن
+          طال — وكان بلا حدٍّ فلا يُبلَغ أسفلُه متى كثرت الدواليب. وعلى الشاشة
+          الضيّقة يُطوى تحت زرٍّ واحد، وكان ينزل كلُّه فوق الكتب فلا يرى
+          الزائرُ كتابًا قبل تمريرٍ طويل. */}
       <aside
-        className="browse-sidebar"
-        style={{ ...cardStyle, borderRadius: 14, padding: 18, position: 'sticky', top: 90 }}
+        className={`browse-sidebar thin-scroll${sideOpen ? ' browse-sidebar-open' : ''}`}
+        style={{ ...cardStyle, borderRadius: 14, padding: 18 }}
       >
+        <button
+          type="button"
+          className="browse-side-toggle"
+          onClick={() => setSideOpen((v) => !v)}
+          aria-expanded={sideOpen}
+        >
+          <CabinetIcon size={16} />
+          <span>الدواليب والتصنيفات</span>
+          {(filterCabinet !== ALL || filterCategory !== ALL || filterStatus !== ALL) && (
+            <span className="browse-side-active">{activeLabel ?? 'مُرشَّح'}</span>
+          )}
+          <span className="browse-side-chev"><ChevronIcon size={14} /></span>
+        </button>
+
+        <div className="browse-side-body">
         <div style={{ fontFamily: 'var(--heading-font)', fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
           تصفّح المكتبة
         </div>
@@ -316,8 +407,10 @@ export default function Browse() {
                     >
                       <span>{sub === ALL ? 'كل الفروع' : sub}</span>
                       <span style={countPillStyle(filterSub === sub)}>
+                        {/* بالمرشِّحات القائمة كعدّادات إخوته، لا بالفهرس كلِّه */}
                         {books.filter((b) => b.category === f.name
-                          && (sub === ALL || b.sub_category === sub)).length}
+                          && (sub === ALL || b.sub_category === sub)
+                          && passes(b, 'category')).length}
                       </span>
                     </button>
                   ))}
@@ -344,6 +437,7 @@ export default function Browse() {
             </select>
           </label>
         </div>
+        </div>
       </aside>
 
       {/* لولا min-width:0 لتمدّد الجدولُ والرفُّ القابلان للتمرير فكسرا الشبكة */}
@@ -358,7 +452,7 @@ export default function Browse() {
             </h1>
             {trimmed && (
               <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>
-                {`نتائج البحث عن «${trimmed}» — ${booksLabel(filtered.length)}`}
+                {`نتائج البحث عن «${trimmed}» — ${booksLabel(shownCount)}`}
               </p>
             )}
           </div>
@@ -591,11 +685,21 @@ export default function Browse() {
         {listed.length === 0 ? (
           <EmptyState title="لا توجد كتب مطابقة" hint="جرّب تعديل الفلاتر أو كلمة البحث" />
         ) : viewMode === 'grid' ? (
-          <GridView books={listed} within={shownWithin} />
+          <>
+            <GridView books={page} within={shownWithin} />
+            <MoreSentinel shown={page.length} total={listed.length} onMore={more} />
+          </>
         ) : viewMode === 'table' ? (
-          <TableView books={listed} within={shownWithin} />
+          <>
+            <TableView books={page} within={shownWithin} />
+            <MoreSentinel shown={page.length} total={listed.length} onMore={more} />
+          </>
         ) : (
-          <ShelfView books={listed} cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]} />
+          <ShelfView
+            books={listed}
+            cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]}
+            dots={settings.show_status_dots}
+          />
         )}
       </div>
 
@@ -780,11 +884,13 @@ function GridView(
         const first = (book.contributors ?? []).find((c) => c.name.trim())
 
         return [
-          <div
+          // رابطٌ لا لوحٌ يُنقر: يُفتح في لسانٍ جديد بالزرّ الأوسط، ويُبلَغ
+          // بلوحة المفاتيح، ويُنسخ عنوانُه
+          <a
             key={book.id}
-            className="book-card"
-            onClick={() => navigate({ name: 'book', id: book.id })}
-            style={{ ...cardStyle, cursor: 'pointer', borderRadius: 12, overflow: 'hidden' }}
+            className="book-card card-link"
+            {...linkTo({ name: 'book', id: book.id })}
+            style={{ ...cardStyle, borderRadius: 12, overflow: 'hidden' }}
           >
             <div style={{ width: '100%', aspectRatio: '3/4', position: 'relative', background: 'var(--cover-bg)' }}>
               <ImageSlot url={book.cover_url} folder="covers" canEdit={false} onUploaded={() => {}} placeholder="غلاف الكتاب" />
@@ -846,7 +952,7 @@ function GridView(
                 )}
               </div>
             </div>
-          </div>,
+          </a>,
 
           ...within(book).map((t, i) => (
             <WithinCard
@@ -868,9 +974,9 @@ function WithinCard(
 ) {
   const first = (title.contributors ?? []).find((c) => c.name.trim())
   return (
-    <div
-      className="within-card"
-      onClick={() => navigate({ name: 'book', id: book.id })}
+    <a
+      className="within-card card-link"
+      {...linkTo({ name: 'book', id: book.id })}
       title={`${withinLabelOf(book)} ${book.title}`}
     >
       <span className="within-card-head">
@@ -894,7 +1000,7 @@ function WithinCard(
         )}
       </div>
       <span className="within-card-foot" style={clipped}>{book.title}</span>
-    </div>
+    </a>
   )
 }
 
@@ -993,11 +1099,11 @@ function TableView(
           const author = authorById(book.author_id)
           const inside = within(book)
           return [
-            <div
+            <a
               key={book.id}
               className="lib-table-row"
               style={{ gridTemplateColumns: TABLE_COLUMNS }}
-              onClick={() => navigate({ name: 'book', id: book.id })}
+              {...linkTo({ name: 'book', id: book.id })}
             >
               <div className="lib-cell lib-cell-no">{formatNumber(i + 1)}</div>
               <div className="lib-cell lib-cell-title" style={clipped}>{book.title}</div>
@@ -1011,7 +1117,7 @@ function TableView(
                   ? `${book.cabinet_no}${book.shelf_no ? ` / ${book.shelf_no}` : ''}`
                   : '—'}
               </div>
-            </div>,
+            </a>,
 
             /* وما طُبع معه أو فيه تحته، بلا رقمٍ مسلسل ولا لونِ صفٍّ مثله:
                هي عناوينُ تُعدّ كتبًا ولا ورقَ لها على حِدَة، فلا يُكتب في
@@ -1028,11 +1134,11 @@ function TableView(
                 </div>
               </div>,
               ...inside.map((t, wi) => (
-                <div
+                <a
                   key={`${book.id}-w${wi}`}
                   className="lib-table-row lib-table-within"
                   style={{ gridTemplateColumns: TABLE_COLUMNS }}
-                  onClick={() => navigate({ name: 'book', id: book.id })}
+                  {...linkTo({ name: 'book', id: book.id })}
                 >
                   <div className="lib-cell lib-cell-no" />
                   <div className="lib-cell lib-cell-title" style={clipped}>{t.title}</div>
@@ -1048,7 +1154,7 @@ function TableView(
                     {(t.at ?? '').trim() ? toArabicDigits(t.at!.trim()) : ''}
                   </div>
                   <div className="lib-cell" />
-                </div>
+                </a>
               )),
             ]),
           ]
@@ -1059,14 +1165,16 @@ function TableView(
 }
 
 // ------------------------------------------------------------------ أرفف
-function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
+function ShelfView(
+  { books, cabinets, dots }: { books: Book[]; cabinets: string[]; dots: boolean },
+) {
   // ما لم يُكتب له دولاب يُعرض في رفٍّ أخيرٍ لا يُهمَل
   const placed = new Set(cabinets)
   const sections = [...cabinets, '']
     .map((cabinet) => ({
       cabinet,
       roomBooks: books.filter((b) =>
-        cabinet ? b.cabinet_no === cabinet : !placed.has(b.cabinet_no.trim())),
+        cabinet ? b.cabinet_no.trim() === cabinet : !placed.has(b.cabinet_no.trim())),
     }))
     .filter((s) => s.roomBooks.length > 0)
 
@@ -1079,7 +1187,7 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
       {sections.map(({ cabinet, roomBooks }) => {
         const spineCount = roomBooks.reduce((sum, b) => sum + volumesOf(b), 0)
         return (
-          <div key={cabinet || 'بلا دولاب'} style={{ marginBottom: 34 }}>
+          <div key={cabinet || 'بلا دولاب'} className="shelf-room" style={{ marginBottom: 34 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
               <div style={{ fontFamily: 'var(--heading-font)', fontSize: 19, fontWeight: 700 }}>
                 {cabinet ? `دولاب ${cabinet}` : 'كتبٌ بلا موضع'}
@@ -1089,8 +1197,7 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
               </div>
             </div>
 
-            <div style={{
-              background: 'linear-gradient(180deg, oklch(0.93 0.02 65) 0%, oklch(0.9 0.02 65) 82%, oklch(0.42 0.09 45) 82%, oklch(0.32 0.08 40) 100%)',
+            <div className="shelf-board thin-scroll" style={{
               borderRadius: 10, padding: '24px 20px 0', display: 'flex', alignItems: 'flex-end',
               gap: 3, overflowX: 'auto', boxShadow: 'inset 0 0 0 1px var(--border)',
             }}>
@@ -1108,13 +1215,13 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
                   const volume = i + 1
                   const url = spineUrl ?? book.spine_images?.[String(volume)]
                   return (
-                    <div
+                    <a
                       key={`${book.id}-${volume}`}
                       className="spine"
-                      onClick={() => navigate({ name: 'book', id: book.id })}
+                      {...linkTo({ name: 'book', id: book.id })}
                       title={count > 1 ? `${book.title} — المجلد ${volume}` : book.title}
                       style={{
-                        cursor: 'pointer', flex: 'none', position: 'relative',
+                        flex: 'none', position: 'relative',
                         width, height, borderRadius: '2px 2px 0 0', overflow: 'hidden',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         background: useImage
@@ -1164,7 +1271,7 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
                         </span>
                       )}
 
-                      {book.status && (
+                      {dots && book.status && (
                         <span style={{
                           position: 'absolute', bottom: 5, right: '50%', transform: 'translateX(50%)',
                           width: 6, height: 6, borderRadius: '50%',
@@ -1172,7 +1279,7 @@ function ShelfView({ books, cabinets }: { books: Book[]; cabinets: string[] }) {
                           boxShadow: '0 0 0 1.5px oklch(0.98 0.01 75 / 0.55)',
                         }} />
                       )}
-                    </div>
+                    </a>
                   )
                 })
               })}

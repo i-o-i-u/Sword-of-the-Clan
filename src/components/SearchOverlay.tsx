@@ -18,10 +18,12 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
-import { QUICK_OPTS, ALL_SEARCH_KEYS, matchBook, matchPerk, matchWithin } from '../lib/search'
+import {
+  ALL_SEARCH_KEYS, QUICK_OPTS, bookRank, matchBook, matchPerk, matchWithin,
+} from '../lib/search'
+import { presetViewState } from '../lib/viewState'
 import { withinTitlesOf } from '../lib/editions'
 import { sourceAuthor, sourceTitle } from '../lib/perks'
-import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import { BOOKS_COUNT, PERKS_COUNT, countLabel, formatNumber } from '../lib/types'
 import ImageSlot from './ImageSlot'
 import {
@@ -40,8 +42,6 @@ export default function SearchOverlay(
   const [query, setQuery] = useState(initialQuery)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useScrollLock()
-  useEscapeKey(onClose)
   useEffect(() => { inputRef.current?.focus() }, [])
 
   const trimmed = query.trim()
@@ -50,13 +50,28 @@ export default function SearchOverlay(
   // والعنوانُ المضموم يُصاب كما يُصاب صاحبُ السجلّ: هو كتابٌ في المكتبة،
   // فمن بحث عن «الأربعون النووية» وهي في «مهمّات العلم» وجب أن يجدها —
   // وبابُه إليها صفحةُ ضامِّها، إذ لا صفحةَ لها.
+  //
+  // وترتيبُها برتبة الإصابة (`bookRank`): ما طابق عنوانُه أوّلًا. وكانت على
+  // ترتيب الإدخال، فقد يكون الكتابُ المطلوب بعينه خارج الأربعةَ عشرَ المعروضة.
   const bookHits = useMemo(
     () => (trimmed
-      ? books.filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)
-        || withinTitlesOf(b).some((t) => matchWithin(t, trimmed, QUICK_OPTS)))
+      ? books
+        .filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)
+          || withinTitlesOf(b).some((t) => matchWithin(t, trimmed, QUICK_OPTS)))
+        .map((b) => ({ b, r: bookRank(b, trimmed) }))
+        .sort((x, y) => x.r - y.r || x.b.title.localeCompare(y.b.title, 'ar'))
+        .map((x) => x.b)
       : []),
     [books, trimmed],
   )
+
+  /** ما زاد على المعروض يُطلب في الفهرس نفسه، ببحثه مكتوبًا في حقله */
+  function showAllInBrowse() {
+    presetViewState('browse.query', trimmed)
+    presetViewState('browse.limit', 60)
+    onClose()
+    navigate({ name: 'browse' })
+  }
 
   const perkHits = useMemo(() => {
     if (!trimmed || !canSeePerks) return []
@@ -151,6 +166,12 @@ export default function SearchOverlay(
                       </span>
                     </button>
                   ))}
+                  {bookHits.length > MAX_BOOKS && (
+                    <button type="button" className="search-all" onClick={showAllInBrowse}>
+                      اعرض الكتبَ كلَّها في الفهرس
+                      <span>{formatNumber(bookHits.length)}</span>
+                    </button>
+                  )}
                 </>
               )}
 

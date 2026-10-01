@@ -4,44 +4,44 @@
 // وهو نافذةٌ لا صفحة: الفائدةُ تُكتب وأنت في موضعك من «الفوائد» أو من صفحة
 // الكتاب، فلا يُخرجك عن مكانك ثم يُعيدك إليه.
 //
-// وأقسامُه ثلاثة لا أكثر: **الفائدة** — أنواعُها وعنوانُها ونصُّها والتعليقُ
-// عليها —، ثم **تصنيفُها**، ثم **مصدرُها**. وما سوى ذلك ليس من النموذج:
-//   • **النفاسة** تُعلَّم من صفحة الفائدة بعد قيدها — الحكمُ عليها إنما يكون
-//     بعد النظر في المقيَّد، فلا يُسأل عنه ساعةَ الكتابة.
-//   • **الكرّاسة** تُضاف من صفحة الكرّاسة نفسها — الكرّاسةُ تقوم بعد أن
-//     يجتمع لها شيء، فتُجمع إليها الفوائدُ مما قُيِّد لا مما يُقيَّد.
+// وأُعيد بناؤه **لوحَين متجاورَين** على الشاشة الواسعة: الكتابةُ في الأيمن —
+// العنوانُ والنصُّ والتعليق، وهي ما يُكتب طويلًا — ووصفُ الفائدة في الأيسر:
+// نوعُها وتصنيفُها ومصدرُها وأعلامُها ووسومُها، وهي ما يُختار اختيارًا. وكان
+// ذلك كلُّه عمودًا واحدًا يُمرَّر فيه بين النصّ ومصدره ذهابًا وإيابًا.
 //
-// وقسمُ المصدر شطران: الفائدةُ إمّا من كتابٍ في الفهرس فيكفي اختيارُه —
-// بياناتُه كلُّها مسجَّلة —، وإمّا من غيره فيُكتب عزوُه نصًّا.
+// وفيه ما يحفظ عمل الكاتب، ولم يكن:
+//   • **لا يُغلق على إخفاق**: إن لم يُحفظ بقي النموذجُ بما فيه، وكان يُغلق
+//     على كل حال فتضيع الفائدةُ بنصّها وهوامشها.
+//   • **لا يُغلق بلا سؤال** إن كان فيه ما لم يُحفظ — بالظلّ، أو بـEsc، أو
+//     بزرّ الإغلاق.
+//   • **مسوّدةٌ تُحفظ في المتصفّح** للفائدة الجديدة وهي تُكتب: فإن انقطع
+//     التيّار أو أُغلق اللسانُ خطأً عُرض استردادُها عند الفتح التالي.
+//   • **«احفظ وقيِّد أخرى»**: من يقيّد من كتابٍ واحدٍ فوائدَ متتابعة يبقى له
+//     المصدرُ والتصنيف، ويُفرَّغ النصُّ وحده. و**Ctrl+Enter** يحفظ.
 //
-// **والشطرُ الثاني أجناس** (`PERK_SOURCE_KINDS`): الكنّاشُ لا يُملأ من الكتب
-// وحدها. منه ما يُسمع من شيخٍ في مجلسه، ومنه ما يُقرأ في صفحةٍ على الشبكة،
-// ومنه ما يُنقل عن منشورِ صاحبٍ في مواقع التواصل، ومنه ما يُلتقط من درسٍ
-// مسجَّل. وكان الشطرُ كتابًا لا غير، فمن سمع فائدةً من شيخه لم يجد لها في
-// النموذج موضعًا إلّا أن يدّعيَها كتابًا.
+// وما ليس من النموذج باقٍ خارجه كما كان:
+//   • **النفاسة** تُعلَّم من صفحة الفائدة بعد قيدها.
+//   • **الكرّاسة** تُضاف من صفحة الكرّاسة نفسها.
 //
-// **ولكلّ جنسٍ ألفاظُ حقوله**: صاحبُ الكتاب «مؤلِّفه»، وصاحبُ السماع «من
-// سُمع منه»، وصاحبُ المنشور «صاحبُ الحساب» — فلا يُسأل الفاهرسُ عن
-// «المؤلِّف» وهو إنما سمع كلامًا في مجلس. وما لا يُسأل عنه لا يُعرض حقلُه:
-// الوفاةُ والطبعةُ والمجلَّدُ للكتاب وحدَه، والرابطُ لِما كان على الشبكة.
+// وقسمُ المصدر شطران: الفائدةُ إمّا من كتابٍ في الفهرس فيكفي اختيارُه، وإمّا
+// من غيره فيُكتب عزوُه نصًّا — **وهذا أجناس** (`PERK_SOURCE_KINDS`): كتابٌ
+// ليس في الفهرس، وسماعٌ، وصفحةُ شبكة، ومنشورٌ، وتسجيل. **ولكلّ جنسٍ ألفاظُ
+// حقوله**، وما لا يُسأل عنه لا يُعرض حقلُه.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { perkTags } from '../lib/perks'
 import { Icon } from '../lib/icons'
 import {
-  htmlToText, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
+  htmlIsEmpty, htmlToText, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
   PERK_SOURCE_KINDS, SOURCE_BOOK, perkCategoriesOf, perkKindsOf, sourceKindOf,
   type Perk,
 } from '../lib/types'
-import {
-  ClearIcon, CloseButton, Combobox, Overlay, chipStyle, ghostButtonStyle,
-  inputStyle, primaryButtonStyle,
-} from './ui'
+import { ClearIcon, CloseButton, Combobox, Overlay, inputStyle } from './ui'
 
 interface Props {
   /** الفائدةُ المُعدَّلة، أو فراغٌ إن كانت جديدة */
@@ -77,6 +77,25 @@ interface Draft {
   tags: string[]
 }
 
+/** موضعُ مسوّدة الفائدة الجديدة في المتصفّح */
+const DRAFT_KEY = 'kn-draft'
+
+function readDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const d = JSON.parse(raw) as Draft
+    return d && typeof d.html === 'string' && !htmlIsEmpty(d.html) ? d : null
+  } catch { return null }
+}
+
+function writeDraft(d: Draft | null) {
+  try {
+    if (d) localStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+    else localStorage.removeItem(DRAFT_KEY)
+  } catch { /* تخزينٌ محجوب: لا يضرّ */ }
+}
+
 export default function PerkEditor({ perk, bookId, onClose }: Props) {
   const {
     books, bookById, perks, perkKinds, perkCategories, perkFigures, settings,
@@ -97,7 +116,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     ? bookById(perk.book_id)
     : (bookId ? bookById(bookId) : undefined)
 
-  const [d, setD] = useState<Draft>(() => ({
+  const initial = useMemo<Draft>(() => ({
     kinds: perk?.kinds ?? [],
     title: perk?.title ?? '',
     // ما قُيِّد قبل المُحرِّر المنسَّق يُرفع إليه فقراتٍ، فلا يُطالَب صاحبُه
@@ -122,8 +141,21 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     subCategories: perk?.sub_categories ?? [],
     people: perk?.people ?? [],
     tags: perk?.tags ?? [],
-  }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [])
+
+  const [d, setD] = useState<Draft>(initial)
+  /** ما يُقارَن به لمعرفة ما لم يُحفظ: الأصلُ، أو ما بقي بعد «احفظ وقيِّد أخرى» */
+  const [baseline, setBaseline] = useState<Draft>(initial)
   const [saving, setSaving] = useState(false)
+  /** مِسماكُ اللوح المنسَّق: يُبدَّل فيُعاد تركيبُه بنصٍّ جديد */
+  const [editorKey, setEditorKey] = useState(0)
+  /** مسوّدةٌ وُجدت من جلسةٍ سابقة، تُعرض لتُستردّ أو تُطرح */
+  const [stash, setStash] = useState<Draft | null>(() => (perk ? null : readDraft()))
+  /** عددُ ما قُيِّد في هذه النافذة بـ«احفظ وقيِّد أخرى» */
+  const [savedCount, setSavedCount] = useState(0)
+
+  const dirty = JSON.stringify(d) !== JSON.stringify(baseline)
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setD((prev) => ({ ...prev, [key]: value }))
@@ -136,6 +168,14 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
         ? prev[key].filter((x) => x !== name)
         : [...prev[key], name],
     }))
+
+  // المسوّدةُ تُحفظ وهي تُكتب — للفائدة الجديدة وحدها: المُعدَّلةُ أصلُها
+  // محفوظٌ في القاعدة
+  useEffect(() => {
+    if (perk || stash || !dirty) return
+    const t = setTimeout(() => writeDraft(d), 500)
+    return () => clearTimeout(t)
+  }, [d, dirty, perk, stash])
 
   // ------------------------------------------------------- ما يُختار منه
   const bookTitles = useMemo(() => books.map((b) => b.title), [books])
@@ -155,18 +195,22 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   )
 
   const text = useMemo(() => htmlToText(d.html), [d.html])
-
-  // النصُّ وحده هو اللازم: عنوانُ الفائدة قد لا يخطر لصاحبها ساعةَ يقيّدها،
-  // وليس للنموذج أن يحبس فائدةً عن الكنّاش من أجل عنوان
   /** جنسُ المصدر المختار، وبه تُعرف حقولُه وألفاظُها */
   const sk = useMemo(() => sourceKindOf(d.sourceKind), [d.sourceKind])
 
-  // والعنوانُ لا يلزم في كل جنس: ما سُمع في مجلسٍ قد لا عنوانَ له، وإنما
-  // يُعرف بمن سُمع منه — فيكفي أحدُهما، ولا تُحبَس الفائدةُ عن الكنّاش
-  const ready = !!text.trim()
-    && (d.fromLibrary ? !!chosen : !!(d.sourceTitle.trim() || d.sourceAuthor.trim()))
+  // النصُّ وحده هو اللازم مع مصدره: عنوانُ الفائدة قد لا يخطر لصاحبها ساعةَ
+  // يقيّدها. والعنوانُ لا يلزم في كل جنسٍ من المصادر: ما سُمع في مجلسٍ قد لا
+  // عنوانَ له وإنما يُعرف بمن سُمع منه — فيكفي أحدُهما
+  const hasSource = d.fromLibrary
+    ? !!chosen
+    : !!(d.sourceTitle.trim() || d.sourceAuthor.trim())
+  const ready = !!text.trim() && hasSource
+  const missing = !text.trim() ? 'اكتب نصَّ الفائدة' : !hasSource
+    ? (d.fromLibrary ? 'اختر كتابها من الفهرس' : `اكتب ${sk.titleLabel} أو ${sk.whoLabel}`)
+    : ''
 
-  async function save() {
+  /** يحفظ. و`again`: يبقى النموذجُ مفتوحًا لفائدةٍ تالية من المصدر نفسه. */
+  async function save(again = false) {
     if (!ready || saving) return
     setSaving(true)
     const html = sanitizeHtml(d.html)
@@ -177,8 +221,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       text: text.trim(),
       text_html: html,
       // ما مُحي مِسماكُه من النصّ يسقط هامشُه، ولا يبقى في المستند نصٌّ لا
-      // موضعَ له. وأمّا الهامشُ الذي لم يُكتب نصُّه بعدُ فيبقى: مِسماكُه في
-      // النصّ قائم، فلو أُسقط لبقي رقمٌ في المتن لا هامشَ له تحته.
+      // موضعَ له. وأمّا الهامشُ الذي لم يُكتب نصُّه بعدُ فيبقى.
       footnotes: orderedFootnotes(html, d.footnotes),
       comment: d.comment.trim(),
       page: d.page.trim(),
@@ -207,16 +250,31 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
         },
     }
 
-    await run(async () => {
+    const ok = await run(async () => {
       // العَلَمُ الذي كُتب ولم يكن في السجلّ يُسجَّل، فيُختار من القائمة بعدُ
       for (const name of d.people) {
         if (!figureNames.includes(name)) await api.findOrCreatePerkFigure(name)
       }
       await (perk ? api.updatePerk(perk.id, input) : api.insertPerk(input))
     })
-    await reload()
     setSaving(false)
-    onClose()
+    // **والنافذةُ لا تُغلق على إخفاق**: ما كُتب فيها باقٍ ليُعاد حفظُه
+    if (!ok) return
+
+    writeDraft(null)
+    await reload()
+    if (again) {
+      // يبقى المصدرُ والتصنيفُ والنوع، ويُفرَّغ ما يخصّ الفائدةَ وحدها
+      const next: Draft = {
+        ...d, title: '', html: '', footnotes: [], comment: '', page: '', people: [], tags: [],
+      }
+      setD(next)
+      setBaseline(next)
+      setEditorKey((k) => k + 1)
+      setSavedCount((n) => n + 1)
+    } else {
+      onClose()
+    }
   }
 
   async function remove() {
@@ -225,342 +283,367 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     if (!window.confirm(
       `حذفُ ${perk.title ? `«${perk.title}»` : 'هذه الفائدة'}؟ لا رجعة في هذا.`,
     )) return
-    await run(() => api.deletePerk(perk.id))
-    await reload()
+    if (await run(() => api.deletePerk(perk.id))) {
+      await reload()
+      onClose()
+    }
+  }
+
+  /** طلبُ الإغلاق: يُستأذن فيه إن كان في النموذج ما لم يُحفظ */
+  function requestClose() {
+    if (dirty && !window.confirm('في النموذج ما لم يُحفظ بعد. أتُغلقه وتُهمله؟')) return
+    // من أهمل ما كتب عن قصدٍ لا تُعرض عليه مسوّدتُه بعدُ
+    if (!perk && dirty) writeDraft(null)
     onClose()
+  }
+
+  function restore() {
+    if (!stash) return
+    setD(stash)
+    setStash(null)
+    setEditorKey((k) => k + 1)
+  }
+
+  function discardStash() {
+    writeDraft(null)
+    setStash(null)
   }
 
   if (!canEdit) return null
 
   return (
-    <Overlay onClose={onClose} align="flex-start">
-      <div className="perk-editor overlay-sheet">
-        <header className="perk-editor-head">
-          <h2>{perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
-          <CloseButton onClose={onClose} />
+    <Overlay onClose={requestClose} align="flex-start" label={perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}>
+      <div
+        className="kn-editor overlay-sheet"
+        onKeyDown={(e) => {
+          // Ctrl+Enter يحفظ من أيّ حقل، كما في أكثر محرِّرات الكتابة
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault()
+            void save()
+          }
+        }}
+      >
+        <header className="kn-editor-head">
+          <span className="kn-editor-mark" aria-hidden="true">
+            <Icon name={perk ? 'draft' : 'quill'} size={20} plain />
+          </span>
+          <div>
+            <h2>{perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
+            {savedCount > 0 && (
+              <p className="kn-editor-sub">
+                قُيِّد في هذه الجلسة: {savedCount === 1 ? 'فائدةٌ واحدة' : savedCount === 2 ? 'فائدتان' : `${savedCount} فوائد`}
+              </p>
+            )}
+          </div>
+          <CloseButton onClose={requestClose} />
         </header>
 
-        <div className="perk-editor-body thin-scroll">
-          {/* ---------------------------------------------- ١. الفائدة */}
-          <span className="perk-part">الفائدة</span>
+        {stash && (
+          <div className="kn-editor-stash" role="status">
+            <span>وُجدت مسوّدةٌ لفائدةٍ لم تُحفظ من قبل.</span>
+            <button type="button" className="kn-btn kn-btn-primary kn-btn-sm" onClick={restore}>
+              استرجِعْها
+            </button>
+            <button type="button" className="kn-link-btn" onClick={discardStash}>اطرحها</button>
+          </div>
+        )}
 
-          <div className="perk-field perk-field-wide">
-            <span className="perk-field-label">نوعُها</span>
-            <div className="perk-kinds">
-              {kinds.map((k) => (
-                <button
-                  key={k.name}
-                  type="button"
-                  onClick={() => toggle('kinds', k.name)}
-                  style={chipStyle(d.kinds.includes(k.name))}
-                  title={k.hint || undefined}
-                >
-                  {/* المضغوطةُ أرضُها لونُ المكتبة، فتلبس الأيقونةُ لونَه */}
-                  <Icon name={k.icon} size={14} plain={d.kinds.includes(k.name)} />
-                  {k.name}
-                </button>
-              ))}
+        <div className="kn-editor-body thin-scroll">
+          {/* ------------------------------------------- لوحُ الكتابة */}
+          <div className="kn-editor-write">
+            <label className="kn-field">
+              <span className="kn-field-label">عنوانُها <em>اختياريّ</em></span>
+              <input
+                value={d.title}
+                onChange={(e) => set('title', e.target.value)}
+                placeholder="عنوانٌ يدلّ عليها — «أوّل من رُويت له ثلاثون بيتًا»"
+                style={inputStyle}
+                className="kn-title-input"
+              />
+            </label>
+
+            <div className="kn-field">
+              <span className="kn-field-label">نصُّها</span>
+              <RichEditor
+                key={editorKey}
+                html={d.html}
+                onChange={(v) => set('html', v)}
+                footnotes={d.footnotes}
+                onFootnotes={(v) => set('footnotes', v)}
+                placeholder="النصُّ كما هو في الكتاب"
+              />
             </div>
-            <p className="perk-hint">
-              {/* والفائدةُ الواحدة تكون تحريرًا وتعقُّبًا معًا، فلا تُحبَس في نوع */}
-              للفائدة أكثرُ من نوع، فاختر ما اجتمع فيها.
-              {d.kinds.length === 1 && kinds.find((k) => k.name === d.kinds[0])?.hint
-                ? ` و«${d.kinds[0]}»: ${kinds.find((k) => k.name === d.kinds[0])!.hint}.`
-                : ''}
-            </p>
-          </div>
 
-          <label className="perk-field perk-field-wide">
-            <span className="perk-field-label">عنوانُها</span>
-            <input
-              value={d.title}
-              onChange={(e) => set('title', e.target.value)}
-              placeholder="عنوانٌ يدلّ عليها — «أوّل من رُويت له ثلاثون بيتًا»"
-              style={inputStyle}
-            />
-          </label>
-
-          <div className="perk-field perk-field-wide">
-            <span className="perk-field-label">نصُّها</span>
-            <RichEditor
-              html={d.html}
-              onChange={(v) => set('html', v)}
-              footnotes={d.footnotes}
-              onFootnotes={(v) => set('footnotes', v)}
-              placeholder="النصُّ كما هو في الكتاب"
-            />
-          </div>
-
-          {/* تعليقُ المُقيِّد تنسيقُه ثابتٌ مغايرٌ لتنسيق النصّ: كلامُه لا
-              يُخلَط بكلام صاحب الكتاب، وهذا أوّلُ ما يُتحرَّى في النقل. ولذلك
-              هو حقلٌ مجرَّد لا لوحُ تحرير — لا يُنسَّق فيه شيء. */}
-          <div className="perk-field perk-field-wide">
-            <label className="perk-field-label" htmlFor="perk-comment">تعليقي عليها</label>
-            <textarea
-              id="perk-comment"
-              value={d.comment}
-              onChange={(e) => set('comment', e.target.value)}
-              onFocus={() => { if (!d.comment) set('comment', 'قلتُ: ') }}
-              placeholder="قلتُ: …"
-              className="perk-area perk-area-small perk-comment-input"
-              style={inputStyle}
-            />
-            <p className="perk-hint">
-              يُعرض مفصولًا عن النصّ بشارةٍ وشريط، وتنسيقُه ثابتٌ لا يتبع تنسيقَه.
-            </p>
-          </div>
-
-          {/* ---------------------------------------------- ٢. تصنيفُها */}
-          <span className="perk-part">تصنيفُها</span>
-
-          <div className="perk-field perk-field-wide">
-            <span className="perk-field-label">في أيّ العلوم هي</span>
-            <div className="perk-kinds">
-              {mains.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => toggle('categories', c.name)}
-                  style={chipStyle(d.categories.includes(c.name))}
-                >
-                  <Icon name={c.icon} size={14} plain={d.categories.includes(c.name)} />
-                  {c.name}
-                </button>
-              ))}
+            {/* تعليقُ المُقيِّد تنسيقُه ثابتٌ مغايرٌ لتنسيق النصّ: كلامُه لا
+                يُخلَط بكلام صاحب الكتاب. ولذلك هو حقلٌ مجرَّد لا لوحُ تحرير. */}
+            <div className="kn-field">
+              <label className="kn-field-label" htmlFor="kn-comment">تعليقي عليها</label>
+              <textarea
+                id="kn-comment"
+                value={d.comment}
+                onChange={(e) => set('comment', e.target.value)}
+                onFocus={() => { if (!d.comment) set('comment', 'قلتُ: ') }}
+                onBlur={() => { if (d.comment.trim() === 'قلتُ:') set('comment', '') }}
+                placeholder="قلتُ: …"
+                className="kn-comment-input"
+                style={inputStyle}
+              />
+              <p className="kn-field-hint">
+                يُعرض مفصولًا عن النصّ بشارةٍ وشريط، وتنسيقُه ثابتٌ لا يتبع تنسيقَه.
+              </p>
             </div>
-            <p className="perk-hint">
-              تصنيفاتُ الفوائد قائمةٌ بنفسها لا صلةَ لها بتصنيفات الكتب، وتُحرَّر
-              من إعدادات القسم.
-            </p>
           </div>
 
-          {subs.length > 0 && (
-            <div className="perk-field perk-field-wide">
-              <span className="perk-field-label">وفروعُه</span>
-              <div className="perk-kinds">
-                {subs.map((c) => (
+          {/* ------------------------------------------- لوحُ الوصف */}
+          <div className="kn-editor-describe">
+            <Part title="مصدرُها" icon="citation">
+              <div className="kn-seg kn-seg-wide" role="group" aria-label="مصدرُها">
+                <button
+                  type="button"
+                  className={d.fromLibrary ? 'on' : ''}
+                  onClick={() => set('fromLibrary', true)}
+                >
+                  <Icon name="shelf" size={14} plain={d.fromLibrary} />
+                  من كتب المكتبة
+                </button>
+                <button
+                  type="button"
+                  className={!d.fromLibrary ? 'on' : ''}
+                  onClick={() => set('fromLibrary', false)}
+                >
+                  <Icon name="link-ref" size={14} plain={!d.fromLibrary} />
+                  من غيرها
+                </button>
+              </div>
+
+              {d.fromLibrary ? (
+                <label className="kn-field">
+                  <span className="kn-field-label">الكتاب</span>
+                  <Combobox
+                    value={d.bookName}
+                    onChange={(v) => set('bookName', v)}
+                    options={bookTitles}
+                    placeholder="اكتب أوّل العنوان…"
+                    emptyHint={
+                      d.bookName.trim() && !chosen
+                        ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من غيرها».'
+                        : undefined
+                    }
+                  />
+                  {chosen && (
+                    <span className="kn-field-ok">
+                      <Icon name="verify" size={12} />
+                      {chosen.author_name || 'في الفهرس'}
+                    </span>
+                  )}
+                </label>
+              ) : (
+                <>
+                  {/* جنسُ المصدر: به تُعرف حقولُه وألفاظُها */}
+                  <div className="kn-pills" role="group" aria-label="جنسُ المصدر">
+                    {PERK_SOURCE_KINDS.map((k) => (
+                      <button
+                        key={k.name}
+                        type="button"
+                        onClick={() => set('sourceKind', k.name)}
+                        className={d.sourceKind === k.name ? 'kn-pill on' : 'kn-pill'}
+                        title={k.hint}
+                        aria-pressed={d.sourceKind === k.name}
+                      >
+                        <Icon name={k.icon} size={13} plain={d.sourceKind === k.name} />
+                        {k.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="kn-field-hint">{sk.hint}.</p>
+
+                  <div className="kn-field-pair">
+                    <Field label={sk.titleLabel} value={d.sourceTitle} onChange={(v) => set('sourceTitle', v)} />
+                    <Field
+                      label={sk.whoLabel}
+                      value={d.sourceAuthor}
+                      onChange={(v) => set('sourceAuthor', v)}
+                      placeholder={sk.isBook ? 'أبو العبَّاس ثعلب' : ''}
+                    />
+                  </div>
+
+                  {/* والوفاةُ والطبعةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
+                  {sk.isBook && (
+                    <div className="kn-field-pair">
+                      <Field
+                        label="وفاتُه"
+                        value={d.sourceDeath}
+                        onChange={(v) => set('sourceDeath', v)}
+                        placeholder="ت ٢٩١ هـ — إن عُرفت"
+                      />
+                      <Field
+                        label="طبعتُه"
+                        value={d.sourceEdition}
+                        onChange={(v) => set('sourceEdition', v)}
+                        placeholder="تحقيقُه ودارُه وسنتُه"
+                      />
+                    </div>
+                  )}
+
+                  {(sk.whereLabel || sk.dateLabel) && (
+                    <div className="kn-field-pair">
+                      {sk.whereLabel && (
+                        <Field label={sk.whereLabel} value={d.sourceVenue} onChange={(v) => set('sourceVenue', v)} />
+                      )}
+                      {sk.dateLabel && (
+                        <Field
+                          label={sk.dateLabel}
+                          value={d.sourceDate}
+                          onChange={(v) => set('sourceDate', v)}
+                          placeholder="١٥ رجب ١٤٤٧ هـ"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {sk.hasUrl && (
+                    <Field
+                      label="رابطُه"
+                      value={d.sourceUrl}
+                      onChange={(v) => set('sourceUrl', v)}
+                      placeholder="https://…"
+                      ltr
+                    />
+                  )}
+                </>
+              )}
+
+              {/* والموضعُ يتبع جنسَ المصدر: الكتابُ مجلَّدٌ وصفحة، والتسجيلُ
+                  دقيقةٌ تُكتب كما هي، وما سواهما لا موضعَ له يُسأل عنه */}
+              {(d.fromLibrary || sk.isBook || sk.spotLabel) && (
+                <div className="kn-field-pair">
+                  {(d.fromLibrary || sk.isBook) && (
+                    <Field
+                      label="المجلَّد"
+                      value={d.volume}
+                      onChange={(v) => set('volume', v)}
+                      placeholder="٤"
+                      numeric
+                    />
+                  )}
+                  <Field
+                    label={(d.fromLibrary || sk.isBook) ? 'الصفحة' : sk.spotLabel}
+                    value={d.page}
+                    onChange={(v) => set('page', v)}
+                    placeholder={(d.fromLibrary || sk.isBook) ? '٨٥' : 'د ١٢:٤٠'}
+                  />
+                </div>
+              )}
+            </Part>
+
+            <Part title="نوعُها" icon="tag-mark" hint="للفائدة أكثرُ من نوع، فاختر ما اجتمع فيها.">
+              <div className="kn-pills">
+                {kinds.map((k) => (
+                  <button
+                    key={k.name}
+                    type="button"
+                    onClick={() => toggle('kinds', k.name)}
+                    className={d.kinds.includes(k.name) ? 'kn-pill on' : 'kn-pill'}
+                    title={k.hint || undefined}
+                    aria-pressed={d.kinds.includes(k.name)}
+                  >
+                    {/* المضغوطةُ أرضُها لونُ المكتبة، فتلبس الأيقونةُ لونَه */}
+                    <Icon name={k.icon} size={13} plain={d.kinds.includes(k.name)} />
+                    {k.name}
+                  </button>
+                ))}
+              </div>
+            </Part>
+
+            <Part
+              title="تصنيفُها"
+              icon="index-list"
+              hint="تصنيفاتُ الفوائد قائمةٌ بنفسها لا صلةَ لها بتصنيفات الكتب، وتُحرَّر من إعدادات القسم."
+            >
+              <div className="kn-pills">
+                {mains.map((c) => (
                   <button
                     key={c.name}
                     type="button"
-                    onClick={() => toggle('subCategories', c.name)}
-                    style={chipStyle(d.subCategories.includes(c.name))}
-                    title={`من ${c.parent}`}
+                    onClick={() => toggle('categories', c.name)}
+                    className={d.categories.includes(c.name) ? 'kn-pill on' : 'kn-pill'}
+                    aria-pressed={d.categories.includes(c.name)}
                   >
-                    <Icon name={c.icon} size={14} plain={d.subCategories.includes(c.name)} />
+                    <Icon name={c.icon} size={13} plain={d.categories.includes(c.name)} />
                     {c.name}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* ---------------------------------------------- ٣. مصدرُها */}
-          <span className="perk-part">مصدرُها</span>
-
-          <div className="perk-field perk-field-wide">
-            <div className="perk-kinds">
-              <button
-                type="button"
-                onClick={() => set('fromLibrary', true)}
-                style={chipStyle(d.fromLibrary)}
-              >
-                <Icon name="shelf" size={14} plain={d.fromLibrary} />
-                من كتب المكتبة
-              </button>
-              <button
-                type="button"
-                onClick={() => set('fromLibrary', false)}
-                style={chipStyle(!d.fromLibrary)}
-              >
-                <Icon name="link-ref" size={14} plain={!d.fromLibrary} />
-                من غيرها
-              </button>
-            </div>
-          </div>
-
-          {d.fromLibrary ? (
-            <label className="perk-field perk-field-wide">
-              <span className="perk-field-label">الكتاب</span>
-              <Combobox
-                value={d.bookName}
-                onChange={(v) => set('bookName', v)}
-                options={bookTitles}
-                placeholder="اكتب أوّل العنوان…"
-                emptyHint={
-                  d.bookName.trim() && !chosen
-                    ? 'لا كتابَ بهذا العنوان في الفهرس. فإن كان من خارجها فاختر «من غيرها».'
-                    : undefined
-                }
-              />
-            </label>
-          ) : (
-            <>
-              {/* جنسُ المصدر: به تُعرف حقولُه وألفاظُها، فلا يُسأل الفاهرسُ عن
-                  «المؤلِّف» وهو إنما سمع كلامًا في مجلس */}
-              <div className="perk-field perk-field-wide">
-                <span className="perk-field-label">جنسُه</span>
-                <div className="perk-kinds">
-                  {PERK_SOURCE_KINDS.map((k) => (
+              {subs.length > 0 && (
+                <div className="kn-pills kn-pills-sub">
+                  {subs.map((c) => (
                     <button
-                      key={k.name}
+                      key={c.name}
                       type="button"
-                      onClick={() => set('sourceKind', k.name)}
-                      style={chipStyle(d.sourceKind === k.name)}
-                      title={k.hint}
+                      onClick={() => toggle('subCategories', c.name)}
+                      className={d.subCategories.includes(c.name) ? 'kn-pill on' : 'kn-pill'}
+                      title={`من ${c.parent}`}
+                      aria-pressed={d.subCategories.includes(c.name)}
                     >
-                      <Icon name={k.icon} size={14} plain={d.sourceKind === k.name} />
-                      {k.name}
+                      <Icon name={c.icon} size={12} plain={d.subCategories.includes(c.name)} />
+                      {c.name}
                     </button>
                   ))}
                 </div>
-                <p className="perk-hint">{sk.hint}.</p>
-              </div>
-
-              <label className="perk-field">
-                <span className="perk-field-label">{sk.titleLabel}</span>
-                <input
-                  value={d.sourceTitle}
-                  onChange={(e) => set('sourceTitle', e.target.value)}
-                  style={inputStyle}
-                />
-              </label>
-              <label className="perk-field">
-                <span className="perk-field-label">{sk.whoLabel}</span>
-                <input
-                  value={d.sourceAuthor}
-                  onChange={(e) => set('sourceAuthor', e.target.value)}
-                  placeholder={sk.isBook ? 'أبو العبَّاس ثعلب' : ''}
-                  style={inputStyle}
-                />
-              </label>
-
-              {/* والوفاةُ والطبعةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
-              {sk.isBook && (
-                <>
-                  <label className="perk-field">
-                    <span className="perk-field-label">وفاتُه</span>
-                    <input
-                      value={d.sourceDeath}
-                      onChange={(e) => set('sourceDeath', e.target.value)}
-                      placeholder="ت ٢٩١ هـ — إن عُرفت"
-                      style={inputStyle}
-                    />
-                  </label>
-                  <label className="perk-field">
-                    <span className="perk-field-label">طبعتُه</span>
-                    <input
-                      value={d.sourceEdition}
-                      onChange={(e) => set('sourceEdition', e.target.value)}
-                      placeholder="تحقيقُه ودارُه وبلدُه وسنتُه، سطرًا واحدًا كما يُكتب في الحاشية"
-                      style={inputStyle}
-                    />
-                  </label>
-                </>
               )}
+            </Part>
 
-              {sk.whereLabel && (
-                <label className="perk-field">
-                  <span className="perk-field-label">{sk.whereLabel}</span>
-                  <input
-                    value={d.sourceVenue}
-                    onChange={(e) => set('sourceVenue', e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-              )}
-              {sk.dateLabel && (
-                <label className="perk-field">
-                  <span className="perk-field-label">{sk.dateLabel}</span>
-                  <input
-                    value={d.sourceDate}
-                    onChange={(e) => set('sourceDate', e.target.value)}
-                    placeholder="١٥ رجب ١٤٤٧ هـ"
-                    style={inputStyle}
-                  />
-                </label>
-              )}
-              {sk.hasUrl && (
-                <label className="perk-field perk-field-wide">
-                  <span className="perk-field-label">رابطُه</span>
-                  <input
-                    value={d.sourceUrl}
-                    onChange={(e) => set('sourceUrl', e.target.value)}
-                    placeholder="https://…"
-                    dir="ltr"
-                    inputMode="url"
-                    style={inputStyle}
-                  />
-                </label>
-              )}
-            </>
-          )}
-
-          {/* والموضعُ يتبع جنسَ المصدر: الكتابُ مجلَّدٌ وصفحة، والتسجيلُ دقيقةٌ
-              تُكتب كما هي، وما سواهما لا موضعَ له يُسأل عنه */}
-          {(d.fromLibrary || sk.isBook) && (
-            <label className="perk-field">
-              <span className="perk-field-label">المجلَّد</span>
-              <input
-                value={d.volume}
-                onChange={(e) => set('volume', e.target.value)}
-                placeholder="٤"
-                inputMode="numeric"
-                style={inputStyle}
+            <Part title="أعلامُها ووسومُها" icon="person">
+              <TokenField
+                label="الأعلام المذكورون فيها"
+                hint="يُسجَّل العَلَمُ أوّلَ مرّةٍ يُكتب، ثم يُختار من القائمة"
+                values={d.people}
+                options={figureNames}
+                onChange={(v) => set('people', v)}
+                placeholder="اسمُ العَلَم، ثم Enter"
               />
-            </label>
-          )}
-          {(d.fromLibrary || sk.isBook || sk.spotLabel) && (
-            <label className="perk-field">
-              <span className="perk-field-label">
-                {(d.fromLibrary || sk.isBook) ? 'الصفحة' : sk.spotLabel}
-              </span>
-              <input
-                value={d.page}
-                onChange={(e) => set('page', e.target.value)}
-                placeholder={(d.fromLibrary || sk.isBook) ? '٨٥' : 'د ١٢:٤٠'}
-                style={inputStyle}
+              <TokenField
+                label="وسومُها"
+                hint="كلماتٌ يُهتدى بها إليها في البحث وتُعرض عليها"
+                values={d.tags}
+                options={knownTags}
+                onChange={(v) => set('tags', v)}
+                placeholder="وسمٌ، ثم Enter"
               />
-            </label>
-          )}
-
-          {/* ------------------------------------- ٤. أعلامُها ووسومُها */}
-          <span className="perk-part">أعلامُها ووسومُها</span>
-
-          <TokenField
-            label="الأعلام المذكورون فيها"
-            hint="يُسجَّل العَلَمُ أوّلَ مرّةٍ يُكتب، ثم يُختار من القائمة — فلا يفترق الاسمُ الواحد بوجهين"
-            values={d.people}
-            options={figureNames}
-            onChange={(v) => set('people', v)}
-            placeholder="اسمُ العَلَم، ثم Enter"
-          />
-
-          <TokenField
-            label="وسومُها"
-            hint="كلماتٌ يُهتدى بها إليها في البحث وتُعرض عليها"
-            values={d.tags}
-            options={knownTags}
-            onChange={(v) => set('tags', v)}
-            placeholder="وسمٌ، ثم Enter"
-          />
+            </Part>
+          </div>
         </div>
 
         {/* الذيلُ خارج الجوف المُمرَّر، فلا يغيب تحت حافّة الشاشة مهما طال
             النموذج. وكان لاصقًا داخله فيقع زرُّ الحفظ تحتها فلا يُبلغ. */}
-        <footer className="perk-editor-foot">
+        <footer className="kn-editor-foot">
           {perk && (
-            <button type="button" onClick={() => void remove()} className="perk-remove">
+            <button type="button" onClick={() => void remove()} className="kn-btn kn-btn-danger-ghost">
               حذف الفائدة
             </button>
           )}
-          <button type="button" onClick={onClose} className="perk-save" style={ghostButtonStyle}>
+          <span className="kn-editor-status" aria-live="polite">
+            {missing || (dirty ? 'جاهزةٌ للحفظ — Ctrl+Enter' : '')}
+          </span>
+          <button type="button" onClick={requestClose} className="kn-btn kn-btn-ghost">
             إلغاء
           </button>
+          {!perk && (
+            <button
+              type="button"
+              disabled={!ready || saving}
+              onClick={() => void save(true)}
+              className="kn-btn kn-btn-ghost"
+              title="يُحفظ هذه، ويبقى النموذجُ مفتوحًا بالمصدر نفسه لفائدةٍ تالية"
+            >
+              احفظ وقيِّد أخرى
+            </button>
+          )}
           <button
             type="button"
             disabled={!ready || saving}
             onClick={() => void save()}
-            style={primaryButtonStyle(ready && !saving)}
+            className="kn-btn kn-btn-primary"
           >
             {saving ? 'تُحفَظ…' : perk ? 'حفظ التعديل' : 'قيِّدها'}
           </button>
@@ -570,10 +653,51 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   )
 }
 
+/** قسمٌ من لوح الوصف: عنوانُه وأيقونتُه، وتحته حقولُه */
+function Part(
+  { title, icon, hint, children }: { title: string; icon: string; hint?: string; children: ReactNode },
+) {
+  return (
+    <section className="kn-part">
+      <h3>
+        <Icon name={icon} size={15} />
+        {title}
+      </h3>
+      {children}
+      {hint && <p className="kn-field-hint">{hint}</p>}
+    </section>
+  )
+}
+
+function Field(
+  { label, value, onChange, placeholder, ltr, numeric }: {
+    label: string
+    value: string
+    onChange: (v: string) => void
+    placeholder?: string
+    ltr?: boolean
+    numeric?: boolean
+  },
+) {
+  return (
+    <label className="kn-field">
+      <span className="kn-field-label">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        dir={ltr ? 'ltr' : undefined}
+        inputMode={ltr ? 'url' : numeric ? 'numeric' : undefined}
+        style={inputStyle}
+      />
+    </label>
+  )
+}
+
 /**
  * حقلُ قائمةٍ من الكلمات: تُكتب الكلمةُ ويُضغط Enter فتصير رُقعةً، وتُحذف
  * بالضغط عليها. ويُقترح ما سبق ذكرُه، فلا يُكتب العَلَمُ الواحد بوجهين
- * فيفترق ما يجتمع.
+ * فيفترق ما يجتمع. والفاصلةُ تفصل كما يفصل Enter، فيُلصق سطرُ أسماءٍ دفعةً.
  */
 function TokenField(
   { label, hint, values, options, onChange, placeholder }: {
@@ -586,54 +710,60 @@ function TokenField(
   },
 ) {
   const [draft, setDraft] = useState('')
+  const valuesRef = useRef(values)
+  valuesRef.current = values
 
   function add(raw: string) {
-    const value = raw.trim()
-    if (!value || values.includes(value)) { setDraft(''); return }
-    onChange([...values, value])
+    const fresh = raw.split(/[,،]/).map((v) => v.trim()).filter(Boolean)
+      .filter((v, i, all) => !valuesRef.current.includes(v) && all.indexOf(v) === i)
+    if (fresh.length) onChange([...valuesRef.current, ...fresh])
     setDraft('')
   }
 
   return (
-    <div className="perk-field">
-      <span className="perk-field-label">{label}</span>
+    <div className="kn-field">
+      <span className="kn-field-label">{label}</span>
 
-      {values.length > 0 && (
-        <div className="perk-tokens">
-          {values.map((v) => (
-            <button
-              key={v}
-              type="button"
-              className="perk-token"
-              onClick={() => onChange(values.filter((x) => x !== v))}
-              title="احذفه"
-            >
-              {v}
-              <ClearIcon size={11} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <span
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter') return
-          e.preventDefault()
-          add(draft)
-        }}
-      >
-        <Combobox
-          value={draft}
-          onChange={(v) => {
-            // الاختيارُ من القائمة يُضيف رأسًا، والكتابةُ تنتظر Enter
-            if (options.includes(v)) add(v)
-            else setDraft(v)
+      <div className="kn-tokens">
+        {values.map((v) => (
+          <button
+            key={v}
+            type="button"
+            className="kn-token"
+            onClick={() => onChange(values.filter((x) => x !== v))}
+            title="احذفه"
+            aria-label={`احذف ${v}`}
+          >
+            {v}
+            <ClearIcon size={10} />
+          </button>
+        ))}
+        <span
+          className="kn-token-input"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+              e.preventDefault()
+              add(draft)
+            } else if (e.key === 'Backspace' && !draft && values.length) {
+              onChange(values.slice(0, -1))
+            }
           }}
-          options={options.filter((o) => !values.includes(o))}
-          placeholder={placeholder}
-        />
-      </span>
-      <p className="perk-hint">{hint}</p>
+        >
+          <Combobox
+            value={draft}
+            onChange={(v) => {
+              // الاختيارُ من القائمة يُضيف رأسًا، والفاصلةُ تُضيف ما قبلها،
+              // والكتابةُ تنتظر Enter
+              if (options.includes(v)) add(v)
+              else if (/[,،]/.test(v)) add(v)
+              else setDraft(v)
+            }}
+            options={options.filter((o) => !values.includes(o))}
+            placeholder={placeholder}
+          />
+        </span>
+      </div>
+      <p className="kn-field-hint">{hint}</p>
     </div>
   )
 }

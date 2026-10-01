@@ -1378,3 +1378,8 @@ export function aboutTextOf(saved: string | null | undefined): string {
   const text = (saved ?? '').trim()
   return !text || text.includes(SEEDED_ABOUT) ? ABOUT_TEXT : text
 }
+
+/** كرّاساتُ الكنّاش */
+export const NOTEBOOKS_COUNT: CountForms = {
+  none: 'لا كرّاسة', one: 'كرّاسةٌ واحدة', two: 'كرّاستان', few: 'كرّاساتٍ', many: 'كرّاسةً',
+}

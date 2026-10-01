@@ -1,19 +1,22 @@
-// بطاقة الفائدة: أنواعُها وتصنيفاتُها وكرّاساتُها ونفاستُها وتاريخُها، ثم
-// عنوانُها ونصُّها وتعليقُ المُقيِّد عليها، ثم عزوُها إلى مصدرها وموضعُها منه،
-// ثم أعلامُها ووسومُها، ثم أدواتُها في الذيل.
+// بطاقة الفائدة، في تصميم الكنّاش الجديد.
 //
 // وهي قطعةٌ واحدة في المواضع الثلاثة — بابُ «الفوائد»، وصفحةُ الفائدة
 // الواحدة، وصفحةُ الكتاب — كي لا يفترق شكلُ الفائدة بين موضعٍ وموضع.
 //
-// والنصُّ يُطوى إذا طال إلا في صفحة الفائدة وحدها: المجموعُ يُتصفَّح لا يُقرأ،
-// وفائدةٌ واحدةٌ تملأ الشاشة تحجب ما بعدها.
+// وطبقاتُها ثلاث، يُقرأ بعضُها بعد بعض ولا يُزاحم:
+//   ١. **الصدر**: أنواعُها شاراتٍ ملوَّنة، ثم أبوابُها وكرّاساتُها رُقَعًا
+//      هادئة، وفي الطرف نفاستُها وتاريخُها.
+//   ٢. **المتن**: عنوانُها، ونصُّها — يُطوى إذا طال إلا في صفحتها، ويخفت
+//      آخرُ ما ظهر منه فيُعرف أنّ وراءه بقيّة — ثم تعليقُ المُقيِّد مفصولًا.
+//   ٣. **الذيل**: عزوُها شريطًا واحدًا، ثم أعلامُها ووسومُها، ثم أدواتُها
+//      أيقوناتٍ مضغوطة: تُعرف بالنظر، ولا تأكل من البطاقة سطرًا كاملًا.
 //
 // **والنفاسة تُعلَّم من صفحة الفائدة وحدها**: هي حكمٌ على المقيَّد بعد النظر
 // فيه، فلا تُسأل ساعةَ الكتابة ولا تُبدَّل من صفّ البطاقات مرورًا.
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { linkTo, navigate } from '../lib/router'
 import * as api from '../lib/api'
 import Prose from './Prose'
 import RichText from './RichText'
@@ -25,7 +28,7 @@ import {
   PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, sourceKindOf, type Perk,
 } from '../lib/types'
 import {
-  CopyButton, HashIcon, LinkIcon, OpenBookIcon, OwnerIcon, PencilIcon,
+  CheckIcon, CopyIcon, HashIcon, LinkIcon, OpenBookIcon, OwnerIcon, PencilIcon,
   PinIcon, QuoteIcon,
 } from './ui'
 
@@ -69,66 +72,64 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
 
   const long = perk.text.length > PERK_PREVIEW_CHARS
   const folded = long && !full && !open
+  const gem = perk.rating >= 3
 
-  const chip = (
-    field: PickField,
-    value: string,
-    className: string,
-    body: React.ReactNode = value,
-  ) => (onPick
-    ? (
-      <button key={value} type="button" className={className} onClick={() => onPick(field, value)}>
-        {body}
-      </button>
-    )
-    : <span key={value} className={className}>{body}</span>
-  )
+  /** رُقعةٌ تجمع ما تحتها إن مُرِّر `onPick`، وإلّا فنصٌّ ساكت */
+  const chip = (field: PickField, value: string, className: string, body: ReactNode = value) =>
+    (onPick
+      ? (
+        <button
+          key={`${field}:${value}`}
+          type="button"
+          className={className}
+          onClick={() => onPick(field, value)}
+          title="اجمع ما تحته"
+        >
+          {body}
+        </button>
+      )
+      : <span key={`${field}:${value}`} className={className}>{body}</span>)
 
   async function setRating(next: number) {
     // النجمةُ المضغوطةُ نفسُها تُرفع بضغطةٍ ثانية، فلا يبقى الحكمُ لازمًا
-    await run(() => api.setPerkRating(perk.id, next === perk.rating ? 0 : next))
-    await reload()
+    const ok = await run(() => api.setPerkRating(perk.id, next === perk.rating ? 0 : next))
+    if (ok) await reload()
   }
 
+  const hasMarks = perk.people.length > 0 || perk.tags.length > 0
+  const hasCite = !hideSource && !!title
+
   return (
-    <article className="perk">
-      {/* ------------------------------------------------------ الترويسة */}
-      <header className="perk-head">
-        {perk.kinds.map((kind) => (
-          <span key={kind} className={`perk-kind perk-kind-${KIND_TONE[kind] ?? 'plain'}`}>
-            {/* والشارةُ المصمتة أرضُها لونُ المكتبة، فلا يُقاتَل لونٌ بلون */}
-            <Icon name={iconOfKind(kind)} size={12} plain={KIND_TONE[kind] === 'solid'} />
-            {kind}
-          </span>
-        ))}
+    <article className={`kn-card${gem ? ' kn-card-gem' : ''}${full ? ' kn-card-full' : ''}`}>
+      {/* ------------------------------------------------------ الصدر */}
+      <header className="kn-card-head">
+        <div className="kn-card-badges">
+          {perk.kinds.map((kind) => (
+            <span key={kind} className={`kn-kind kn-kind-${KIND_TONE[kind] ?? 'plain'}`}>
+              {/* والشارةُ المصمتة أرضُها لونُ المكتبة، فلا يُقاتَل لونٌ بلون */}
+              <Icon name={iconOfKind(kind)} size={12} plain={KIND_TONE[kind] === 'solid'} />
+              {kind}
+            </span>
+          ))}
+          {perk.categories.map((c) => chip(
+            'category', c, 'kn-chip',
+            <><Icon name={iconOfCat(c)} size={11} />{c}</>,
+          ))}
+          {perk.sub_categories.map((c) => chip(
+            'subCategory', c, 'kn-chip kn-chip-sub',
+            <><Icon name={iconOfCat(c)} size={11} />{c}</>,
+          ))}
+          {inNotebooks.map((n) => chip(
+            'notebook', n.id, 'kn-chip kn-chip-notebook',
+            <><Icon name={n.icon || 'notebook'} size={11} />{n.name}</>,
+          ))}
+        </div>
 
-        {perk.categories.map((c) => chip(
-          'category', c, 'perk-chip',
-          <>
-            <Icon name={iconOfCat(c)} size={11} />
-            {c}
-          </>,
-        ))}
-        {perk.sub_categories.map((c) => chip(
-          'subCategory', c, 'perk-chip perk-chip-sub',
-          <>
-            <Icon name={iconOfCat(c)} size={11} />
-            {c}
-          </>,
-        ))}
-        {inNotebooks.map((n) => chip(
-          'notebook', n.id, 'perk-chip perk-chip-book',
-          <>
-            <Icon name={n.icon || 'notebook'} size={11} />
-            {n.name}
-          </>,
-        ))}
-
-        <span className="perk-head-tail">
-          {/* النفاسة نجومٌ مملوءة بقدرها لا رقمًا: تُقرأ في لمحة. وفي صفحة
-              الفائدة تُضغط فتُعلَّم — وهي موضعُ تعليمها لا غير. */}
+        <div className="kn-card-meta">
+          {/* النفاسة نجومٌ بقدرها لا رقمًا: تُقرأ في لمحة. وفي صفحة الفائدة
+              تُضغط فتُعلَّم — وهي موضعُ تعليمها لا غير. */}
           {full && canEdit ? (
-            <span className="perk-stars perk-stars-edit" title="نفاستُها">
+            <span className="kn-stars kn-stars-edit" role="group" aria-label="نفاستُها">
               {[1, 2, 3].map((n) => (
                 <button
                   key={n}
@@ -137,40 +138,50 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
                   className={n <= perk.rating ? 'on' : ''}
                   title={n === 3 ? 'من النفائس' : `${n} من ٣`}
                   aria-label={`نفاستُها ${n} من ٣`}
+                  aria-pressed={n <= perk.rating}
                 >
                   ★
                 </button>
               ))}
             </span>
           ) : perk.rating > 0 && (
-            <span className="perk-stars" title={`نفاستُها ${perk.rating} من ٣`}>
+            <span className="kn-stars" title={`نفاستُها ${perk.rating} من ٣`}>
               {'★'.repeat(Math.min(3, perk.rating))}
             </span>
           )}
-          <span className="perk-date">{perkDate(perk)}</span>
+          <time className="kn-date">{perkDate(perk)}</time>
           {canEdit && onEdit && (
             <button
               type="button"
-              className="perk-pen"
+              className="kn-icon-btn"
               onClick={() => onEdit(perk)}
               title="تعديل الفائدة"
               aria-label="تعديل الفائدة"
             >
-              <PencilIcon size={13} />
+              <PencilIcon size={14} />
             </button>
           )}
-        </span>
+        </div>
       </header>
 
-      {/* --------------------------------------------------- المتن */}
-      {perk.title && <h3 className="perk-title">{perk.title}</h3>}
+      {/* ------------------------------------------------------- المتن */}
+      {perk.title && (
+        <h3 className="kn-card-title">
+          {full ? perk.title : <a {...linkTo({ name: 'perk', id: perk.id })}>{perk.title}</a>}
+        </h3>
+      )}
 
-      <div className={folded ? 'perk-text perk-text-folded' : 'perk-text'}>
+      <div className={folded ? 'kn-card-text kn-folded' : 'kn-card-text'}>
         <RichText html={perk.text_html} text={perk.text} footnotes={perk.footnotes} />
       </div>
 
       {long && !full && (
-        <button type="button" className="perk-more" onClick={() => setOpen((v) => !v)}>
+        <button
+          type="button"
+          className="kn-more"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
           {open ? 'اطوِ النصّ' : 'اقرأها تامّةً'}
         </button>
       )}
@@ -179,148 +190,173 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
           بكلام صاحب الكتاب، وهذا أوَّلُ ما يُتحرَّى في النقل. وتنسيقُه ثابتٌ
           لا يتبع تنسيقَ النصّ، فيُعرف الكلامان بالنظر قبل القراءة. */}
       {perk.comment && (
-        <div className="perk-comment">
-          <span className="perk-comment-tag">
+        <aside className="kn-comment">
+          <span className="kn-comment-tag">
             <OwnerIcon size={11} />
             تعليقي
           </span>
           <Prose text={perk.comment} />
-        </div>
+        </aside>
       )}
 
-      {/* --------------------------------------------------- العزو */}
-      {!hideSource && title && (
-        <div className="perk-source">
-          <span className="perk-source-title">
-            {book
-              ? (
-                <a
-                  className="perk-source-link"
-                  href={`#/book/${book.id}`}
-                  onClick={(e) => { e.preventDefault(); navigate({ name: 'book', id: book.id }) }}
-                >
-                  {title}
-                </a>
-              )
-              : title}
-          </span>
-          {writer && (
-            <span className="perk-source-author">
-              {writer}
-              {/* والوفاةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
-              {sourceKind.isBook && perk.source?.death ? ` (${perk.source.death})` : ''}
+      {/* ------------------------------------------------------- الذيل */}
+      <footer className="kn-card-foot">
+        {hasCite && (
+          <div className="kn-cite">
+            <span className="kn-cite-icon" aria-hidden="true">
+              <Icon name={book ? 'open-book' : sourceKind.icon} size={15} />
             </span>
-          )}
-          {/* موضعُه وتاريخُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، ومتى */}
-          {perk.source?.venue && (
-            <span className="perk-source-note">{perk.source.venue}</span>
-          )}
-          {perk.source?.date && (
-            <span className="perk-source-note">{perk.source.date}</span>
-          )}
-          {perk.source?.edition && (
-            <span className="perk-source-edition">{perk.source.edition}</span>
-          )}
-          <span className="perk-source-tail">
-            {place && (
-              <span className="perk-place">
-                <PinIcon size={11} />
-                {place}
+            <span className="kn-cite-body">
+              <span className="kn-cite-title">
+                {book
+                  ? <a {...linkTo({ name: 'book', id: book.id })}>{title}</a>
+                  : title}
               </span>
-            )}
-            {sourceKind.hasUrl && perk.source?.url && (
+              {writer && (
+                <span className="kn-cite-author">
+                  {writer}
+                  {/* والوفاةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
+                  {sourceKind.isBook && perk.source?.death ? ` (${perk.source.death})` : ''}
+                </span>
+              )}
+              {/* موضعُه وتاريخُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، ومتى */}
+              {perk.source?.venue && <span className="kn-cite-note">{perk.source.venue}</span>}
+              {perk.source?.date && <span className="kn-cite-note">{perk.source.date}</span>}
+              {perk.source?.edition && (
+                <span className="kn-cite-edition">{perk.source.edition}</span>
+              )}
+            </span>
+            <span className="kn-cite-tail">
+              {place && (
+                <span className="kn-place">
+                  <PinIcon size={11} />
+                  {place}
+                </span>
+              )}
+              {sourceKind.hasUrl && perk.source?.url && /^https?:\/\//i.test(perk.source.url) && (
+                <a
+                  className="kn-cite-url"
+                  href={perk.source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  <LinkIcon size={11} />
+                  افتح المصدر
+                </a>
+              )}
+              {/* جنسُ المصدر خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره.
+                  ولا يُقال «في المكتبة» — ذاك هو الأصل ههنا. */}
+              {!book && (
+                <span className="kn-outside">
+                  <Icon name={sourceKind.icon} size={11} />
+                  {sourceKind.badge}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* والموضعُ يُذكر ولو أُخفي المصدر: صفحةُ الكتاب تعرف كتابَها ولا
+            تعرف صفحتَه من الفائدة */}
+        {hideSource && place && (
+          <div className="kn-cite kn-cite-bare">
+            <span className="kn-place">
+              <PinIcon size={11} />
+              {place}
+            </span>
+          </div>
+        )}
+
+        <div className="kn-foot-row">
+          {hasMarks && (
+            <div className="kn-marks">
+              {perk.people.map((name) => chip(
+                'person', name, 'kn-person',
+                <><Icon name="person" size={11} />{name}</>,
+              ))}
+              {perk.tags.map((tag) => chip(
+                'tag', tag, 'kn-tag',
+                <><HashIcon size={10} />{tag}</>,
+              ))}
+            </div>
+          )}
+
+          <div className="kn-tools">
+            {!full && (
               <a
-                className="perk-source-url"
-                href={perk.source.url}
-                target="_blank"
-                rel="noreferrer noopener"
+                className="kn-tool"
+                {...linkTo({ name: 'perk', id: perk.id })}
+                title="افتح الفائدة في صفحتها"
+                aria-label="افتح الفائدة في صفحتها"
               >
-                <LinkIcon size={11} />
-                افتح المصدر
+                <OpenBookIcon size={15} />
               </a>
             )}
-            {/* جنسُ المصدر خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره، وهل
-                هو كتابٌ أصلًا أم كلامٌ سُمع في مجلس أو نُقل عن منشور. ولا
-                يُقال «في المكتبة» — ذاك هو الأصل ههنا فلا يُخبَر عنه. */}
-            {!book && (
-              <span className="perk-outside">
-                <Icon name={sourceKind.icon} size={11} />
-                {sourceKind.badge}
-              </span>
+            <CopyTool
+              icon={<CopyIcon size={15} />}
+              label="نسخ النصّ"
+              value={perk.text}
+              onFail={setError}
+            />
+            <CopyTool
+              icon={<QuoteIcon size={15} />}
+              label="نسخ العزو"
+              value={perkCitation(perk, book, author)}
+              onFail={setError}
+            />
+            <CopyTool
+              icon={<LinkIcon size={15} />}
+              label="نسخ الرابط"
+              value={perkLink(perk.id, perks.map((p) => p.id))}
+              onFail={setError}
+            />
+            {book && !hideSource && (
+              <button
+                type="button"
+                className="kn-tool kn-tool-wide"
+                onClick={() => navigate({ name: 'book', id: book.id })}
+                title={`صفحةُ «${book.title}» في الفهرس`}
+              >
+                <Icon name="shelf" size={15} plain />
+                <span>بطاقةُ الكتاب</span>
+              </button>
             )}
-          </span>
+          </div>
         </div>
-      )}
-
-      {/* والموضعُ يُذكر ولو أُخفي المصدر: صفحةُ الكتاب تعرف كتابَها ولا تعرف
-          صفحتَه من الفائدة */}
-      {hideSource && place && (
-        <div className="perk-source">
-          <span className="perk-place">
-            <PinIcon size={11} />
-            {place}
-          </span>
-        </div>
-      )}
-
-      {/* -------------------------------------------- الأعلام والوسوم */}
-      {(perk.people.length > 0 || perk.tags.length > 0) && (
-        <div className="perk-marks">
-          {perk.people.length > 0 && (
-            <span className="perk-marks-group">
-              <span className="perk-marks-label">الأعلام</span>
-              {perk.people.map((name) => chip('person', name, 'perk-person'))}
-            </span>
-          )}
-          {perk.tags.map((tag) => chip(
-            'tag', tag, 'perk-tag',
-            <>
-              <HashIcon size={10} />
-              {tag}
-            </>,
-          ))}
-        </div>
-      )}
-
-      {/* --------------------------------------------------- الأدوات */}
-      <footer className="perk-actions">
-        {!full && (
-          <button
-            type="button"
-            className="card-action"
-            onClick={() => navigate({ name: 'perk', id: perk.id })}
-          >
-            <OpenBookIcon size={15} />
-            <span>افتح الفائدة</span>
-          </button>
-        )}
-        <CopyButton
-          icon={<QuoteIcon size={15} />}
-          label="نسخ العزو"
-          done="نُسخ العزو"
-          value={perkCitation(perk, book, author)}
-          onFail={setError}
-        />
-        <CopyButton
-          icon={<LinkIcon size={15} />}
-          label="نسخ الرابط"
-          done="نُسخ الرابط"
-          value={perkLink(perk.id, perks.map((p) => p.id))}
-          onFail={setError}
-        />
-        {book && !hideSource && (
-          <button
-            type="button"
-            className="card-action"
-            onClick={() => navigate({ name: 'book', id: book.id })}
-            title={`صفحةُ «${book.title}» في الفهرس`}
-          >
-            <OpenBookIcon size={15} />
-            <span>بطاقةُ الكتاب</span>
-          </button>
-        )}
       </footer>
     </article>
+  )
+}
+
+/**
+ * أداةُ نسخٍ مضغوطة: أيقونةٌ وحدها، يقول اسمَها التلميحُ وقارئُ الشاشة،
+ * وتصير علامةَ صحٍّ لحظةً بعد النسخ فيُعلم أنه وقع.
+ */
+function CopyTool(
+  { icon, label, value, onFail }:
+  { icon: ReactNode; label: string; value: string; onFail: (m: string) => void },
+) {
+  const [done, setDone] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setDone(true)
+      setTimeout(() => setDone(false), 1600)
+    } catch {
+      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً
+      onFail('تعذّر النسخ إلى الحافظة، فانسخه بيدك: ' + value)
+    }
+  }
+  return (
+    <button
+      type="button"
+      className={done ? 'kn-tool kn-tool-done' : 'kn-tool'}
+      onClick={() => void copy()}
+      title={done ? 'نُسخ' : label}
+      aria-label={label}
+    >
+      {done ? <CheckIcon size={15} /> : icon}
+    </button>
   )
 }
 

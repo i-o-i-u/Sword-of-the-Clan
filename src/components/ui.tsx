@@ -36,8 +36,9 @@ export const facetStyle = (active: boolean): CSSProperties => ({
   alignItems: 'center',
   gap: 8,
   border: 'none',
-  background: active ? 'oklch(0.93 0.03 45)' : 'none',
-  color: active ? 'oklch(0.32 0.08 40)' : 'var(--text)',
+  // بلون المكتبة مخفَّفًا لا بيجٍ ثابت: كان بقعةً فاتحةً في المظهر الداكن
+  background: active ? 'color-mix(in oklch, var(--accent) 15%, transparent)' : 'none',
+  color: active ? 'var(--accent-soft)' : 'var(--text)',
   fontWeight: active ? 700 : 400,
   fontSize: 13.5,
   padding: '6px 8px',
@@ -946,17 +947,123 @@ export function BackButton({ label, onClick }: { label: string; onClick: () => v
  * ويبقى تكبيرُ القارئ ساريًا على جوف النافذة وحده (`.overlay-sheet`)، فلا
  * يفوته ما اختاره لنفسه من حجم الخطّ.
  */
-export function Overlay(
-  { onClose, children, align = 'center', zIndex = 90, paddingTop }:
-  { onClose: () => void; children: ReactNode; align?: 'center' | 'flex-start'; zIndex?: number; paddingTop?: number },
+/**
+ * آخرُ ما رُسم من قائمةٍ تُرسم على دفعات: متى بلغه القارئُ طُلبت الدفعةُ
+ * التالية. ومعه زرٌّ ظاهر لمن لا يُمرِّر — قارئُ الشاشة ولوحةُ المفاتيح —
+ * وعددُ ما بقي، فيعرف القارئُ أين هو من القائمة.
+ */
+export function MoreSentinel(
+  { shown, total, onMore }: { shown: number; total: number; onMore: () => void },
 ) {
+  const ref = useRef<HTMLDivElement>(null)
+  const moreRef = useRef(onMore)
+  moreRef.current = onMore
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || shown >= total || typeof IntersectionObserver !== 'function') return
+    // يُطلب قبل أن يُبلَغ آخرُها بقليل، فلا يرى القارئُ حدَّها أصلًا
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) moreRef.current() },
+      { rootMargin: '900px 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [shown, total])
+
+  if (shown >= total) return null
+  return (
+    <div ref={ref} className="more-sentinel">
+      <button type="button" onClick={onMore}>
+        اعرض ما بعدها
+        <span>{formatNumber(total - shown)} باقية</span>
+      </button>
+    </div>
+  )
+}
+
+/**
+ * وثلاثُ خصالٍ تجمعها الطبقةُ لكل نافذة، وكانت كلُّ نافذةٍ تجتهد لنفسها فيها
+ * فتأخذ بعضَها وتدع بعضًا:
+ *
+ *  ١. **لا تُغلق إلا بنقرةٍ على الظلّ حقًّا**: ما ابتدأ ضغطُه على الظلّ وانتهى
+ *     عليه. وكانت تُغلق بكل نقرةٍ يراها المتصفّحُ على الظلّ — ومنها أن تُحدِّد
+ *     نصًّا في المُحرِّر بالسحب ثم تُفلت الفأرةَ خارج اللوح، فيقع النقرُ على
+ *     أقرب أبٍ مشترك وهو الظلّ، فتُغلق نافذةُ الفائدة وتضيع الكتابة كلُّها.
+ *  ٢. **Esc يُغلق العليا وحدها**: النوافذُ تتراكب — منتقي الأيقونات فوق
+ *     إعدادات الفوائد — فلا يُغلق المفتاحُ الواحد نافذتين. وما تولّى المفتاحَ
+ *     قبلها (قائمةٌ منسدلةٌ تُطوى به) يمنعها بـ`preventDefault`.
+ *  ٣. **الصفحةُ لا تجري من تحتها**: يُقفل تمريرُها ما دامت نافذةٌ مفتوحة.
+ *
+ * و`onClose` هو طلبُ الإغلاق لا الإغلاقُ نفسُه: النافذةُ التي فيها ما لم يُحفظ
+ * تمرّره على سؤالٍ أوّلًا.
+ */
+const overlayStack: number[] = []
+let overlaySeq = 0
+
+export function Overlay(
+  { onClose, children, align = 'center', zIndex = 90, paddingTop, label }:
+  {
+    onClose: () => void
+    children: ReactNode
+    align?: 'center' | 'flex-start'
+    zIndex?: number
+    paddingTop?: number
+    /** اسمُ النافذة لقارئ الشاشة */
+    label?: string
+  },
+) {
+  const pressedOnShade = useRef(false)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  useEffect(() => {
+    const id = ++overlaySeq
+    overlayStack.push(id)
+
+    // قفلُ التمرير مرّةً واحدة لأولى النوافذ، ويُفكّ بإغلاق آخرها
+    const root = document.documentElement
+    const previous = document.body.style.overflow
+    if (overlayStack.length === 1) {
+      // عرضُ شريط التمرير يُعوَّض كي لا تقفز الصفحةُ يمينًا ويسارًا
+      const bar = window.innerWidth - root.clientWidth
+      document.body.style.overflow = 'hidden'
+      if (bar > 0) document.body.style.paddingInlineEnd = `${bar}px`
+    }
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (overlayStack[overlayStack.length - 1] !== id) return
+      e.preventDefault()
+      closeRef.current()
+    }
+    document.addEventListener('keydown', onKey)
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      const at = overlayStack.indexOf(id)
+      if (at >= 0) overlayStack.splice(at, 1)
+      if (overlayStack.length === 0) {
+        document.body.style.overflow = previous === 'hidden' ? '' : previous
+        document.body.style.paddingInlineEnd = ''
+      }
+    }
+  }, [])
+
   return createPortal(
     <div
-      onClick={onClose}
       className="overlay-wrap"
       style={{ zIndex, alignItems: align, paddingTop }}
+      onMouseDown={(e) => { pressedOnShade.current = e.target === e.currentTarget }}
+      onClick={(e) => {
+        const onShade = e.target === e.currentTarget && pressedOnShade.current
+        pressedOnShade.current = false
+        if (onShade) closeRef.current()
+      }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ display: 'contents' }}>{children}</div>
+      <div role="dialog" aria-modal="true" aria-label={label} style={{ display: 'contents' }}>
+        {children}
+      </div>
     </div>,
     document.body,
   )
@@ -1157,7 +1264,7 @@ export function Combobox(
         // الإغلاق يتأخّر لحظةً كي يسبقه نقرُ الخيار، فالنقر يُفقِد التركيز أولًا
         onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 130) }}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') { setOpen(false); return }
+          if (e.key === 'Escape') { if (open) { e.preventDefault(); setOpen(false) } return }
           if (!showList) { if (e.key === 'ArrowDown') setOpen(true); return }
           if (e.key === 'ArrowDown') {
             e.preventDefault(); setActive((i) => (i + 1) % matches.length)
@@ -1219,4 +1326,18 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
       {hint && <div style={{ fontSize: 14 }}>{hint}</div>}
     </div>
   )
+}
+
+/**
+ * رابطٌ خارجيّ يُوضع في `href` آمنًا: ما كان بـhttp أو https بقي، وما كُتب بلا
+ * بروتوكول («x.com/…») سُبق بـhttps، وما سوى ذلك — `javascript:` و`data:`
+ * ونحوهما — يُردّ `null` فلا يُكتب رابطٌ أصلًا. والروابطُ يكتبها صاحبُ المكتبة
+ * وحده، غير أنها تُفتح على كل زائر، فلا يُترك لحرفٍ يُلصق خطأً أن يُنفَّذ.
+ */
+export function safeHref(raw: string | null | undefined): string | null {
+  const url = (raw ?? '').trim()
+  if (!url) return null
+  if (/^https?:\/\//i.test(url)) return url
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null
+  return `https://${url.replace(/^\/+/, '')}`
 }

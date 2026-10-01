@@ -10,7 +10,6 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
 import { deathLabel } from '../lib/hijri'
 import { peopleByRole } from '../lib/people'
 import { BOOKS_COUNT, countLabel, formatNumber, roleGroupLabel } from '../lib/types'
@@ -103,7 +102,7 @@ export default function People() {
                     },
                   ],
                   cells: [deathLabel(author) || '—', formatNumber(count)],
-                  onOpen: () => navigate({ name: 'author', id: author.id }),
+                  to: { name: 'author', id: author.id },
                 }))}
               />
             </section>

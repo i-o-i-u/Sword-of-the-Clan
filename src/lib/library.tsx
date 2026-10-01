@@ -84,7 +84,15 @@ interface LibraryValue {
   previewSettings: (patch: Partial<Settings>) => void
   /** يحفظ الإعدادات كما هي الآن. زرّ الحفظ في النافذة هو الذي يستدعيه. */
   saveSettings: (next: Settings) => Promise<void>
-  run: (job: () => Promise<void>) => Promise<void>
+  /** ينفّذ حفظًا ويعرض خطأه. `true` إن وقع الحفظ. */
+  run: (job: () => Promise<void>) => Promise<boolean>
+  /** تعديلُ دار: يسري على الشاشة فورًا، ويُزامَن اسمُها وبلدُها على كتبها */
+  patchPublisher: (id: string, patch: Partial<Publisher>) => Promise<void>
+  /**
+   * استقرّ الدور: عُرف أصاحبُ المكتبة الطالبُ أم زائر. وقبله `isOwner`
+   * فارغٌ لا لأنه زائر، بل لأنه لم يُعرف بعد — فلا يُحكم به على مسار.
+   */
+  roleReady: boolean
 }
 
 const VIEWER_PREFS_KEY = 'lib-viewer-prefs'
@@ -213,28 +221,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     const seq = ++loadSeq.current
     if (!loadedOnce.current) setLoading(true)
     try {
-      const owner = isOwnerRef.current
-      const [b, a, w, p, l, sh, c, img, q, st, pk, pc, pf, nb] = await Promise.all([
-        api.fetchBooks(owner),
-        api.fetchAuthors(owner),
-        api.fetchWorks(owner),
-        api.fetchPerks(owner),
-        api.fetchLoans(owner),
-        api.fetchPublishers(owner),
-        api.fetchCategories(owner),
-        api.fetchLandingImages(owner),
-        api.fetchLandingQuotes(owner),
-        api.fetchSettings(owner),
-        api.fetchPerkKinds(owner),
-        api.fetchPerkCategories(owner),
-        api.fetchPerkFigures(owner),
-        api.fetchNotebooks(owner),
-      ])
+      // المكتبةُ كلُّها في استعلامٍ واحد، يقرأ الخادمُ فيه جدولَ الكتب مرّةً
+      const snap = await api.fetchSnapshot()
       if (seq !== loadSeq.current) return // سبقه تحميلٌ أحدث، فجوابُه أولى
-      setBooks(b); setAuthors(a); setWorks(w); setPerks(p); setLoans(l)
-      setPerkKinds(pk); setPerkCategories(pc); setPerkFigures(pf); setNotebooks(nb)
-      setPublishers(sh); setCategories(c)
-      setLandingImages(img); setLandingQuotes(q)
+      setBooks(snap.books); setAuthors(snap.authors); setWorks(snap.works)
+      setPerks(snap.perks); setLoans(snap.loans)
+      setPerkKinds(snap.perkKinds); setPerkCategories(snap.perkCategories)
+      setPerkFigures(snap.perkFigures); setNotebooks(snap.notebooks)
+      setPublishers(snap.publishers); setCategories(snap.categories)
+      setLandingImages(snap.landingImages); setLandingQuotes(snap.landingQuotes)
+      const st = snap.settings
       // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
       serverSettings.current = st
       setSettings(withViewerPrefs(st, isOwnerRef.current))
@@ -289,14 +285,22 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, [settings.theme, settings.font, settings.ui_scale])
 
   // -------------------------------------------------------------- التعديل
-  /** ينفّذ عمليةَ حفظٍ ويعرض خطأها ويُعيد التحميل عند الإخفاق */
-  const run = useCallback(async (job: () => Promise<void>) => {
+  /**
+   * ينفّذ عمليةَ حفظٍ ويعرض خطأها ويُعيد التحميل عند الإخفاق.
+   *
+   * ويُخبر بما وقع: `true` إن حُفظ. وكانت لا تُخبر بشيء، فكان من ينادِيها
+   * يمضي بعدها كأنّ الحفظ وقع — فتُغلق نافذةُ الفائدة على إخفاقه وتضيع
+   * الفائدةُ كلُّها بنصّها وهوامشها.
+   */
+  const run = useCallback(async (job: () => Promise<void>): Promise<boolean> => {
     try {
       await job()
       setError(null)
+      return true
     } catch (e) {
       setError('تعذّر الحفظ: ' + describe(e))
       await reload()
+      return false
     }
   }, [reload])
 
@@ -308,10 +312,53 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const patchAuthor = useCallback(async (id: string, patch: Partial<Author>) => {
     setAuthors((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)))
     // تغيير الاسم يسري على الكتب أيضًا، ويتكفّل مُشغِّل قاعدة البيانات بحفظه
+    // ومثلُه حيث كان مؤلِّفًا مشارِكًا أو ذا صفة: الخادمُ يزامن ذلك كلَّه
     if (patch.name !== undefined) {
-      setBooks((prev) => prev.map((b) => (b.author_id === id ? { ...b, author_name: patch.name! } : b)))
+      const name = patch.name
+      setBooks((prev) => prev.map((b) => {
+        const mine = b.author_id === id
+          || (b.co_authors ?? []).some((c) => c.author_id === id)
+          || (b.contributors ?? []).some((c) => c.person_id === id)
+        if (!mine) return b
+        return {
+          ...b,
+          author_name: b.author_id === id ? name : b.author_name,
+          co_authors: (b.co_authors ?? []).map((c) => (c.author_id === id ? { ...c, name } : c)),
+          contributors: (b.contributors ?? []).map(
+            (c) => (c.person_id === id ? { ...c, name } : c),
+          ),
+        }
+      }))
     }
     await run(() => api.updateAuthor(id, patch))
+  }, [run])
+
+  const patchPublisher = useCallback(async (id: string, patch: Partial<Publisher>) => {
+    setPublishers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    // واسمُ الدار وبلدُها مكتوبان على كتبها، والخادمُ يزامنهما — فيُزامَنان
+    // ههنا كذلك، وإلّا بقي القديمُ على البطاقات حتى يُعاد التحميل
+    if (patch.name !== undefined || patch.place !== undefined) {
+      setBooks((prev) => prev.map((b) => {
+        let next = b
+        if (b.publisher_id === id) {
+          next = {
+            ...next,
+            ...(patch.name !== undefined ? { publisher: patch.name } : {}),
+            ...(patch.place !== undefined ? { place: patch.place } : {}),
+          }
+        }
+        if (patch.name !== undefined && b.co_publishers.some((c) => c.publisher_id === id)) {
+          next = {
+            ...next,
+            co_publishers: b.co_publishers.map(
+              (c) => (c.publisher_id === id ? { ...c, name: patch.name! } : c),
+            ),
+          }
+        }
+        return next
+      }))
+    }
+    await run(() => api.updatePublisher(id, patch))
   }, [run])
 
   const patchSettings = useCallback(async (patch: Partial<Settings>) => {
@@ -358,20 +405,36 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [categories],
   )
 
-  const value: LibraryValue = {
+  const authorById = useCallback(
+    (id: string | null) => (id ? authorMap.get(id) ?? null : null), [authorMap],
+  )
+  const bookById = useCallback((id: string) => bookMap.get(id), [bookMap])
+  const toggleBrowseOnly = useCallback(() => setBrowseOnly((v) => !v), [])
+
+  // القيمةُ تُبنى مرّةً لكل تبدُّلٍ فيها لا مع كل رسم: كانت كائنًا جديدًا في
+  // كل مرّة، ومعها `authorById` و`bookById` دالّتان جديدتان — فيبطل كلُّ
+  // `useMemo` في الصفحات يتعلّق بهما ويُعاد حسابُه بلا سبب.
+  const value = useMemo<LibraryValue>(() => ({
     loading, error, setError,
     isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     canEdit: isOwner && !browseOnly,
-    toggleBrowseOnly: () => setBrowseOnly((v) => !v),
-    signOut, refreshRole,
+    toggleBrowseOnly,
+    signOut, refreshRole, roleReady,
     books, authors, works, perks, loans, publishers, categories, mainCategories,
     perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings,
-    authorById: (id) => (id ? authorMap.get(id) ?? null : null),
-    bookById: (id) => bookMap.get(id),
-    reload, patchBook, patchAuthor, patchSettings, cycleTheme,
+    authorById, bookById,
+    reload, patchBook, patchAuthor, patchPublisher, patchSettings, cycleTheme,
     setViewerPref, previewSettings, saveSettings, run,
-  }
+  }), [
+    loading, error, isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
+    toggleBrowseOnly, signOut, refreshRole, roleReady,
+    books, authors, works, perks, loans, publishers, categories, mainCategories,
+    perkKinds, perkCategories, perkFigures, notebooks,
+    landingImages, landingQuotes, settings, authorById, bookById,
+    reload, patchBook, patchAuthor, patchPublisher, patchSettings, cycleTheme,
+    setViewerPref, previewSettings, saveSettings, run,
+  ])
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>
 }
@@ -381,19 +444,3 @@ function describe(e: unknown): string {
   return String(e)
 }
 
-/**
- * يؤخّر حفظ الحقول النصّية الطويلة (النبذة والملاحظات والترجمة) حتى يتوقّف
- * الكاتب، فلا نُرسل طلبًا مع كل حرف.
- */
-export function useDebouncedSave<T>(save: (value: T) => void, delay = 600) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveRef = useRef(save)
-  saveRef.current = save
-
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
-
-  return useCallback((value: T) => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => saveRef.current(value), delay)
-  }, [delay])
-}

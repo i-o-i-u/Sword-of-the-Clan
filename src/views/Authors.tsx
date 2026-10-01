@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { goBack, navigate, pressable } from '../lib/router'
 import { lifeLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
 import { withinLabelOf, withinTitlesOf } from '../lib/editions'
 import { authoredBooks, authoredWithin, contributedBooks, topRole } from '../lib/people'
@@ -64,7 +64,7 @@ export function AuthorsIndex() {
       },
     ],
     cells: [lifeLabel(author) || '—', formatNumber(count)],
-    onOpen: () => navigate({ name: 'author', id: author.id }),
+    to: { name: 'author', id: author.id },
   }))
 
   return (
@@ -137,7 +137,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
   if (!author) {
     return (
       <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-        <BackButton label="العودة إلى المؤلِّفين" onClick={() => navigate({ name: 'authors' })} />
+        <BackButton label="العودة إلى المؤلِّفين" onClick={() => goBack({ name: 'authors' })} />
         <EmptyState title="لم يُعثَر على هذا المؤلِّف" />
       </main>
     )
@@ -160,9 +160,9 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         {/* من لا تأليف له لا يُعرض في صفحة المؤلِّفين، فلا يُردّ إليها:
             يُردّ إلى الصفحة التي جاء منها — «المحقِّقون ونحوهم» */}
         {authorBooks.length > 0 ? (
-          <BackButton label="العودة إلى المؤلِّفين" onClick={() => navigate({ name: 'authors' })} />
+          <BackButton label="العودة إلى المؤلِّفين" onClick={() => goBack({ name: 'authors' })} />
         ) : (
-          <BackButton label="العودة إلى المُحقِّقين ونحوهم" onClick={() => navigate({ name: 'people' })} />
+          <BackButton label="العودة إلى المُحقِّقين ونحوهم" onClick={() => goBack({ name: 'people' })} />
         )}
         {canEdit && (
           <button
@@ -321,7 +321,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
               <li
                 key={`${w.book.id}-${i}`}
                 style={{ cursor: 'pointer' }}
-                onClick={() => navigate({ name: 'book', id: w.book.id })}
+                {...pressable(() => navigate({ name: 'book', id: w.book.id }))}
               >
                 <span className="within-list-no">{formatNumber(i + 1)}</span>
                 <span className="within-list-body">
@@ -368,7 +368,7 @@ function PersonShelf(
           <div
             key={book.id}
             className="book-card"
-            onClick={() => navigate({ name: 'book', id: book.id })}
+            {...pressable(() => navigate({ name: 'book', id: book.id }))}
             style={{ ...cardStyle, cursor: 'pointer', borderRadius: 12, overflow: 'hidden' }}
           >
             <div style={{ width: '100%', aspectRatio: '3/4', background: 'var(--cover-bg)' }}>

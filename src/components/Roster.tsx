@@ -9,6 +9,7 @@
 // واختيارُ القارئ يُحفظ في متصفّحه فلا يُعاد في كل زيارة.
 
 import { useCallback, useState, type ReactNode } from 'react'
+import { linkTo, navigate, pressable, type Route } from '../lib/router'
 import { GridIcon, TableIcon, viewToggleStyle } from './ui'
 
 export type RosterView = 'grid' | 'table'
@@ -23,7 +24,8 @@ export interface RosterRow {
   lines: { icon: ReactNode; text: string; tone?: 'accent' }[]
   /** خلايا الجدول بعد عمود الاسم، على ترتيب `headers` */
   cells: ReactNode[]
-  onOpen: () => void
+  /** صفحتُه: البطاقةُ رابطٌ إليها، والصفُّ يُفتح بالنقر وبمفتاح الإدخال */
+  to: Route
 }
 
 const PREF_KEY = 'lib-roster-view'
@@ -94,7 +96,7 @@ export default function Roster(
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="row-hover" onClick={row.onOpen}>
+              <tr key={row.id} className="row-hover" {...pressable(() => navigate(row.to))}>
                 <td className="roster-name-cell">
                   <span className="roster-mark-sm">{row.mark}</span>
                   <span>{row.name}</span>
@@ -111,7 +113,7 @@ export default function Roster(
   return (
     <div className="author-grid">
       {rows.map((row) => (
-        <div key={row.id} className="author-card" onClick={row.onOpen}>
+        <a key={row.id} className="author-card card-link" {...linkTo(row.to)}>
           <span className="author-mark" aria-hidden="true">{row.mark}</span>
           <div style={{ minWidth: 0 }}>
             <div className="author-name">{row.name}</div>
@@ -123,7 +125,7 @@ export default function Roster(
               </div>
             ))}
           </div>
-        </div>
+        </a>
       ))}
     </div>
   )

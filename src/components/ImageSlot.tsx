@@ -85,7 +85,7 @@ export default function ImageSlot(
         />
       ) : (
         <span style={{
-          fontSize: 11, color: 'oklch(0.45 0.02 60)', textAlign: 'center',
+          fontSize: 11, color: 'var(--muted)', textAlign: 'center',
           padding: 8, lineHeight: 1.6,
         }}>
           {busy ? '…جارٍ الرفع' : placeholder}

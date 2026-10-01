@@ -11,7 +11,7 @@
 // والقطعةُ واحدة في الموضعين — الهبوطِ والتصفُّح — كما `SideDoors`، كي لا
 // يفترق سلوكُ القرعة بينهما.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { deathLabel } from '../lib/hijri'
@@ -40,13 +40,7 @@ export default function SuggestedBook({ onClose }: { onClose: () => void }) {
 
   const again = useCallback(() => setBook((prev) => drawOther(books, prev)), [books])
 
-  // تُغلق بـEsc كسائر الطبقات. والإغلاقُ ههنا مقصودٌ خفيفًا: القرعةُ عرضٌ
-  // يُردّ، فلا يُثقَّل ردُّه على القارئ.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // وتُغلق بـEsc كسائر الطبقات، والطبقةُ (`Overlay`) تتولّى ذلك.
 
   if (!book) return null
 

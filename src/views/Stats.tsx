@@ -15,7 +15,7 @@ import {
   roleGroupLabel, type Book,
 } from '../lib/types'
 import { bookCount, countedTitles, isCollection, matnTitles } from '../lib/editions'
-import { navigate } from '../lib/router'
+import { navigate, pressable } from '../lib/router'
 import {
   ArchiveIcon, BooksIcon, CalculatorIcon, CalendarIcon, CoinIcon, GlobeIcon, HourglassIcon,
   OpenBookIcon,
@@ -393,8 +393,7 @@ function Highlight(
   return (
     <div
       className={`stat-highlight${onClick ? ' stat-highlight-link' : ''}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
+      {...(onClick ? pressable(onClick) : {})}
       style={cardStyle}
     >
       <span className="stat-highlight-icon" aria-hidden="true">{icon}</span>
@@ -448,7 +447,7 @@ function RankCard({ title, icon, rows }: { title: string; icon: ReactNode; rows:
           <li
             key={`${row.name}-${i}`}
             className={row.onClick ? 'stats-rank-link' : undefined}
-            onClick={row.onClick}
+            {...(row.onClick ? pressable(row.onClick) : {})}
           >
             <span className="stats-rank-no">{formatNumber(i + 1)}</span>
             <span className="stats-rank-name">{row.name}</span>

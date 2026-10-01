@@ -11,8 +11,8 @@
 import { useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
+import { pressable } from '../lib/router'
 import { FONTS, FONT_LABELS, FONT_ORDER, THEMES, THEME_LABELS, THEME_ORDER } from '../lib/theme'
-import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import { QUICK_OPTS, normalizeText } from '../lib/search'
 import {
   AUTHOR_PRIVACY_FIELDS, BOOKS_COUNT, BOOK_PRIVACY_FIELDS, CATEGORIES_COUNT,
@@ -92,8 +92,6 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
-  useScrollLock()
-  useEscapeKey(requestClose)
 
   return (
     <Overlay onClose={requestClose} zIndex={90}>
@@ -579,7 +577,7 @@ function CategoryManager(
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { e.preventDefault(); void commit(parent) }
-          if (e.key === 'Escape') { setDraft(''); setAdding(null) }
+          if (e.key === 'Escape') { e.preventDefault(); setDraft(''); setAdding(null) }
         }}
         placeholder={parent ? `فرعٌ تحت «${parent}»` : 'اسم تصنيفٍ رئيسٍ جديد'}
         style={{ ...smallInput, fontSize: 12.5 }}
@@ -986,7 +984,8 @@ function DocPicker(
           return (
             <div
               key={d.id}
-              onClick={() => onToggle(d.id)}
+              {...pressable(() => onToggle(d.id), 'button')}
+              aria-pressed={on}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
                 cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 9,

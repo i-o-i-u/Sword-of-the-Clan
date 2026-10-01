@@ -9,7 +9,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { navigate, pressable } from '../lib/router'
 import { matnTitles, type CountedTitle } from '../lib/editions'
 import { BOOKS_COUNT, MATNS_COUNT, countLabel } from '../lib/types'
 import {
@@ -99,7 +99,7 @@ export default function Matns() {
                 {group.books.map((matn, i) => (
                   <li
                     key={`${matn.book.id}-${matn.within ? matn.title : ''}-${i}`}
-                    onClick={() => navigate({ name: 'book', id: matn.book.id })}
+                    {...pressable(() => navigate({ name: 'book', id: matn.book.id }))}
                   >
                     {/* الفرعُ موضعُ الرقم من السلاسل: هو أخصُّ ما يُعرف به
                         المتنُ بعد فنِّه، وشرطةٌ لمن لم يُكتب فرعُه */}

@@ -79,7 +79,7 @@ export default function IconPicker(
           {/* الحقلُ والأبوابُ في صدر الجوف لا يجريان معه: الشبكةُ تُمرَّر
               طويلًا، ولو غابا لطُولب القارئُ بالعودة إلى الصدر لكلّ باب */}
           <div className="icon-picker-bar">
-            <div className="perks-search icon-picker-search">
+            <div className="kn-search kn-search-sm icon-picker-search">
               <SearchIcon size={16} />
               <input
                 value={query}

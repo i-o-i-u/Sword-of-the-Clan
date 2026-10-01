@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as books from "../books.js";
 import type * as catalog from "../catalog.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as images from "../images.js";
 import type * as library from "../library.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   books: typeof books;
   catalog: typeof catalog;
+  crons: typeof crons;
   http: typeof http;
   images: typeof images;
   library: typeof library;

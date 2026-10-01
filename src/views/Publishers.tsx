@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { navigate } from '../lib/router'
+import { goBack, navigate, pressable } from '../lib/router'
 import { BOOKS_COUNT, countLabel, formatNumber } from '../lib/types'
 import { pressesOf } from '../lib/editions'
 import ImageSlot from '../components/ImageSlot'
@@ -20,6 +20,7 @@ import {
   BackButton, DebouncedInput, DebouncedTextarea, EmptyState, GlobeIcon,
   OpenBookIcon, PencilIcon, PressIcon,
   cardStyle, ghostButtonStyle, inputStyle, primaryButtonStyle, resolveAsset,
+  safeHref,
 } from '../components/ui'
 
 /** عدد كتب كل دارٍ في المكتبة، مفتاحُه معرّف الدار */
@@ -125,7 +126,7 @@ export default function Publishers() {
                 },
               ],
               cells: [p.place || '—', formatNumber(counts.get(p.id) ?? 0)],
-              onOpen: () => navigate({ name: 'publisher', id: p.id }),
+              to: { name: 'publisher', id: p.id },
             }))}
           />
 
@@ -192,7 +193,7 @@ export default function Publishers() {
 
 // ================================================================ صفحة الدار
 export function PublisherPage({ publisherId }: { publisherId: string }) {
-  const { publishers, books, canEdit, run, reload } = useLibrary()
+  const { publishers, books, canEdit, run, reload, patchPublisher } = useLibrary()
   const publisher = publishers.find((p) => p.id === publisherId)
 
   // الصفحة عرضٌ حتى يُطلب التعديل، كصفحة الكتاب وصفحة المؤلِّف
@@ -210,7 +211,7 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
   if (!publisher) {
     return (
       <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-        <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => navigate({ name: 'publishers' })} />
+        <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => goBack({ name: 'publishers' })} />
         <EmptyState title="لم يُعثَر على هذه الدار" hint="قد تكون حُذفت، أو أنها غير ظاهرةٍ للزوار." />
       </main>
     )
@@ -218,8 +219,10 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
 
   const p = publisher
   const open = canEdit && editing
+  // يسري على الشاشة فورًا ثم يُحفظ. وكان يُرسَل إلى الخادم وحده، فلا يظهر
+  // الشعارُ المرفوع ولا الاسمُ المُعدَّل حتى تُحدَّث الصفحة.
   const save = (patch: Parameters<typeof api.updatePublisher>[1]) =>
-    void run(() => api.updatePublisher(p.id, patch))
+    void patchPublisher(p.id, patch)
 
   return (
     <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
@@ -227,7 +230,7 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 12, flexWrap: 'wrap',
       }}>
-        <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => navigate({ name: 'publishers' })} />
+        <BackButton label="العودة إلى دُوْر النَّشْر" onClick={() => goBack({ name: 'publishers' })} />
         {canEdit && (
           <button
             type="button"
@@ -371,8 +374,8 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {p.website && (
-              <a href={p.website} target="_blank" rel="noreferrer" dir="ltr" style={{ fontSize: 13, color: 'var(--accent-soft)' }}>
+            {safeHref(p.website) && (
+              <a href={safeHref(p.website)!} target="_blank" rel="noreferrer noopener" dir="ltr" style={{ fontSize: 13, color: 'var(--accent-soft)' }}>
                 {p.website}
               </a>
             )}
@@ -397,7 +400,7 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
             <div
               key={book.id}
               className="book-card"
-              onClick={() => navigate({ name: 'book', id: book.id })}
+              {...pressable(() => navigate({ name: 'book', id: book.id }))}
               style={{ ...cardStyle, cursor: 'pointer', borderRadius: 12, overflow: 'hidden' }}
             >
               <div style={{ width: '100%', aspectRatio: '3/4', background: 'var(--cover-bg)' }}>

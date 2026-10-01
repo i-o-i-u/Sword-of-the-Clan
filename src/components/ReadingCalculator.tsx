@@ -259,8 +259,8 @@ export default function ReadingCalculator({ onClose }: { onClose: () => void }) 
           */}
           <div
             style={{
-              background: result.wrong ? 'oklch(0.95 0.04 65)' : 'var(--header)',
-              border: `1px solid ${result.wrong ? 'oklch(0.82 0.09 65)' : 'transparent'}`,
+              background: result.wrong ? 'color-mix(in oklch, var(--star) 14%, var(--surface))' : 'var(--header)',
+              border: `1px solid ${result.wrong ? 'color-mix(in oklch, var(--star) 45%, transparent)' : 'transparent'}`,
               borderRadius: 12, padding: '16px 18px',
               fontSize: 14.5, lineHeight: 2.1, minHeight: 64,
               minWidth: 0, width: '100%', maxWidth: '100%',

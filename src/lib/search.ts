@@ -38,7 +38,9 @@ export const DEFAULT_SEARCH_KEYS = SEARCH_FIELDS.filter((f) => f.def).map((f) =>
 
 export function normalizeText(text: unknown, o: SearchOptions): string {
   // إسقاط التشكيل والتطويل
-  let x = String(text ?? '').replace(/[ً-ْٰـ]/g, '')
+  // والمدىُ إلى U+065F لا إلى السكون وحده: فيه المدّةُ والهمزتان العُليا
+  // والسُّفلى وما يُكتب فوق الحرف، وكانت تبقى فتفرّق بين الكلمة وأختها
+  let x = String(text ?? '').replace(/[ً-ٰٟـ]/g, '')
   if (!o.caseSensitive) x = x.toLowerCase()
   if (!o.respectHamza) {
     x = x
@@ -80,13 +82,52 @@ function fieldText(b: Book, key: string): string {
 export function matchBook(b: Book, query: string, o: SearchOptions, keys: string[]): boolean {
   const needle = normalizeText(query, o)
   if (!needle) return true
-  const texts = keys.map((k) => normalizeText(fieldText(b, k), o))
+  return matchTexts(bookTexts(b, o, keys), needle, o)
+}
+
+/**
+ * نصوصُ الكتاب مُطبَّعةً، حقلًا حقلًا. تُحسب مرّةً لكل كتابٍ وتُحفظ، فلا
+ * يُعاد تطبيعُ الفهرس كلِّه مع كل حرفٍ يُكتب في البحث — وكان يُعاد مرّاتٍ
+ * بعدد وجوه التصفية، إذ يُحسب عدّادُ كل دولابٍ وتصنيفٍ بالبحث نفسه.
+ */
+export function bookTexts(b: Book, o: SearchOptions, keys: string[]): string[] {
+  return keys.map((k) => normalizeText(fieldText(b, k), o))
+}
+
+/** نصُّ العنوان المضموم مُطبَّعًا: ما ينفرد به عن ضامِّه (انظر `matchWithin`) */
+export function withinText(t: WithinTitle, o: SearchOptions): string {
+  return normalizeText([
+    t.title, t.author_name,
+    (t.contributors ?? []).map((c) => c.name).join(' '),
+    t.category ?? '', t.sub_category ?? '',
+  ].join(' '), o)
+}
+
+/** مطابقةُ نصوصٍ مُطبَّعةٍ سلفًا بإبرةٍ مُطبَّعة */
+export function matchTexts(texts: string[], needle: string, o: SearchOptions): boolean {
+  if (!needle) return true
   if (o.exact) return texts.some((t) => t === needle)
   if (o.anyOrder) {
     const all = texts.join(' | ')
     return needle.split(' ').filter(Boolean).every((w) => all.includes(w))
   }
   return texts.some((t) => t.includes(needle))
+}
+
+/**
+ * رتبةُ الكتاب في نتائج البحث السريع: ما طابق عنوانُه أوّلًا، ثم ما ابتدأ
+ * عنوانُه بالكلمة، ثم ما احتواها، ثم ما طابق في مؤلِّفه، ثم سائرُ الحقول.
+ * وكانت النتائجُ على ترتيب الإدخال، فقد يكون الكتابُ المطلوب بعينه
+ * الخامسَ عشرَ فلا يُعرض.
+ */
+export function bookRank(b: Book, query: string): number {
+  const needle = normalizeText(query, QUICK_OPTS)
+  const title = normalizeText(b.title, QUICK_OPTS)
+  if (title === needle) return 0
+  if (title.startsWith(needle)) return 1
+  if (title.includes(needle)) return 2
+  if (normalizeText(b.author_name, QUICK_OPTS).includes(needle)) return 3
+  return 4
 }
 
 /**
@@ -100,11 +141,7 @@ export function matchBook(b: Book, query: string, o: SearchOptions, keys: string
 export function matchWithin(t: WithinTitle, query: string, o: SearchOptions): boolean {
   const needle = normalizeText(query, o)
   if (!needle) return true
-  const hay = normalizeText([
-    t.title, t.author_name,
-    (t.contributors ?? []).map((c) => c.name).join(' '),
-    t.category ?? '', t.sub_category ?? '',
-  ].join(' '), o)
+  const hay = withinText(t, o)
   if (o.anyOrder) return needle.split(' ').filter(Boolean).every((w) => hay.includes(w))
   return hay.includes(needle)
 }

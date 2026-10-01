@@ -19,7 +19,7 @@ import { countAuthors } from '../lib/people'
 import {
   AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, PRESSES_COUNT, countLabel,
 } from '../lib/types'
-import { BooksIcon, PressIcon, QuillIcon, TelegramIcon, XIcon } from './ui'
+import { BooksIcon, PressIcon, QuillIcon, TelegramIcon, XIcon, safeHref } from './ui'
 
 /**
  * `tally` يطلب شريطَ الأعداد. وهو للهبوط وحده: صفحةُ «عن المكتبة» تعرض
@@ -53,7 +53,7 @@ export default function Footer({ tally = false }: { tally?: boolean }) {
   const links = [
     { url: settings.x_url, label: 'إكس', icon: <XIcon size={14} /> },
     { url: settings.telegram_url, label: 'تلجرام', icon: <TelegramIcon size={15} /> },
-  ].filter((l) => l.url.trim())
+  ].map((l) => ({ ...l, url: safeHref(l.url) ?? '' })).filter((l) => l.url)
 
   return (
     <footer className="site-footer">

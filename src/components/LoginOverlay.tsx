@@ -6,7 +6,6 @@ import { useState, type FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { claimOwnership, fetchOwnerRecord, ownerExists } from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import { CloseButton, Overlay, cardStyle } from './ui'
 
 const MIN_PASSWORD = 6
@@ -36,8 +35,6 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
-  useScrollLock()
-  useEscapeKey(onClose)
 
   /**
    * يحجز ملكية المكتبة، ويتسامح مع كونها محجوزةً لهذا الحساب نفسه (كأن تُضغط

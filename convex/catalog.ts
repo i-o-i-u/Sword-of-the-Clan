@@ -3,6 +3,7 @@
 
 import { v } from 'convex/values'
 import { mutation, type MutationCtx } from './_generated/server'
+import type { Doc, Id } from './_generated/dataModel'
 import { era, perkSource, visibility } from './schema'
 import { DEFAULT_SETTINGS, requireOwner, toClient } from './privacy'
 
@@ -48,26 +49,84 @@ export const setAuthorDeath = mutation({
     death_approx: v.boolean(),
     death_text: v.string(),
   },
-  handler: async (ctx, { id, death, era: dEra, alive, death_approx, death_text }) => {
+  handler: async (ctx, { id, ...death }) => {
     await requireOwner(ctx)
-    const author = await ctx.db.get(id)
-    if (!author) throw new Error('لا مؤلِّف بهذا المعرّف.')
+    await applyDeath(ctx, id, death)
+  },
+})
 
-    if (alive) {
-      await ctx.db.patch(id, { alive: true, death: null, death_approx: false, death_text: '' })
-      return
-    }
-    if (death_approx) {
-      if (!death_text.trim()) return
-      await ctx.db.patch(id, {
-        alive: false, death_approx: true, death_text: death_text.trim(), death: null,
-      })
-      return
-    }
-    if (death === null) return
+/** ما يُكتب من وفاة الرجل، كما في `setAuthorDeath` */
+const deathInput = v.object({
+  death: v.union(v.number(), v.null()),
+  era: v.optional(era),
+  alive: v.boolean(),
+  death_approx: v.boolean(),
+  death_text: v.string(),
+})
+
+async function applyDeath(
+  ctx: MutationCtx,
+  id: Id<'authors'>,
+  { death, era: dEra, alive, death_approx, death_text }: {
+    death: number | null; era?: Doc<'authors'>['era']
+    alive: boolean; death_approx: boolean; death_text: string
+  },
+) {
+  const author = await ctx.db.get(id)
+  if (!author) throw new Error('لا مؤلِّف بهذا المعرّف.')
+
+  if (alive) {
+    await ctx.db.patch(id, { alive: true, death: null, death_approx: false, death_text: '' })
+    return
+  }
+  if (death_approx) {
+    if (!death_text.trim()) return
     await ctx.db.patch(id, {
-      alive: false, death_approx: false, death_text: '', death, era: dEra ?? author.era,
+      alive: false, death_approx: true, death_text: death_text.trim(), death: null,
     })
+    return
+  }
+  if (death === null) return
+  await ctx.db.patch(id, {
+    alive: false, death_approx: false, death_text: '', death, era: dEra ?? author.era,
+  })
+}
+
+async function findOrCreateAuthorId(ctx: MutationCtx, name: string): Promise<Id<'authors'>> {
+  const trimmed = name.trim()
+  const found = await ctx.db
+    .query('authors')
+    .withIndex('by_name', (q) => q.eq('name', trimmed))
+    .first()
+  if (found) return found._id
+  return await ctx.db.insert('authors', {
+    name: trimmed, full_name: '', birth: null, death: null, era: 'هـ',
+    alive: false, death_approx: false, death_text: '', bio: '',
+  })
+}
+
+/**
+ * أسماءُ نموذج الكتاب كلُّها دفعةً واحدة: المؤلِّفون والمشارِكون ومؤلِّفو
+ * العناوين المضمومة ومشارِكوهم، ومعها وفاةُ من كُتبت وفاتُه.
+ *
+ * وكان النموذجُ يُنادي لكلّ اسمٍ نداءً ينتظر سابقَه، فمجموعةٌ فيها عشرون
+ * عنوانًا كانت خمسين رحلةً إلى الخادم — وإن أخفق نداءٌ في وسطها بقيت
+ * سجلّاتٌ أُنشئت لكتابٍ لم يُحفظ. وهي ههنا معاملةٌ واحدة: تقع كلُّها أو لا
+ * يقع منها شيء. والجوابُ على ترتيب الطلب، فموضعُ كلّ اسمٍ موضعُ صاحبه.
+ */
+export const ensureAuthors = mutation({
+  args: {
+    rows: v.array(v.object({ name: v.string(), death: v.optional(deathInput) })),
+  },
+  handler: async (ctx, { rows }) => {
+    await requireOwner(ctx)
+    const out: { id: string; name: string }[] = []
+    for (const row of rows) {
+      const id = await findOrCreateAuthorId(ctx, row.name)
+      if (row.death) await applyDeath(ctx, id, row.death)
+      out.push({ id, name: (await ctx.db.get(id))!.name })
+    }
+    return out
   },
 })
 
@@ -109,13 +168,41 @@ export const updateAuthor = mutation({
       // ومؤلِّفُ العنوان المضموم مؤلِّفٌ كصاحب السجلّ، واسمُه مُكرَّرٌ في
       // ضامِّه — فلو أُغفل بقي على الكتاب اسمٌ قديم، كما يبقى على كتب الدار
       // إن أُغفلت مزامنتُها. ولا فهرسَ يبلغه، فالمرورُ على الكتب كلِّها.
+      //
+      // وكذلك اسمُه حيث كان مؤلِّفًا مشارِكًا أو ذا صفة: هو مكتوبٌ هناك نصًّا
+      // كما هو مكتوبٌ في `author_name`، فلو أُغفل بقي القديمُ على البطاقة
+      // وفي البحث.
+      const renameIn = <T extends { name: string }>(
+        rows: T[] | undefined, own: (r: T) => boolean,
+      ) => {
+        let changed = false
+        const next = (rows ?? []).map((r) => {
+          if (!own(r) || r.name === name) return r
+          changed = true
+          return { ...r, name }
+        })
+        return { next, changed }
+      }
       for (const b of await ctx.db.query('books').collect()) {
-        const titles = b.within_titles ?? []
-        if (!titles.some((t) => t.author_id === id && t.author_name !== name)) continue
+        const co = renameIn(b.co_authors, (c) => c.author_id === id)
+        const contribs = renameIn(b.contributors, (c) => c.person_id === id)
+        let titlesChanged = false
+        const titles = (b.within_titles ?? []).map((t) => {
+          const inner = renameIn(t.contributors, (c) => c.person_id === id)
+          const own = t.author_id === id && t.author_name !== name
+          if (!own && !inner.changed) return t
+          titlesChanged = true
+          return {
+            ...t,
+            author_name: t.author_id === id ? name : t.author_name,
+            contributors: inner.next,
+          }
+        })
+        if (!co.changed && !contribs.changed && !titlesChanged) continue
         await ctx.db.patch(b._id, {
-          within_titles: titles.map(
-            (t) => (t.author_id === id ? { ...t, author_name: name } : t),
-          ),
+          ...(co.changed ? { co_authors: co.next } : {}),
+          ...(contribs.changed ? { contributors: contribs.next } : {}),
+          ...(titlesChanged ? { within_titles: titles } : {}),
         })
       }
     }
@@ -511,7 +598,9 @@ export const insertLoan = mutation({
     await requireOwner(ctx)
     await ctx.db.insert('loans', {
       ...loan,
-      lent_date: new Date().toISOString().slice(0, 10),   // كان current_date
+      // كان current_date. ويومُ الإعارة بتوقيت مكّة (+٣) لا بالتوقيت العالميّ،
+      // وإلّا كُتب ما يُعار بين منتصف الليل والثالثة فجرًا بتاريخ الأمس
+      lent_date: new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10),
       returned: false,
     })
   },
@@ -612,6 +701,38 @@ export const findOrCreatePublisher = mutation({
       name: trimmed, place: place?.trim() ?? '', founded: '', website: '', notes: '',
     })
     return toClient((await ctx.db.get(id))!)
+  },
+})
+
+/**
+ * دُورُ نموذج الكتاب دفعةً واحدة — الأولى ومن شارَكها — كما تُكتب أسماءُ
+ * الأشخاص في `ensureAuthors`: معاملةٌ واحدة، والجوابُ على ترتيب الطلب.
+ * ولا يُكتب فوق مكانِ دارٍ محفوظ، وإنما يُسدّ الفارغ.
+ */
+export const ensurePublishers = mutation({
+  args: { rows: v.array(v.object({ name: v.string(), place: v.optional(v.string()) })) },
+  handler: async (ctx, { rows }) => {
+    await requireOwner(ctx)
+    const out: { id: string; name: string; place: string }[] = []
+    for (const { name, place } of rows) {
+      const trimmed = name.trim()
+      if (!trimmed) throw new Error('اسم الدار فارغ.')
+      const found = await ctx.db
+        .query('publishers')
+        .withIndex('by_name', (q) => q.eq('name', trimmed))
+        .first()
+      let id = found?._id
+      if (found) {
+        if (!found.place && place?.trim()) await ctx.db.patch(found._id, { place: place.trim() })
+      } else {
+        id = await ctx.db.insert('publishers', {
+          name: trimmed, place: place?.trim() ?? '', founded: '', website: '', notes: '',
+        })
+      }
+      const row = (await ctx.db.get(id!))!
+      out.push({ id: row._id, name: row.name, place: row.place })
+    }
+    return out
   },
 })
 

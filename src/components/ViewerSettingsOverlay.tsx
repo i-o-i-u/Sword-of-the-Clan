@@ -5,14 +5,11 @@
 
 import { useLibrary } from '../lib/library'
 import { FONTS, FONT_LABELS, FONT_ORDER, THEMES, THEME_LABELS, THEME_ORDER } from '../lib/theme'
-import { useEscapeKey, useScrollLock } from '../lib/useScrollLock'
 import type { FontName, ThemeName } from '../lib/types'
 import { CloseButton, Overlay, cardStyle } from './ui'
 
 export default function ViewerSettingsOverlay({ onClose }: { onClose: () => void }) {
   const { settings, setViewerPref } = useLibrary()
-  useScrollLock()
-  useEscapeKey(onClose)
 
   const optionCard = (active: boolean) => ({
     flex: 1,

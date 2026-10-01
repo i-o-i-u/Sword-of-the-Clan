@@ -13,7 +13,7 @@ import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { hashFor, navigate, shortBookLink } from '../lib/router'
+import { goBack, hashFor, navigate, pressable, shortBookLink } from '../lib/router'
 import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
 import { formatIsbn, isbnInfo } from '../lib/isbn'
@@ -21,7 +21,7 @@ import {
   BOOKS_COUNT, COPIES_COUNT, LANGUAGES, PERKS_COUNT, STATUSES, STATUS_UNKNOWN,
   WORK_PHRASES, contributorLabel, countLabel, formatNumber,
   missingVolumeLabel, missingVolumesHeadline, parseNumber, sumVolumePages,
-  type Author, type Book, type Perk, type ReadingStatus, type WithinTitle,
+  type Author, type Book, type Perk, type ReadingStatus, type Settings, type WithinTitle,
 } from '../lib/types'
 import {
   editionGroup, isCollection, issueBadge, issueLine, pressesLine, pressesOf,
@@ -40,6 +40,19 @@ import {
 
 // عارض الصورة لا يُفتح في كل زيارة، فلا يُحمَّل مع الصفحة
 const ImageViewer = lazy(() => import('../components/ImageViewer'))
+
+/**
+ * أمخفيٌّ هذا الحقلُ من هذا الكتاب؟ بالدرجات الثلاث نفسِها التي يحكم بها
+ * الخادمُ (`privacy.fieldHidden`): ما أُخفي منه بعينه، ثم ما أُخفي من الكتب
+ * كلِّها ما لم يُستثنَ منه. وكان يقرأ الثانيةَ وحدها، فيرى صاحبُ المكتبة
+ * بطاقتَه على غير ما يراها الزائر. (والزائرُ لا يصله شيءٌ من هذا: المخفيُّ
+ * يُفرَّغ في الخادم، وقوائمُه تصله فارغة.)
+ */
+function fieldHiddenFor(settings: Settings, bookId: string, key: string): boolean {
+  if ((settings.book_field_overrides?.[bookId] ?? []).includes(key)) return true
+  if (!settings.hidden_fields.includes(key)) return false
+  return !(settings.field_exceptions?.[key] ?? []).includes(bookId)
+}
 
 /** صفٌّ من صفوف البيانات. `key` مفتاحُه في `hidden_fields`. */
 interface Row {
@@ -64,7 +77,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   )
   const vis = settings.visibility
   const showTo = (key: keyof typeof vis) => isOwner || vis[key]
-  const hidden = (key: string) => settings.hidden_fields.includes(key)
+  const hidden = (key: string) => fieldHiddenFor(settings, book?.id ?? bookId, key)
 
   const [showVolumes, setShowVolumes] = useState(false)
   // وقسمُ ما طُبع معه مطويٌّ حتى يُفتح: المجموعةُ تضمّ عشرين عنوانًا وأكثر
@@ -83,7 +96,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   if (!book) {
     return (
       <main className="app-main" style={{ maxWidth: 1000, margin: '0 auto', padding: 32 }}>
-        <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
+        <BackButton label="العودة إلى المكتبة" onClick={() => goBack({ name: 'browse' })} />
         <EmptyState title="لم يُعثَر على هذا الكتاب" hint="قد يكون حُذف، أو أنه غير ظاهرٍ للزوار." />
       </main>
     )
@@ -335,7 +348,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 12, flexWrap: 'wrap',
       }}>
-        <BackButton label="العودة إلى المكتبة" onClick={() => navigate({ name: 'browse' })} />
+        <BackButton label="العودة إلى المكتبة" onClick={() => goBack({ name: 'browse' })} />
         {/* البطاقة عرضٌ لا تعديل: بيانات الكتاب كلُّها تُصحَّح من نموذجه */}
         {canEdit && (
           <button
@@ -356,8 +369,8 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               وما في هذه البطاقة يكفي لقراءته لا لتأمّله. */}
           <div
             className={`detail-cover${book.cover_url ? ' zoomable' : ''}`}
-            onClick={() => { if (book.cover_url) setZoomCover(true) }}
-            role={book.cover_url ? 'button' : undefined}
+            {...(book.cover_url ? pressable(() => setZoomCover(true), 'button') : {})}
+            aria-label={book.cover_url ? 'اعرض الغلاف مكبَّرًا' : undefined}
             title={book.cover_url ? 'اعرض الغلاف مكبَّرًا' : undefined}
             style={{
               width: '100%', aspectRatio: '3/4', borderRadius: 14, overflow: 'hidden',
@@ -533,20 +546,31 @@ export default function BookDetail({ bookId }: { bookId: string }) {
                 {canEdit ? 'تقييمي' : 'تقييم صاحب المكتبة'}
               </div>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                {[1, 2, 3, 4, 5].map((n) => (
+                {/* أزرارٌ لا حروف: تُبلَغ بلوحة المفاتيح ويقرؤها قارئُ الشاشة */}
+                {[1, 2, 3, 4, 5].map((n) => (canEdit ? (
+                  <button
+                    key={n}
+                    type="button"
+                    className="star-btn"
+                    onClick={() => void patchBook(book.id, { rating: n })}
+                    aria-label={`تقييم ${n} من ٥`}
+                    aria-pressed={n <= book.rating}
+                    style={{ color: n <= book.rating ? 'var(--star)' : 'var(--border)' }}
+                  >
+                    {n <= book.rating ? '★' : '☆'}
+                  </button>
+                ) : (
                   <span
                     key={n}
-                    onClick={() => canEdit && void patchBook(book.id, { rating: n })}
-                    role={canEdit ? 'button' : undefined}
-                    aria-label={canEdit ? `تقييم ${n} من ٥` : undefined}
+                    aria-hidden="true"
                     style={{
-                      fontSize: 26, lineHeight: 1, cursor: canEdit ? 'pointer' : 'default',
-                      color: n <= book.rating ? 'var(--star)' : 'oklch(0.8 0.01 60)',
+                      fontSize: 26, lineHeight: 1,
+                      color: n <= book.rating ? 'var(--star)' : 'var(--border)',
                     }}
                   >
                     {n <= book.rating ? '★' : '☆'}
                   </span>
-                ))}
+                )))}
                 {canEdit && book.rating > 0 && (
                   <button
                     type="button"
@@ -1059,7 +1083,7 @@ function OtherEditions({ group }: { group: ReturnType<typeof editionGroup> }) {
 function EditionPanel({ book, main }: { book: Book; main: boolean }) {
   const { authorById, settings, isOwner } = useLibrary()
   const vis = settings.visibility
-  const hidden = (key: string) => settings.hidden_fields.includes(key)
+  const hidden = (key: string) => fieldHiddenFor(settings, book.id, key)
 
   const presses = pressesOf(book)
   const span = volumeYearSpan(book)
@@ -1098,6 +1122,11 @@ function EditionPanel({ book, main }: { book: Book; main: boolean }) {
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('a')) return
         navigate({ name: 'book', id: book.id })
+      }}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && e.target === e.currentTarget) navigate({ name: 'book', id: book.id })
       }}
       className="edition-panel"
       title="افتح صفحة هذه النشرة"
@@ -1248,7 +1277,7 @@ function PrintedWithin({ books }: { books: Book[] }) {
         {books.map((b) => (
           <div
             key={b.id}
-            onClick={() => navigate({ name: 'book', id: b.id })}
+            {...pressable(() => navigate({ name: 'book', id: b.id }))}
             style={{
               display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer', flexWrap: 'wrap',
               background: 'var(--header)', border: '1px solid var(--border)',
@@ -1314,7 +1343,7 @@ function WorksOn({ rows }: { rows: { type: string; target: Book | undefined }[] 
           return (
             <div
               key={`${target.id}-${row.type}-${i}`}
-              onClick={() => navigate({ name: 'book', id: target.id })}
+              {...pressable(() => navigate({ name: 'book', id: target.id }))}
               style={{
                 cursor: 'pointer', background: 'var(--header)', border: '1px solid var(--border)',
                 borderRadius: 9, padding: '10px 13px', fontSize: 14.5, lineHeight: 2,
@@ -1355,7 +1384,7 @@ function WorksAbout({ rows }: { rows: { type: string; target: Book | undefined }
         {visible.map((row, i) => (
           <div
             key={`${row.target!.id}-${row.type}-${i}`}
-            onClick={() => navigate({ name: 'book', id: row.target!.id })}
+            {...pressable(() => navigate({ name: 'book', id: row.target!.id }))}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
               background: 'var(--header)', border: '1px solid var(--border)',
@@ -1449,7 +1478,7 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
             </div>
           </div>
 
-          <div className="perk-list">
+          <div className="kn-list">
             {perks.map((p) => (
               <PerkCard
                 key={p.id}

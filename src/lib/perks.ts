@@ -32,6 +32,8 @@ export interface Tally {
   note?: string
   /** فروعُه، إن كان بابًا رئيسًا */
   children?: Tally[]
+  /** جنسُ المصدر في باب المصادر: فراغُه كتابٌ من الفهرس */
+  kind?: string
 }
 
 /** يعدّ أسماءً بلا تكرار، ويرتّبها بالأكثر ثم أبجديًّا */
@@ -159,7 +161,7 @@ export function perkTags(perks: Perk[]): Tally[] {
  * شارتُه — «سماعًا»، «من الشبكة» — فيُعرف بابُ الفائدة بالنظر.
  */
 export function perkSources(perks: Perk[], bookById: (id: string) => Book | undefined): Tally[] {
-  const rows = new Map<string, Tally>()
+  const rows = new Map<string, Tally & { kind: string }>()
   for (const perk of perks) {
     const book = perk.book_id ? bookById(perk.book_id) : undefined
     const name = sourceTitle(perk, book)
@@ -174,6 +176,8 @@ export function perkSources(perks: Perk[], bookById: (id: string) => Book | unde
       count: 1,
       icon: kind ? kind.icon : 'open-book',
       note: kind ? kind.badge : '',
+      // جنسُه، وبه يُصفّى بابُ المصادر: فراغُه كتابٌ من الفهرس
+      kind: kind ? kind.name : '',
     })
   }
   return [...rows.values()]
@@ -315,8 +319,49 @@ function haystack(perk: Perk, book: Book | undefined): string {
   ].join(' ')
 }
 
+/**
+ * نصوصُ الفوائد مُطبَّعةً، تُحسب مرّةً لكلّ فائدةٍ وتُحفظ. وكان البحثُ
+ * يُطبِّع نصَّ كلِّ فائدةٍ — وفيها الطويلُ ذو الصفحات — مع كل حرفٍ يُكتب.
+ */
+export type PerkIndex = Map<string, string>
+
+export function perkIndex(perks: Perk[], bookById: (id: string) => Book | undefined): PerkIndex {
+  return new Map(perks.map((p) => [
+    p.id,
+    normalizeText(haystack(p, p.book_id ? bookById(p.book_id) : undefined), QUICK_OPTS),
+  ]))
+}
+
+/**
+ * عدّاداتُ الأنواع والتصنيفات على الترشيح القائم: كم فائدةً تبقى لو اختير
+ * هذا النوعُ أو هذا التصنيف، مع سائر الشروط كما هي. وبه يعرف القارئُ قبل أن
+ * يضغط أيُّ الأبواب يقوده إلى شيء.
+ */
+export function facetCounts(
+  perks: Perk[], f: PerkFilter, bookById: (id: string) => Book | undefined, index?: PerkIndex,
+): { kinds: Map<string, number>; categories: Map<string, number>; subs: Map<string, number> } {
+  const count = (list: Perk[], key: 'kinds' | 'categories' | 'sub_categories') => {
+    const m = new Map<string, number>()
+    for (const p of list) for (const v of new Set(p[key])) m.set(v, (m.get(v) ?? 0) + 1)
+    return m
+  }
+  return {
+    kinds: count(filterPerks(perks, { ...f, kind: '' }, bookById, index), 'kinds'),
+    categories: count(
+      filterPerks(perks, { ...f, category: '', subCategory: '' }, bookById, index), 'categories',
+    ),
+    subs: count(filterPerks(perks, { ...f, subCategory: '' }, bookById, index), 'sub_categories'),
+  }
+}
+
+/** فائدةٌ بالقرعة، غيرُ التي بين اليدين إن كان في الكنّاش سواها */
+export function randomPerk(perks: Perk[], current?: string): Perk | undefined {
+  const pool = perks.length > 1 ? perks.filter((p) => p.id !== current) : perks
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
 export function filterPerks(
-  perks: Perk[], f: PerkFilter, bookById: (id: string) => Book | undefined,
+  perks: Perk[], f: PerkFilter, bookById: (id: string) => Book | undefined, index?: PerkIndex,
 ): Perk[] {
   const needle = normalizeText(f.query.trim(), QUICK_OPTS)
   return perks.filter((p) => {
@@ -333,7 +378,9 @@ export function filterPerks(
     // قُرئ أو سُمع من خارجه في بابٍ واحد، وليس لِما خارجه معرّف
     if (f.source && sourceTitle(p, book) !== f.source) return false
     if (!needle) return true
-    return normalizeText(haystack(p, book), QUICK_OPTS).includes(needle)
+    const hay = index?.get(p.id) ?? normalizeText(haystack(p, book), QUICK_OPTS)
+    // والكلماتُ تُطلب مجتمعةً على أيّ ترتيب، كما في البحث عن الكتب
+    return needle.split(' ').filter(Boolean).every((w) => hay.includes(w))
   })
 }
 
