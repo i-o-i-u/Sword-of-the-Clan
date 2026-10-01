@@ -28,8 +28,8 @@ import {
   PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, sourceKindOf, type Perk,
 } from '../lib/types'
 import {
-  CheckIcon, CopyIcon, HashIcon, LinkIcon, OpenBookIcon, OwnerIcon, PencilIcon,
-  PinIcon, QuoteIcon,
+  CheckIcon, CopyIcon, HashIcon, LinkIcon, OpenBookIcon, PencilIcon,
+  ClockIcon, PagesIcon, QuoteIcon,
 } from './ui'
 
 interface Props {
@@ -41,6 +41,25 @@ interface Props {
   onEdit?: (perk: Perk) => void
   /** الضغطُ على وسمٍ أو عَلَمٍ يجمع ما تحته. ومن لم يمرّره فهي نصٌّ لا رابط */
   onPick?: (field: PickField, value: string) => void
+}
+
+/** «قلتُ» في صدر التعليق، بتشكيلها أو بغيره، وما يليها من نقطتين أو فاصلة */
+const SAID = /^\s*قلت[ً-ْ]*\s*[:：،,]?\s*/
+
+/**
+ * تعليقُ المُقيِّد. صدرُه «قلتُ» في سطرٍ وحده، بخطٍّ غير خطّه وبالحُمرة — كما
+ * يميّز النُّسّاخُ كلامَهم من كلام المؤلِّف. وكان صدرُه شارةً تقول «تعليقي»،
+ * ثم يبتدئ التعليقُ نفسُه بـ«قلتُ» فتتكرّر العلامةُ مرّتين بلفظين. فالشارةُ
+ * سقطت، و«قلتُ» تُنزع من أوّل النصّ إن كُتبت فيه لأنها صارت صدرَه.
+ */
+export function PerkComment({ text }: { text: string }) {
+  const body = text.replace(SAID, '')
+  return (
+    <aside className="kn-comment">
+      <span className="kn-comment-said">قلتُ:</span>
+      <Prose text={body} />
+    </aside>
+  )
 }
 
 export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Props) {
@@ -58,6 +77,9 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   // جنسُ المصدر: كتابٌ من خارج الفهرس، أو سماعٌ، أو صفحةُ شبكة، أو منشور،
   // أو تسجيل. ولكلٍّ ألفاظُ حقوله وشارتُه. وما كان من الفهرس فكتابٌ ساكت.
   const sourceKind = sourceKindOf(perk.source?.kind)
+  // موضعُ الفائدة صفحةٌ في الكتاب ودقيقةٌ في التسجيل، فأيقونتُه أيقونتُهما لا
+  // دبّوسُ الخريطة: ذاك «موضعٌ» في الأرض، وكان يُقرأ «ص٣٩٨» كأنّه عنوانُ مكان
+  const PlaceIcon = sourceKind.isBook ? PagesIcon : ClockIcon
 
   // والأيقونةُ تُطلب من المُحرَّر ومن المبدئيّ جميعًا: ما لم يُحرَّر بعدُ
   // تُعرض أنواعُه وتصنيفاتُه المبدئيّة، فلو قُرئ من الجدول وحدَه لبقيت
@@ -189,15 +211,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       {/* تعليقُ المُقيِّد مفصولٌ عن النصّ بشارةٍ وشريط: كلامُه لا يُخلَط
           بكلام صاحب الكتاب، وهذا أوَّلُ ما يُتحرَّى في النقل. وتنسيقُه ثابتٌ
           لا يتبع تنسيقَ النصّ، فيُعرف الكلامان بالنظر قبل القراءة. */}
-      {perk.comment && (
-        <aside className="kn-comment">
-          <span className="kn-comment-tag">
-            <OwnerIcon size={11} />
-            تعليقي
-          </span>
-          <Prose text={perk.comment} />
-        </aside>
-      )}
+      {perk.comment && <PerkComment text={perk.comment} />}
 
       {/* ------------------------------------------------------- الذيل */}
       <footer className="kn-card-foot">
@@ -229,7 +243,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
             <span className="kn-cite-tail">
               {place && (
                 <span className="kn-place">
-                  <PinIcon size={11} />
+                  <PlaceIcon size={11} />
                   {place}
                 </span>
               )}
@@ -261,7 +275,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
         {hideSource && place && (
           <div className="kn-cite kn-cite-bare">
             <span className="kn-place">
-              <PinIcon size={11} />
+              <PlaceIcon size={11} />
               {place}
             </span>
           </div>

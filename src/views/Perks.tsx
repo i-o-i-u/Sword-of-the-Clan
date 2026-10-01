@@ -42,7 +42,7 @@ import {
   countLabel, countParts, formatNumber, perkCategoriesOf, perkKindsOf,
   type CountForms, type Notebook, type Perk, type PerkKindDef,
 } from '../lib/types'
-import PerkCard from '../components/PerkCard'
+import PerkCard, { PerkComment } from '../components/PerkCard'
 import Prose from '../components/Prose'
 import RichText from '../components/RichText'
 import PerkEditor from '../components/PerkEditor'
@@ -699,12 +699,7 @@ function Feed(
               <section key={p.id}>
                 {p.title && <h3>{p.title}</h3>}
                 <RichText html={p.text_html} text={p.text} footnotes={p.footnotes} />
-                {p.comment && (
-                  <aside className="kn-comment">
-                    <span className="kn-comment-tag"><OwnerIcon size={11} />تعليقي</span>
-                    <Prose text={p.comment} />
-                  </aside>
-                )}
+                {p.comment && <PerkComment text={p.comment} />}
                 <footer>
                   <a {...linkTo({ name: 'perk', id: p.id })}>
                     {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'الفائدة'}
@@ -1119,8 +1114,11 @@ export function PerkPage({ perkId }: { perkId: string }) {
             <span className="kn-pager-dir">→ السابقة</span>
             <span className="kn-pager-title">{prev.title || prev.text.slice(0, 60)}</span>
           </a>
-        ) : <span />}
-        {perks.length > 2 && (
+        ) : <span className="kn-pager-void" />}
+        {/* والوسطُ قائمٌ وإن لم تكن قرعة: الشبكةُ ثلاثةُ أعمدة، فلو سقط الأوسطُ
+            وقعت «التالية» في عموده الضيّق فصارت زرًّا صغيرًا في وسط الصفحة
+            وأختُها لوحٌ عريض — وذاك ما كان يُرى في كنّاشٍ فيه فائدتان */}
+        {perks.length > 2 ? (
           <button
             type="button"
             className="kn-btn kn-btn-ghost"
@@ -1132,13 +1130,13 @@ export function PerkPage({ perkId }: { perkId: string }) {
             <SuggestIcon size={15} />
             <span>بالقرعة</span>
           </button>
-        )}
+        ) : <span className="kn-pager-gap" />}
         {next ? (
           <a className="kn-pager-link kn-pager-next" {...linkTo({ name: 'perk', id: next.id })}>
             <span className="kn-pager-dir">التالية ←</span>
             <span className="kn-pager-title">{next.title || next.text.slice(0, 60)}</span>
           </a>
-        ) : <span />}
+        ) : <span className="kn-pager-void" />}
       </div>
 
       {kin.notebook.length > 0 && (

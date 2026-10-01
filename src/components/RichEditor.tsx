@@ -22,7 +22,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  SYMBOL_GROUPS, newFootnoteId, type Footnote,
+  SYMBOL_GROUPS, escapeHtml, layoutPoems, newFootnoteId, type Footnote,
 } from '../lib/richtext'
 import {
   BoldIcon, ClearIcon, HighlightIcon, ItalicIcon, ListIcon, NoteIcon,
@@ -38,11 +38,6 @@ interface Props {
   /** لوحُ التعليق أقصرُ من لوح النصّ: التعقُّبُ سطرٌ أو سطران */
   small?: boolean
 }
-
-/** بيتٌ: صدرٌ ونجمةٌ وعَجُز. ولا يبدأ بنجمة، فذاك رجز. */
-const VERSE = /^(?!\s*\*)(.+?)\s\*\s(.+)$/
-/** وشطرُ الرجز محفوفٌ بنجمتين، كما يكتبه صاحبُ الكنّاش */
-const RAJAZ = /^\*\s*([^*]+?)\s*\*$/
 
 export default function RichEditor(
   { html, onChange, footnotes, onFootnotes, placeholder, small }: Props,
@@ -182,40 +177,14 @@ export default function RichEditor(
   function layoutPoetry(all = false) {
     const el = ref.current
     if (!el) return
-    const sel = window.getSelection()
-    const anchor = all ? null : (sel?.anchorNode ?? null)
-
-    for (const block of [...el.children]) {
-      if (block.classList.contains('poem-wrap')) continue
-      if (anchor && block.contains(anchor)) continue
-      // ما فيه تنسيقٌ داخليّ لا يُقلَب شعرًا: الشعرُ سطرٌ مجرَّد
-      const line = (block.textContent ?? '').trim()
-      if (!line) continue
-
-      const rajaz = RAJAZ.exec(line)
-      const verse = rajaz ? null : VERSE.exec(line)
-      if (!rajaz && !verse) continue
-
-      const kind = rajaz ? 'rajaz' : 'verse'
-      const row = rajaz
-        ? shatrRow([rajaz[1]], true)
-        : shatrRow([verse![1].trim(), verse![2].trim()], false)
-
-      // ما كان قبله لوحُ شعرٍ من جنسه ضُمّ إليه، فتُصفّ القصيدةُ في جدولٍ
-      // واحد وتُرقَّم أبياتُها من أوّلها
-      const before = block.previousElementSibling
-      const table = before?.classList.contains('poem-wrap')
-        ? before.querySelector<HTMLTableElement>(`table.${tableClass(kind)}`)
-        : null
-
-      if (table) {
-        table.querySelector('tbody')?.appendChild(row)
-        block.remove()
-      } else {
-        block.replaceWith(poemWrap(kind, row))
-      }
+    const anchor = all ? null : (window.getSelection()?.anchorNode ?? null)
+    // الصفُّ في `lib/richtext` لا هنا: العرضُ يصفّ بالدالّة نفسها ما فات المُحرِّرَ،
+    // ويُفصل فيها السطرُ عن السطر قبل الصفّ — البيتُ بعد «قال الشاعر:» بسطرٍ
+    // لا بفقرة كان يبقى منثورًا
+    if (layoutPoems(el, anchor)) {
+      hardenMarks(el)
+      emit()
     }
-    emit()
   }
 
   return (
@@ -310,8 +279,18 @@ export default function RichEditor(
           // اللصقُ نصًّا مجرَّدًا: ما يُنسخ من متصفّحٍ يجرّ معه أنماطَ موقعه
           onPaste={(e) => {
             e.preventDefault()
-            const text = e.clipboardData.getData('text/plain')
-            document.execCommand('insertText', false, text)
+            const text = e.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n')
+            // ونصٌّ ذو أسطرٍ يُدرَج فقراتٍ لا نصًّا واحدًا: `insertText` يُبقي في
+            // فيرفكس حرفَ السطر في عقدةٍ واحدة، فلا يرى الصفُّ في الأبيات أسطرًا
+            if (text.includes('\n')) {
+              const html = text.split('\n')
+                .map((line) => `<p>${line.trim() ? escapeHtml(line) : '<br>'}</p>`)
+                .join('')
+              document.execCommand('insertHTML', false, html)
+              requestAnimationFrame(() => layoutPoetry())
+            } else {
+              document.execCommand('insertText', false, text)
+            }
             emit()
           }}
         />
@@ -374,48 +353,6 @@ function ToolButton(
 // ---------------------------------------------------------------------------
 // أدواتٌ على شجرة اللوح
 // ---------------------------------------------------------------------------
-
-const tableClass = (kind: 'verse' | 'rajaz') => (kind === 'rajaz' ? 'rajaz-table' : 'poetry-table')
-
-/** لوحُ الشعر: جدولٌ في إطاره، كما يُعرض في البطاقة سواءً بسواء */
-function poemWrap(kind: 'verse' | 'rajaz', row: HTMLTableRowElement): HTMLElement {
-  const wrap = document.createElement('div')
-  wrap.className = kind === 'rajaz' ? 'poem-wrap poem-wrap-rajaz' : 'poem-wrap'
-  const table = document.createElement('table')
-  table.className = tableClass(kind)
-  const body = document.createElement('tbody')
-  body.appendChild(row)
-  table.appendChild(body)
-  wrap.appendChild(table)
-  return wrap
-}
-
-/**
- * صفُّ البيت أو الشطر. و`data-original` يحمل الشطرَ قبل مدّه بالتطويل: عليه
- * يُقاس المدُّ في كل مرّة — والقياسُ على الممدود يزيده مدًّا على مدّ.
- */
-function shatrRow(parts: string[], rajaz: boolean): HTMLTableRowElement {
-  const row = document.createElement('tr')
-  if (rajaz) {
-    row.appendChild(cell('rajaz-shatr', parts[0]))
-  } else {
-    row.appendChild(cell('shatr shatr-first', parts[0]))
-    row.appendChild(cell('shatr shatr-last', parts[1]))
-  }
-  const no = document.createElement('td')
-  no.className = 'bayt-no'
-  no.contentEditable = 'false'
-  row.appendChild(no)
-  return row
-}
-
-function cell(className: string, text: string): HTMLTableCellElement {
-  const td = document.createElement('td')
-  td.className = className
-  td.dataset.original = text
-  td.textContent = text
-  return td
-}
 
 function makeMarker(id: string): HTMLElement {
   const sup = document.createElement('sup')

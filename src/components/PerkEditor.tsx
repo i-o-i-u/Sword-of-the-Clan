@@ -34,7 +34,7 @@ import { useLibrary } from '../lib/library'
 import { perkTags } from '../lib/perks'
 import { Icon } from '../lib/icons'
 import {
-  htmlIsEmpty, htmlToText, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
+  htmlIsEmpty, htmlToText, layoutPoemsHtml, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
@@ -213,7 +213,9 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   async function save(again = false) {
     if (!ready || saving) return
     setSaving(true)
-    const html = sanitizeHtml(d.html)
+    // ويُصفّ الشعرُ قبل الحفظ: الحفظُ بـCtrl+Enter والمؤشِّرُ في البيت الأخير
+    // لا يتركه، فلا يصفّه المُحرِّر
+    const html = layoutPoemsHtml(sanitizeHtml(d.html))
     const input: api.PerkInput = {
       book_id: d.fromLibrary ? (chosen?.id ?? null) : null,
       kinds: d.kinds,
@@ -382,14 +384,14 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 id="kn-comment"
                 value={d.comment}
                 onChange={(e) => set('comment', e.target.value)}
-                onFocus={() => { if (!d.comment) set('comment', 'قلتُ: ') }}
-                onBlur={() => { if (d.comment.trim() === 'قلتُ:') set('comment', '') }}
-                placeholder="قلتُ: …"
+                placeholder="ما تقوله أنت في الفائدة…"
                 className="kn-comment-input"
                 style={inputStyle}
               />
+              {/* و«قلتُ» لا تُكتب: هي صدرُ التعليق في العرض، تُرسم بالحُمرة في
+                  سطرٍ وحده (`PerkComment`). وما كُتبت فيه من قبلُ تُنزع منه هناك */}
               <p className="kn-field-hint">
-                يُعرض مفصولًا عن النصّ بشارةٍ وشريط، وتنسيقُه ثابتٌ لا يتبع تنسيقَه.
+                يُعرض مفصولًا عن النصّ مُصدَّرًا بـ«قلتُ:» — فلا حاجة إلى كتابتها.
               </p>
             </div>
           </div>

@@ -19,12 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # Node 24 للبناء وللأدوات جميعًا: أدواتُ الإصدارات السابقة تجري على
+      # Node 20، وقد نُعيَ وصار كلُّ نشرٍ يحمل تحذيرَه. فكلُّ أداةٍ هنا على
+      # إصدارها الذي يجري على node24 (`using: node24` في action.yml).
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -40,7 +43,7 @@ jobs:
         run: npx convex deploy --cmd 'npm run build:deploy'
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -63,4 +66,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

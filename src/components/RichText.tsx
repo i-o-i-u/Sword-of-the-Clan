@@ -13,7 +13,7 @@
 // كما كان، فلا يضيع قديمٌ لأن الجديد جاء.
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { orderedFootnotes, sanitizeHtml, type Footnote } from '../lib/richtext'
+import { layoutPoemsHtml, orderedFootnotes, sanitizeHtml, type Footnote } from '../lib/richtext'
 import { fontOf, stretchShatr } from '../lib/tatweel'
 import Prose from './Prose'
 
@@ -26,7 +26,8 @@ export default function RichText(
     className?: string
   },
 ) {
-  const clean = useMemo(() => (html.trim() ? sanitizeHtml(html) : ''), [html])
+  // والشعرُ يُصفّ عند العرض أيضًا: ما فات المُحرِّرَ صفُّه حين حُفظ يُعرض مصفوفًا
+  const clean = useMemo(() => (html.trim() ? layoutPoemsHtml(sanitizeHtml(html)) : ''), [html])
   const notes = useMemo(() => orderedFootnotes(clean, footnotes), [clean, footnotes])
   const ref = useRef<HTMLDivElement>(null)
   const lastWidth = useRef(0)

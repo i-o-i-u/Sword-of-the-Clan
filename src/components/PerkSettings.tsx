@@ -23,27 +23,42 @@
 //
 // وأمّا **الكرّاسات** فليست ههنا: لها بابُها من صفحة الفوائد، ومن صفحة كل
 // كرّاسةٍ تُضاف الفوائدُ الداخلة فيها.
+//
+// ===========================================================================
+// هيئتُها — على طراز الكنّاش (`kn-set-*`)
+// ===========================================================================
+//
+// كانت على أصناف نموذج الفائدة القديم: تبويبٌ من رُقَعٍ، وصفوفٌ من حقولٍ
+// متراصّة لا يُعرف أوّلُها من آخرها، والفرعُ والرئيسُ في هيئةٍ واحدة. فصارت:
+//   • **عمودًا للأبواب** إلى جانب اللوح، لكلّ بابٍ أيقونتُه وعددُ ما فيه
+//     وسطرٌ يشرحه — كعمود الترشيح في الكنّاش. وعلى الجوّال شريطًا.
+//   • **وصدرًا لكلّ باب**: شرحُه، وحقلٌ يُرشِّح صفوفَه — الأعلامُ تكثر فلا
+//     يُبلَغ آخرُها بالتمرير — وزرُّ الزيادة وزرُّ الاستعادة.
+//   • **وكلُّ صفٍّ بطاقةٌ**: أيقونتُه على أرضٍ من لونها، فاسمُه بارزًا، فشرحُه
+//     أو وفاتُه، فعددُ فوائده شارةً، فزرُّ الحذف. والتصنيفُ الرئيس لوحٌ تحته
+//     فروعُه مُزاحةً بخيط.
+//   • **وذيلًا يُخبر بحال النافذة**: أفيها ما لم يُحفظ — فلا يُغلقها صاحبُها
+//     وهو يظنّ أنّه حفظ.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as api from '../lib/api'
+import { Icon } from '../lib/icons'
 import { useLibrary } from '../lib/library'
+import { QUICK_OPTS, normalizeText } from '../lib/search'
 import { IconChoice } from './IconPicker'
 import {
   DEFAULT_PERK_CATEGORIES, DEFAULT_PERK_KINDS, PERKS_COUNT, countLabel,
   perkCategoriesOf, perkKindsOf,
   type PerkCategory, type PerkFigure, type PerkKindDef,
 } from '../lib/types'
-import {
-  ClearIcon, CloseButton, Overlay, ghostButtonStyle, inputStyle, primaryButtonStyle,
-  tabStyle,
-} from './ui'
+import { ClearIcon, CloseButton, GearIcon, Overlay, SearchIcon } from './ui'
 
 type Tab = 'kinds' | 'topics' | 'figures'
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'kinds', label: 'الأنواع' },
-  { key: 'topics', label: 'التصنيفات' },
-  { key: 'figures', label: 'الأعلام' },
+const TABS: { key: Tab; label: string; icon: string; sub: string }[] = [
+  { key: 'kinds', label: 'الأنواع', icon: 'gem', sub: 'تحريرٌ، تعقُّبٌ، نقل…' },
+  { key: 'topics', label: 'التصنيفات', icon: 'nasab', sub: 'أبوابُ العلم وفروعُها' },
+  { key: 'figures', label: 'الأعلام', icon: 'person', sub: 'من يُذكر في الفوائد' },
 ]
 
 /** مِسماكٌ محلّيّ لا يُحفظ: به يعرف الفرعُ رئيسَه ما دامت النافذة مفتوحة */
@@ -59,6 +74,10 @@ interface CatRow {
   /** مِسماكُ رئيسه، وفارغُه: هو رئيسٌ بنفسه */
   parentUid: string
 }
+
+/** صفُّ النوع والعَلَم: معهما مِسماكٌ محلّيّ كالتصنيف، فلا يُعرف الصفُّ الجديدُ بموضعه */
+type KindRow = PerkKindDef & { uid: string }
+type FigureRow = PerkFigure & { uid: string }
 
 function toRows(cats: PerkCategory[]): CatRow[] {
   const mains = cats.filter((c) => !c.parent)
@@ -82,6 +101,9 @@ function toRows(cats: PerkCategory[]): CatRow[] {
   return rows
 }
 
+const withUid = <T,>(rows: T[]): (T & { uid: string })[] => rows.map((r) => ({ ...r, uid: uid() }))
+const stripUid = <T extends { uid: string }>({ uid: _u, ...rest }: T) => rest
+
 export default function PerkSettings({ onClose }: { onClose: () => void }) {
   const {
     perks, perkKinds, perkCategories, perkFigures, settings, canEdit, run, reload,
@@ -89,21 +111,28 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
 
   const [tab, setTab] = useState<Tab>('kinds')
   const [saving, setSaving] = useState(false)
+  /** ترشيحُ الصفوف بالاسم، لكلّ بابٍ ترشيحُه */
+  const [filter, setFilter] = useState<Record<Tab, string>>({ kinds: '', topics: '', figures: '' })
+  /** الصفُّ الذي زِيد الآن: يُركَّز حقلُ اسمه */
+  const [fresh, setFresh] = useState('')
   /** أمُسَّت النافذة؟ فإن لم تُمسّ تبعت ما يصل من الخادم */
   const dirty = useRef(false)
+  /** والحالُ نفسُه للعرض: الذيلُ يُخبر بما لم يُحفظ */
+  const [touched, setTouched] = useState(false)
 
   // المبدئيّةُ تُعرض حتى تُحرَّر، فأوّلُ حفظٍ يُثبتها صفوفًا في الجدول
-  const [kinds, setKindsState] = useState<PerkKindDef[]>(
-    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
+  const [kinds, setKindsState] = useState<KindRow[]>(
+    () => withUid(perkKindsOf(perkKinds, perks, settings.perk_kinds_set)),
   )
   const [cats, setCatsState] = useState<CatRow[]>(
     () => toRows(perkCategoriesOf(perkCategories, settings.perk_categories_set)),
   )
-  const [figures, setFiguresState] = useState<PerkFigure[]>(() => perkFigures)
+  const [figures, setFiguresState] = useState<FigureRow[]>(() => withUid(perkFigures))
 
-  const setKinds = (next: PerkKindDef[]) => { dirty.current = true; setKindsState(next) }
-  const setCats = (next: CatRow[]) => { dirty.current = true; setCatsState(next) }
-  const setFigures = (next: PerkFigure[]) => { dirty.current = true; setFiguresState(next) }
+  const touch = () => { dirty.current = true; setTouched(true) }
+  const setKinds = (next: KindRow[]) => { touch(); setKindsState(next) }
+  const setCats = (next: CatRow[]) => { touch(); setCatsState(next) }
+  const setFigures = (next: FigureRow[]) => { touch(); setFiguresState(next) }
 
   /**
    * النافذةُ قد تُفتح والبياناتُ في الطريق، فتُبنى حالُها على المبدئيّ. فمتى
@@ -115,9 +144,9 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
    */
   useEffect(() => {
     if (dirty.current) return
-    setKindsState(perkKindsOf(perkKinds, perks, settings.perk_kinds_set))
+    setKindsState(withUid(perkKindsOf(perkKinds, perks, settings.perk_kinds_set)))
     setCatsState(toRows(perkCategoriesOf(perkCategories, settings.perk_categories_set)))
-    setFiguresState(perkFigures)
+    setFiguresState(withUid(perkFigures))
   }, [perkKinds, perkCategories, perkFigures, perks, settings])
 
   const kindCount = (name: string) => perks.filter((p) => p.kinds.includes(name)).length
@@ -141,10 +170,12 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
       }
       return ''
     }
-    return { kinds: dup(kinds), cats: dup(cats), figures: dup(figures) }
+    return { kinds: dup(kinds), topics: dup(cats), figures: dup(figures) }
   }, [kinds, cats, figures])
 
-  const ready = !clash.kinds && !clash.cats && !clash.figures
+  const ready = !clash.kinds && !clash.topics && !clash.figures
+  /** البابُ الذي فيه التكرار، ليُنقل إليه من التنبيه */
+  const clashTab = (Object.keys(clash) as Tab[]).find((k) => clash[k])
 
   /**
    * ما نقص من القائمة المبدئيّة. **والإعادةُ زيادةٌ لا استبدال**: يُردّ
@@ -161,7 +192,7 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
   }, [cats])
 
   function restoreKinds() {
-    setKinds([...kinds, ...missingKinds.map((d) => ({ ...d }))])
+    setKinds([...kinds, ...withUid(missingKinds.map((d) => ({ ...d })))])
   }
 
   function restoreCats() {
@@ -184,6 +215,27 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
     setCats(next)
   }
 
+  /** يزيد صفًّا ويُفرغ الترشيح — صفٌّ جديدٌ فارغٌ لا يطابق شيئًا فيختفي */
+  function added(u: string) {
+    setFresh(u)
+    setFilter((f) => ({ ...f, [tab]: '' }))
+  }
+  function addKind() {
+    const u = uid()
+    setKinds([...kinds, { uid: u, id: '', name: '', icon: '', hint: '' }])
+    added(u)
+  }
+  function addCat(parentUid = '') {
+    const u = uid()
+    setCats([...cats, { uid: u, id: '', name: '', icon: '', parentUid }])
+    added(u)
+  }
+  function addFigure() {
+    const u = uid()
+    setFigures([...figures, { uid: u, id: '', name: '', death: '', note: '', icon: '' }])
+    added(u)
+  }
+
   async function save() {
     if (!ready || saving) return
     setSaving(true)
@@ -202,9 +254,9 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
       .map((c) => (c.parent ? c : { ...c, parent: '' }))
 
     const ok = await run(async () => {
-      await api.savePerkKinds(kinds.filter((k) => k.name.trim()))
+      await api.savePerkKinds(kinds.filter((k) => k.name.trim()).map(stripUid))
       await api.savePerkCategories(flat)
-      await api.savePerkFigures(figures.filter((f) => f.name.trim()))
+      await api.savePerkFigures(figures.filter((f) => f.name.trim()).map(stripUid))
     })
     setSaving(false)
     // والنافذةُ لا تُغلق على إخفاق: ما حُرِّر فيها باقٍ ليُعاد حفظُه
@@ -219,198 +271,266 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
-  if (!canEdit) return null
+  // ------------------------------------------------------------ الترشيح
+  const needle = normalizeText(filter[tab].trim(), QUICK_OPTS)
+  const hit = (name: string) => !needle || normalizeText(name, QUICK_OPTS).includes(needle)
 
   const mains = cats.filter((c) => !c.parentUid)
+  const kidsOf = (u: string) => cats.filter((c) => c.parentUid === u)
+
+  const shownKinds = kinds.filter((k) => hit(k.name) || k.uid === fresh)
+  const shownFigures = figures.filter((f) => hit(f.name) || f.uid === fresh)
+  // التصنيفُ يُعرض إن طابق هو أو طابق فرعٌ من فروعه، وتحته ما طابق من فروعه
+  // — أو فروعُه كلُّها إن كان هو المطابق
+  const shownTopics = mains
+    .map((main) => {
+      const kids = kidsOf(main.uid)
+      if (hit(main.name) || main.uid === fresh) return { main, kids }
+      const some = kids.filter((k) => hit(k.name) || k.uid === fresh)
+      return some.length ? { main, kids: some } : null
+    })
+    .filter((x): x is { main: CatRow; kids: CatRow[] } => x !== null)
+
+  if (!canEdit) return null
+
+  const sizes: Record<Tab, number> = {
+    kinds: kinds.length,
+    topics: mains.length,
+    figures: figures.length,
+  }
+  const current = TABS.find((t) => t.key === tab)!
+  const shownCount = tab === 'kinds' ? shownKinds.length
+    : tab === 'figures' ? shownFigures.length : shownTopics.length
 
   return (
     <Overlay onClose={requestClose} align="flex-start" label="إعدادات الفوائد">
-      <div className="perk-editor overlay-sheet" style={{ width: 'min(720px, 100%)' }}>
-        <header className="perk-editor-head">
-          <h2>إعدادات الفوائد</h2>
+      <div className="kn-editor kn-set overlay-sheet">
+        <header className="kn-editor-head">
+          <span className="kn-editor-mark"><GearIcon size={19} /></span>
+          <div>
+            <h2>إعدادات الفوائد</h2>
+            <p className="kn-editor-sub">أبوابُ الكنّاش: أنواعُه، وتصنيفاتُه، وأعلامُه</p>
+          </div>
           <CloseButton onClose={requestClose} />
         </header>
 
-        <div className="perk-editor-body thin-scroll" style={{ gridTemplateColumns: '1fr' }}>
-          <div className="perk-settings-tabs">
+        <div className="kn-set-main">
+          {/* عمودُ الأبواب: لكلٍّ أيقونتُه وعددُه وسطرٌ يشرحه */}
+          <nav className="kn-set-nav" role="tablist" aria-label="أبواب الإعدادات">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                className={tab === t.key ? 'kn-set-tab on' : 'kn-set-tab'}
                 onClick={() => setTab(t.key)}
-                style={tabStyle(tab === t.key)}
               >
-                {t.label}
+                <span className="kn-set-tab-icon"><Icon name={t.icon} size={20} /></span>
+                <span className="kn-set-tab-text">
+                  <b>{t.label}</b>
+                  <small>{t.sub}</small>
+                </span>
+                <em className={clash[t.key] ? 'warn' : undefined}>
+                  {clash[t.key] ? '!' : sizes[t.key]}
+                </em>
               </button>
             ))}
-          </div>
+          </nav>
 
-          {/* الخبرُ بالمنع في صدر النافذة لا في ذيلها: زرُّ الحفظ يُعطَّل،
-              فلا يُترك القارئُ يبحث عن العِلّة في آخر لوحٍ يُمرَّر */}
-          {!ready && (
-            <p className="perk-warn">
-              اسمٌ مكرَّر: «{clash.kinds || clash.cats || clash.figures}». والأسماءُ
-              هي التي تُكتب في الفوائد، فلا يُفرَّق بين متشابهَين — غيِّرْ أحدَهما
-              ليُحفظ.
-            </p>
-          )}
+          <div className="kn-set-pane thin-scroll">
+            {/* الخبرُ بالمنع في صدر اللوح لا في ذيله: زرُّ الحفظ يُعطَّل، فلا
+                يُترك القارئُ يبحث عن العِلّة في آخر لوحٍ يُمرَّر */}
+            {!ready && clashTab && (
+              <div className="kn-set-warn" role="alert">
+                <Icon name="alert" size={18} />
+                <span>
+                  اسمٌ مكرَّر في {TABS.find((t) => t.key === clashTab)!.label}:
+                  {' '}«{clash[clashTab]}». والأسماءُ هي التي تُكتب في الفوائد، فلا
+                  يُفرَّق بين متشابهَين — غيِّرْ أحدَهما ليُحفظ.
+                </span>
+                {clashTab !== tab && (
+                  <button type="button" className="kn-link-btn" onClick={() => setTab(clashTab)}>
+                    اذهب إليه
+                  </button>
+                )}
+              </div>
+            )}
 
-          {tab === 'kinds' && (
-            <>
-              <p className="perk-hint">
-                أنواعُ ما تُقيِّد: تحريرٌ وتعقُّبٌ ونقلٌ ونحوها. ولكلّ نوعٍ
-                أيقونتُه وشرحُه، والشرحُ يُعرض في النموذج فلا يُخلَط نوعٌ بنوع.
-                وحذفُ النوع يرفع اسمَه من فوائده — <strong>ولا تُحذف فائدةٌ
-                واحدة</strong>.
+            <section className="kn-set-intro">
+              <h3>{current.label}</h3>
+              {tab === 'kinds' && (
+                <p>
+                  أنواعُ ما تُقيِّد: تحريرٌ وتعقُّبٌ ونقلٌ ونحوها. ولكلّ نوعٍ أيقونتُه
+                  وشرحُه، والشرحُ يُعرض في النموذج فلا يُخلَط نوعٌ بنوع.
+                </p>
+              )}
+              {tab === 'topics' && (
+                <p>
+                  أبوابُ العلم التي تُنسب إليها الفائدة، <strong>منفصلةٌ عن تصنيفات
+                  المكتبة انفصالًا تامًّا</strong>: تلك تُصنَّف بها الكتبُ على الأرفف،
+                  وهذه تُصنَّف بها الفوائد. وتحت كلِّ تصنيفٍ فروعُه — «التغافل» فردٌ
+                  من أفراد «الأخلاق والآداب». وحذفُ التصنيف يحذف فروعَه معه.
+                </p>
+              )}
+              {tab === 'figures' && (
+                <p>
+                  سجلُّ الأعلام: من يُذكر في الفوائد. ويُسجَّل العَلَمُ من نموذج
+                  الفائدة أيضًا أوّلَ مرّةٍ يُكتب اسمُه، فيُختار من القائمة بعدُ.
+                  ووفاتُه تُعرض في بطاقته من باب «الأعلام».
+                </p>
+              )}
+              <p className="kn-set-safe">
+                <Icon name="verify" size={14} />
+                الحذفُ يرفع الاسمَ من فوائده عند الحفظ، ولا تُحذف فائدةٌ واحدة.
               </p>
+            </section>
 
-              <div className="kinds-list">
-                {kinds.map((row, i) => {
+            <div className="kn-set-tools">
+              <label className="kn-search kn-set-filter">
+                <SearchIcon size={15} />
+                <input
+                  value={filter[tab]}
+                  onChange={(e) => setFilter({ ...filter, [tab]: e.target.value })}
+                  placeholder={`رشِّح ${current.label} بالاسم…`}
+                  aria-label={`رشِّح ${current.label}`}
+                />
+                {filter[tab] && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter({ ...filter, [tab]: '' })}
+                    aria-label="امسح الترشيح"
+                  >
+                    <ClearIcon size={13} />
+                  </button>
+                )}
+              </label>
+              {tab === 'kinds' && (
+                <RestoreButton n={missingKinds.length} what="الأنواع" onRestore={restoreKinds} />
+              )}
+              {tab === 'topics' && (
+                <RestoreButton n={missingCats.length} what="التصنيفات" onRestore={restoreCats} />
+              )}
+              <button
+                type="button"
+                className="kn-btn kn-btn-primary kn-btn-sm"
+                onClick={() => (tab === 'kinds' ? addKind() : tab === 'topics' ? addCat() : addFigure())}
+              >
+                + {tab === 'kinds' ? 'نوعٌ جديد' : tab === 'topics' ? 'تصنيفٌ جديد' : 'عَلَمٌ جديد'}
+              </button>
+            </div>
+
+            {/* ---------------------------------------------------- الأنواع */}
+            {tab === 'kinds' && (
+              <div className="kn-set-list">
+                {shownKinds.map((row, i) => {
                   const n = row.id ? kindCount(row.name) : 0
+                  const patch = (p: Partial<KindRow>) => setKinds(kinds.map(
+                    (x) => (x.uid === row.uid ? { ...x, ...p } : x),
+                  ))
                   return (
-                    <div key={row.id || `new-${i}`} className="kinds-row kinds-row-wide">
-                      <IconChoice
-                        value={row.icon}
-                        label={row.name || 'النوع'}
-                        onChange={(icon) => setKinds(kinds.map(
-                          (x, j) => (j === i ? { ...x, icon } : x),
-                        ))}
-                      />
+                    <SetRow
+                      key={row.uid}
+                      icon={row.icon}
+                      onIcon={(icon) => patch({ icon })}
+                      label={row.name || 'النوع'}
+                      count={n}
+                      isNew={!row.id}
+                      dup={!!row.name.trim() && row.name.trim() === clash.kinds}
+                      drop={{ what: 'النوع', onDrop: () => setKinds(kinds.filter((x) => x.uid !== row.uid)) }}
+                    >
                       <input
+                        className="kn-set-name"
                         value={row.name}
-                        onChange={(e) => setKinds(kinds.map(
-                          (x, j) => (j === i ? { ...x, name: e.target.value } : x),
-                        ))}
-                        style={inputStyle}
+                        onChange={(e) => patch({ name: e.target.value })}
+                        placeholder="اسمُ النوع"
                         aria-label={`اسم النوع ${i + 1}`}
+                        autoFocus={row.uid === fresh}
                       />
                       <input
+                        className="kn-set-note"
                         value={row.hint}
-                        onChange={(e) => setKinds(kinds.map(
-                          (x, j) => (j === i ? { ...x, hint: e.target.value } : x),
-                        ))}
+                        onChange={(e) => patch({ hint: e.target.value })}
                         placeholder="شرحُه — يُعرض في النموذج"
-                        style={inputStyle}
                         aria-label={`شرح النوع ${i + 1}`}
                       />
-                      <span className="kinds-count">
-                        {n > 0 ? countLabel(n, PERKS_COUNT) : 'لا فائدة'}
-                      </span>
-                      <DropButton
-                        n={n}
-                        what="النوع"
-                        onDrop={() => setKinds(kinds.filter((_, j) => j !== i))}
-                      />
-                    </div>
+                    </SetRow>
                   )
                 })}
               </div>
+            )}
 
-              <div className="kinds-foot">
-                <button
-                  type="button"
-                  style={ghostButtonStyle}
-                  onClick={() => setKinds([...kinds, { id: '', name: '', icon: '', hint: '' }])}
-                >
-                  + نوعٌ جديد
-                </button>
-                <RestoreButton
-                  n={missingKinds.length}
-                  what="الأنواع"
-                  onRestore={restoreKinds}
-                />
-              </div>
-            </>
-          )}
-
-          {tab === 'topics' && (
-            <>
-              <p className="perk-hint">
-                أبوابُ العلم التي تُنسب إليها الفائدة. <strong>وهي منفصلةٌ عن
-                تصنيفات المكتبة انفصالًا تامًّا</strong>: تلك تُصنَّف بها الكتبُ
-                على الأرفف، وهذه تُصنَّف بها الفوائد. وتحت كلِّ تصنيفٍ فروعُه —
-                «التغافل» فردٌ من أفراد «الأخلاق والآداب». وحذفُ التصنيف يحذف
-                فروعَه معه، ويرفع اسمَه من فوائده — <strong>ولا تُحذف فائدةٌ
-                واحدة</strong>.
-              </p>
-
-              <div className="topics-list">
-                {mains.map((main) => {
-                  const kids = cats.filter((c) => c.parentUid === main.uid)
+            {/* ------------------------------------------------- التصنيفات */}
+            {tab === 'topics' && (
+              <div className="kn-set-list">
+                {shownTopics.map(({ main, kids }) => {
                   const n = main.id ? catCount(main.name) : 0
+                  const allKids = kidsOf(main.uid)
+                  const patch = (u: string, p: Partial<CatRow>) => setCats(cats.map(
+                    (x) => (x.uid === u ? { ...x, ...p } : x),
+                  ))
                   return (
-                    <div key={main.uid} className="topic-block">
-                      <div className="kinds-row kinds-row-wide">
-                        <IconChoice
-                          value={main.icon}
-                          label={main.name || 'التصنيف'}
-                          onChange={(icon) => setCats(cats.map(
-                            (x) => (x.uid === main.uid ? { ...x, icon } : x),
-                          ))}
-                        />
-                        <input
-                          value={main.name}
-                          onChange={(e) => setCats(cats.map(
-                            (x) => (x.uid === main.uid ? { ...x, name: e.target.value } : x),
-                          ))}
-                          placeholder="اسمُ التصنيف"
-                          style={inputStyle}
-                          aria-label="اسم التصنيف"
-                        />
-                        <span className="kinds-count">
-                          {n > 0 ? countLabel(n, PERKS_COUNT) : 'لا فائدة'}
-                        </span>
-                        <DropButton
-                          n={n}
-                          what="التصنيف"
-                          kids={kids.length}
-                          onDrop={() => setCats(cats.filter(
+                    <div key={main.uid} className="kn-set-topic">
+                      <SetRow
+                        icon={main.icon}
+                        onIcon={(icon) => patch(main.uid, { icon })}
+                        label={main.name || 'التصنيف'}
+                        count={n}
+                        isNew={!main.id}
+                        dup={!!main.name.trim() && main.name.trim() === clash.topics}
+                        drop={{
+                          what: 'التصنيف',
+                          kids: allKids.length,
+                          onDrop: () => setCats(cats.filter(
                             (c) => c.uid !== main.uid && c.parentUid !== main.uid,
-                          ))}
+                          )),
+                        }}
+                      >
+                        <input
+                          className="kn-set-name"
+                          value={main.name}
+                          onChange={(e) => patch(main.uid, { name: e.target.value })}
+                          placeholder="اسمُ التصنيف"
+                          aria-label="اسم التصنيف"
+                          autoFocus={main.uid === fresh}
                         />
-                      </div>
+                        <span className="kn-set-kids-count">
+                          {allKids.length ? `${allKids.length} من الفروع` : 'بلا فروع'}
+                        </span>
+                      </SetRow>
 
-                      <div className="topic-kids">
+                      {/* والفروعُ مُزاحةٌ تحت رئيسها بخيط: يُعرف أنها تحته لا
+                          قسيمةٌ له */}
+                      <div className="kn-set-kids">
                         {kids.map((kid) => {
                           const kn = kid.id ? catCount(kid.name) : 0
                           return (
-                            <div key={kid.uid} className="kinds-row kinds-row-wide">
-                              <IconChoice
-                                value={kid.icon}
-                                label={kid.name || 'الفرع'}
-                                onChange={(icon) => setCats(cats.map(
-                                  (x) => (x.uid === kid.uid ? { ...x, icon } : x),
-                                ))}
-                              />
+                            <SetRow
+                              key={kid.uid}
+                              small
+                              icon={kid.icon}
+                              onIcon={(icon) => patch(kid.uid, { icon })}
+                              label={kid.name || 'الفرع'}
+                              count={kn}
+                              isNew={!kid.id}
+                              dup={!!kid.name.trim() && kid.name.trim() === clash.topics}
+                              drop={{
+                                what: 'الفرع',
+                                onDrop: () => setCats(cats.filter((c) => c.uid !== kid.uid)),
+                              }}
+                            >
                               <input
+                                className="kn-set-name"
                                 value={kid.name}
-                                onChange={(e) => setCats(cats.map(
-                                  (x) => (x.uid === kid.uid ? { ...x, name: e.target.value } : x),
-                                ))}
+                                onChange={(e) => patch(kid.uid, { name: e.target.value })}
                                 placeholder="اسمُ الفرع"
-                                style={inputStyle}
                                 aria-label="اسم الفرع"
+                                autoFocus={kid.uid === fresh}
                               />
-                              <span className="kinds-count">
-                                {kn > 0 ? countLabel(kn, PERKS_COUNT) : 'لا فائدة'}
-                              </span>
-                              <DropButton
-                                n={kn}
-                                what="الفرع"
-                                onDrop={() => setCats(cats.filter((c) => c.uid !== kid.uid))}
-                              />
-                            </div>
+                            </SetRow>
                           )
                         })}
-
-                        <button
-                          type="button"
-                          className="topic-add-kid"
-                          onClick={() => setCats([
-                            ...cats,
-                            { uid: uid(), id: '', name: '', icon: '', parentUid: main.uid },
-                          ])}
-                        >
+                        <button type="button" className="kn-set-add-kid" onClick={() => addCat(main.uid)}>
                           + فرعٌ تحت «{main.name || 'هذا التصنيف'}»
                         </button>
                       </div>
@@ -418,107 +538,113 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                   )
                 })}
               </div>
+            )}
 
-              <div className="kinds-foot">
-                <button
-                  type="button"
-                  style={ghostButtonStyle}
-                  onClick={() => setCats([
-                    ...cats, { uid: uid(), id: '', name: '', icon: '', parentUid: '' },
-                  ])}
-                >
-                  + تصنيفٌ جديد
-                </button>
-                <RestoreButton
-                  n={missingCats.length}
-                  what="التصنيفات"
-                  onRestore={restoreCats}
-                />
-              </div>
-            </>
-          )}
-
-          {tab === 'figures' && (
-            <>
-              <p className="perk-hint">
-                سجلُّ الأعلام: من يُذكر في الفوائد. ويُسجَّل العَلَمُ من نموذج
-                الفائدة أيضًا أوّلَ مرّةٍ يُكتب اسمُه، فيُختار من القائمة بعدُ.
-                وحذفُه يرفع اسمَه من فوائده — <strong>ولا تُحذف فائدةٌ واحدة</strong>.
-              </p>
-
-              <div className="kinds-list">
-                {figures.map((row, i) => {
+            {/* --------------------------------------------------- الأعلام */}
+            {tab === 'figures' && (
+              <div className="kn-set-list">
+                {shownFigures.map((row, i) => {
                   const n = row.id ? figureCount(row.name) : 0
+                  const patch = (p: Partial<FigureRow>) => setFigures(figures.map(
+                    (x) => (x.uid === row.uid ? { ...x, ...p } : x),
+                  ))
                   return (
-                    <div key={row.id || `new-${i}`} className="kinds-row kinds-row-wide">
-                      {/* وللعَلَم أيقونتُه كما لكلّ نوعٍ وتصنيفٍ وكرّاسة،
-                          وفراغُها يُرسم شخصًا في شبكة الأعلام لا بياضًا */}
-                      <IconChoice
-                        value={row.icon}
-                        label={row.name || 'العَلَم'}
-                        onChange={(icon) => setFigures(figures.map(
-                          (x, j) => (j === i ? { ...x, icon } : x),
-                        ))}
-                      />
+                    <SetRow
+                      key={row.uid}
+                      // وللعَلَم أيقونتُه كما لكلّ نوعٍ وتصنيفٍ وكرّاسة، وفراغُها
+                      // يُرسم شخصًا في شبكة الأعلام لا بياضًا
+                      icon={row.icon}
+                      onIcon={(icon) => patch({ icon })}
+                      label={row.name || 'العَلَم'}
+                      count={n}
+                      isNew={!row.id}
+                      dup={!!row.name.trim() && row.name.trim() === clash.figures}
+                      drop={{ what: 'العَلَم', onDrop: () => setFigures(figures.filter((x) => x.uid !== row.uid)) }}
+                    >
                       <input
+                        className="kn-set-name"
                         value={row.name}
-                        onChange={(e) => setFigures(figures.map(
-                          (x, j) => (j === i ? { ...x, name: e.target.value } : x),
-                        ))}
+                        onChange={(e) => patch({ name: e.target.value })}
                         placeholder="اسمُ العَلَم"
-                        style={inputStyle}
                         aria-label={`اسم العَلَم ${i + 1}`}
+                        autoFocus={row.uid === fresh}
                       />
                       <input
+                        className="kn-set-note kn-set-death"
                         value={row.death}
-                        onChange={(e) => setFigures(figures.map(
-                          (x, j) => (j === i ? { ...x, death: e.target.value } : x),
-                        ))}
+                        onChange={(e) => patch({ death: e.target.value })}
                         placeholder="ت ٢٩١ هـ — إن عُرفت"
-                        style={inputStyle}
                         aria-label="وفاتُه"
                       />
-                      <span className="kinds-count">
-                        {n > 0 ? countLabel(n, PERKS_COUNT) : 'لا فائدة'}
-                      </span>
-                      <DropButton
-                        n={n}
-                        what="العَلَم"
-                        onDrop={() => setFigures(figures.filter((_, j) => j !== i))}
-                      />
-                    </div>
+                    </SetRow>
                   )
                 })}
               </div>
+            )}
 
-              <button
-                type="button"
-                style={ghostButtonStyle}
-                onClick={() => setFigures([
-                  ...figures, { id: '', name: '', death: '', note: '', icon: '' },
-                ])}
-              >
-                + عَلَمٌ جديد
-              </button>
-            </>
-          )}
+            {shownCount === 0 && (
+              <div className="kn-set-empty">
+                <Icon name={filter[tab] ? 'magnifier' : current.icon} size={30} />
+                <p>
+                  {filter[tab]
+                    ? `لا شيءَ في ${current.label} بهذا الاسم.`
+                    : `لا شيءَ في ${current.label} بعد. أضِف أوّلَها من الزرّ أعلاه.`}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        <footer className="perk-editor-foot">
-          <button type="button" onClick={requestClose} className="perk-save" style={ghostButtonStyle}>
+        <footer className="kn-editor-foot">
+          <span className={touched ? 'kn-editor-status kn-set-dirty' : 'kn-editor-status'}>
+            {!ready ? 'لا يُحفظ وفيه اسمٌ مكرَّر'
+              : touched ? 'فيه تعديلاتٌ لم تُحفظ بعد' : 'لا تعديلَ بعد'}
+          </span>
+          <button type="button" className="kn-btn kn-btn-ghost" onClick={requestClose}>
             إلغاء
           </button>
           <button
             type="button"
+            className="kn-btn kn-btn-primary"
             disabled={!ready || saving}
             onClick={() => void save()}
-            style={primaryButtonStyle(ready && !saving)}
           >
             {saving ? 'يُحفَظ…' : 'حفظ'}
           </button>
         </footer>
       </div>
     </Overlay>
+  )
+}
+
+/**
+ * صفٌّ في الإعدادات: أيقونتُه، فحقولُه، فعددُ فوائده، فزرُّ حذفه. وهو واحدٌ
+ * للأنواع والتصنيفات وفروعها والأعلام، فلا يفترق صفٌّ عن صفٍّ في هيئته.
+ */
+function SetRow(
+  { icon, onIcon, label, count, isNew, dup, small, drop, children }: {
+    icon: string
+    onIcon: (icon: string) => void
+    label: string
+    count: number
+    isNew: boolean
+    /** اسمُه مكرَّر: يُعلَّم الصفُّ نفسُه، فلا يُبحث عنه في القائمة */
+    dup: boolean
+    small?: boolean
+    drop: { what: string; kids?: number; onDrop: () => void }
+    children: ReactNode
+  },
+) {
+  const cls = ['kn-set-row', small && 'kn-set-row-sm', dup && 'dup'].filter(Boolean).join(' ')
+  return (
+    <div className={cls}>
+      <IconChoice value={icon} onChange={onIcon} label={label} size={small ? 'sm' : 'md'} />
+      <div className="kn-set-fields">{children}</div>
+      <span className={count > 0 ? 'kn-set-count' : 'kn-set-count none'}>
+        {isNew ? 'جديد' : count > 0 ? countLabel(count, PERKS_COUNT) : 'لا فائدة'}
+      </span>
+      <DropButton n={count} what={drop.what} kids={drop.kids} onDrop={drop.onDrop} />
+    </div>
   )
 }
 
@@ -536,17 +662,17 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
 function RestoreButton(
   { n, what, onRestore }: { n: number; what: string; onRestore: () => void },
 ) {
+  if (n === 0) {
+    return <span className="kn-set-restored" title={`${what} المبدئيّةُ كلُّها موجودة`}>المبدئيّةُ كاملة</span>
+  }
   return (
     <button
       type="button"
-      className="kinds-restore"
-      disabled={n === 0}
-      title={n === 0
-        ? `المبدئيّةُ كلُّها موجودة`
-        : `يُردّ ما نقص من ${what} المبدئيّة (${n})، ولا يُحذف ما زدتَه`}
+      className="kn-btn kn-btn-ghost kn-btn-sm"
+      title={`يُردّ ما نقص من ${what} المبدئيّة (${n})، ولا يُحذف ما زدتَه`}
       onClick={onRestore}
     >
-      {n === 0 ? 'المبدئيّةُ كلُّها موجودة' : `أعِد المبدئيّةَ الناقصة (${n})`}
+      أعِد المبدئيّةَ الناقصة ({n})
     </button>
   )
 }
@@ -577,7 +703,7 @@ function DropButton(
   return (
     <button
       type="button"
-      className="kinds-drop"
+      className="kn-set-drop"
       title={tail ? `احذف هذا ${what} — ${tail}، ولا تُحذف فائدةٌ واحدة` : `احذف هذا ${what}`}
       onClick={() => {
         if (!tail) { onDrop(); return }

@@ -21,7 +21,6 @@
   --danger: oklch(0.5 0.15 28);
   --cover-bg: oklch(0.9 0.02 65);
 
-
   /* ------------------------------------------------ ألوان الأيقونات
    * لوحةٌ ثمانيّة تصبغ بها أيقوناتُ الأنواع والتصنيفات (`lib/icons.tsx`).
    * وهي مكسورةُ الإشراق قليلًا لتجاور لونَ المكتبة الترابيّ ولا تصرخ فوقه،
@@ -1611,7 +1610,6 @@ body::after {
   font-variant-numeric: tabular-nums;
 }
 
-
 /* --------------------------------------- ما طُبع مع الكتاب أو فيه */
 /*
  * بطاقةُ العنوان المضموم في الشبكة: تلي بطاقةَ ضامِّها فيُعرف أنها منه.
@@ -2512,7 +2510,6 @@ body::after {
   white-space: nowrap;
 }
 
-
 /* ------------------------------- النشرة الأخرى في بطاقة الكتاب */
 /*
  * لوحُ نشرةٍ أخرى: غلافُها إلى جانب ما تنفرد به. والغلافُ صغيرٌ ههنا لا
@@ -2733,7 +2730,6 @@ body::after {
     min-height: calc(100vh / var(--ui-scale) - var(--header-h));
   }
 }
-
 
 /* ورقة التقويم تنزل تحت الأزرار قبل أن تزاحمها */
 @media (max-width: 1080px) {
@@ -3043,52 +3039,6 @@ body::after {
  * يُمرَّر — فإذا لم تسع النافذةُ الشاشةَ وقع الذيلُ تحت حافّتها فلا يُبلغ
  * زرُّ الحفظ. والقسمةُ ثلاثًا تجعل الذيلَ خارج الممرَّر أصلًا، فلا يغيب.
  */
-/*
- * لوحُ النموذج ولوحُ المُنتقي: أرضٌ وحدٌّ واستدارةٌ وظلّ، مكتوبةٌ مرّةً لهما.
- *
- * **وكان المُنتقي بلا أرضٍ أصلًا** — لم يكن فيه إلّا `width` — فتظهر الصفحةُ
- * من ورائه بين رُقَعه وشبكته، وتُرى بطاقاتُ الأيقونات معلَّقةً في الهواء على
- * كلامٍ لا يخصُّها. ويخرج صدرُه المصبوغ عن استدارةٍ لا وجود لها، فيُرى له
- * ركنٌ قائمٌ في لوحٍ مستدير.
- */
-.perk-editor,
-.icon-picker {
-  width: min(760px, 100%);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow-3);
-  overflow: hidden;
-}
-
-.perk-editor-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex: none;
-  padding: 16px 22px;
-  border-bottom: 1px solid var(--border);
-  background: var(--header);
-}
-.perk-editor-head h2 {
-  margin: 0;
-  font-family: var(--heading-font);
-  font-size: 19px;
-  font-weight: 700;
-}
-
-/* الجوف: هو وحده الذي يُمرَّر، وحقولُه في شبكةٍ عمودُها اثنان على السَّعة */
-.perk-editor-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 18px;
-  padding: 18px 22px 22px;
-  align-content: start;
-}
 
 .perk-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .perk-field-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
@@ -3116,14 +3066,6 @@ body::after {
 .perk-part:first-child { margin-top: 0; }
 
 .perk-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
-
-.perk-hint {
-  margin: 0;
-  font-size: 11.5px;
-  line-height: 1.7;
-  color: var(--muted);
-}
-
 .perk-area {
   min-height: 132px;
   line-height: 2;
@@ -3147,19 +3089,6 @@ body::after {
 }
 .perk-token:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
 .perk-token svg { flex: none; opacity: 0.7; }
-
-/* الذيلُ خارج الممرَّر، فلا يغيب تحت حافّة الشاشة مهما طال النموذج.
-   والحذفُ في طرفٍ والحفظُ في الطرف الآخر: لا يُضغط أحدُهما مكان الآخر. */
-.perk-editor-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-  padding: 13px 22px;
-  border-top: 1px solid var(--border);
-  background: var(--header);
-}
-.perk-editor-foot .perk-save { margin-inline-start: auto; }
 
 .perk-remove {
   padding: 9px 16px;
@@ -3617,37 +3546,6 @@ a { transition: color 0.15s; }
   .search-panel { border-radius: 14px; }
 }
 
-/* ------------------------------------- قوائمُ إعدادات الفوائد */
-.kinds-list { display: flex; flex-direction: column; gap: 8px; }
-
-.kinds-row { display: flex; align-items: center; gap: 8px; }
-.kinds-row input { flex: 1; min-width: 0; }
-
-.kinds-count {
-  flex: none;
-  min-width: 82px;
-  font-size: 11.5px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.kinds-drop {
-  display: flex;
-  flex: none;
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: none;
-  color: var(--muted);
-  transition: background 0.15s, color 0.15s;
-}
-.kinds-drop:hover:not(:disabled) { background: var(--danger); color: var(--on-accent); border-color: transparent; }
-/* النوعُ الذي عليه قيودٌ لا يُحذف: حذفُه لا يمحوها، فيبقى الاسمُ ويظهر
-   أنّ الحذف لم يقع */
-.kinds-drop:disabled { opacity: 0.32; }
-
-.kinds-add { margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--border); }
-
 /* ══════════════════════════════════════════════ سجلَّات الأسماء */
 /*
  * صفحاتُ المؤلِّفين ودُور النَّشْر و«المحقِّقون ونحوهم»: ثلاثُ سجلَّاتٍ من
@@ -4099,136 +3997,6 @@ a { transition: color 0.15s; }
   font-weight: 700;
 }
 
-/* ================================================== منتقي الأيقونة */
-.icon-choice {
-  display: flex;
-  flex: none;
-  padding: 7px;
-  border: 1px dashed var(--border);
-  border-radius: 9px;
-  background: none;
-  color: var(--muted);
-  transition: color 0.15s, border-color 0.15s;
-}
-.icon-choice-on { border-style: solid; color: var(--accent); }
-.icon-choice:hover { color: var(--accent); border-color: var(--accent); }
-
-.icon-picker-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 20px;
-}
-
-/*
- * البحثُ والأبوابُ يلزمان صدرَ الجوف ولا يجريان معه.
- *
- * ومئةٌ وثمانون أيقونةً لا تُمسح في شاشةٍ واحدة، فلو جرى الحقلُ والأبوابُ مع
- * الشبكة لغابا في أوّل تمريرة، فيُطالَب القارئُ بأن يعود إلى الصدر كلَّما
- * أراد بابًا. وحاشيتُه مطروحةٌ من نفسه (`margin` سالبة) ليمتدّ إلى حرفَي
- * اللوح، فلا يُرى تحته شريطٌ من الشبكة يمرّ في الفراغ.
- */
-.icon-picker-bar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: -16px -20px 0;
-  padding: 16px 20px 11px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.icon-picker-search { flex: none; }
-.icon-picker-groups { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* اسمُ الباب فوق شبكته: يُعرف موضعُ الأيقونة من بابها وهو يُمرَّر */
-.icon-picker-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 -4px;
-  font-family: var(--heading-font);
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--accent-soft);
-}
-.icon-picker-group::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.icon-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
-}
-.icon-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--surface);
-  color: var(--text);
-  transition: border-color 0.15s, background 0.15s, transform 0.15s var(--ease);
-}
-.icon-cell span { font-size: 11px; color: var(--muted); text-align: center; }
-.icon-cell:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent) 7%, var(--surface));
-}
-.icon-cell-on {
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent) 12%, var(--surface));
-  color: var(--accent);
-}
-.icon-cell-on span { color: var(--accent-soft); }
-
-/* =========================================== إعدادات الفوائد وأبوابها */
-.perk-settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* صفٌّ فيه أيقونةٌ واسمٌ وشرحٌ وعددٌ وزرُّ حذف */
-.kinds-row-wide { flex-wrap: wrap; }
-.kinds-row-wide input { flex: 1 1 140px; }
-
-.topics-list { display: flex; flex-direction: column; gap: 14px; }
-.topic-block {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: color-mix(in oklch, var(--accent) 3%, var(--surface));
-}
-/* والفروعُ مُزاحةٌ تحت رئيسها بخيط: يُعرف أنها تحته لا قسيمةٌ له */
-.topic-kids {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 10px;
-  padding-inline-start: 16px;
-  border-inline-start: 2px solid color-mix(in oklch, var(--accent) 25%, transparent);
-}
-.topic-add-kid {
-  align-self: flex-start;
-  padding: 5px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.topic-add-kid:hover { color: var(--accent); border-color: var(--accent); }
-
 /*
  * وعلى الجوّال يُصفّ البيتُ شطرين طوليَّين (انظر ما قبلُ)، فيسقط عمودُ
  * الترقيم: رقمٌ في سطرٍ وحده ليس ترقيمًا، وإنما هو سطرٌ ثالثٌ يُقحَم بين
@@ -4236,40 +4004,9 @@ a { transition: color 0.15s; }
  */
 @media (max-width: 620px) {
   .bayt-no { display: none; }
-  .icon-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
   .rich-poem-hint span { display: none; }
-  .kinds-row-wide { gap: 6px; }
 }
 
-/*
- * الخبرُ بالمنع في صدر نافذة الإعدادات: زرُّ الحفظ يُعطَّل حين يتكرّر اسمٌ،
- * فلو كان الخبرُ في الذيل لبحث القارئُ عن العِلّة في آخر لوحٍ يُمرَّر.
- */
-.perk-warn {
-  margin: 0;
-  padding: 9px 13px;
-  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
-  border-radius: 10px;
-  background: color-mix(in oklch, var(--danger) 9%, transparent);
-  color: var(--danger);
-  font-size: 12.5px;
-  line-height: 1.8;
-}
-
-/* صفُّ أزرار القائمة في الإعدادات: الزيادةُ وإعادةُ المبدئيّ */
-.kinds-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-
-.kinds-restore {
-  padding: 8px 15px;
-  border: 1px dashed var(--border);
-  border-radius: 9px;
-  background: none;
-  color: var(--muted);
-  font-size: 12.5px;
-  transition: color 0.15s, border-color 0.15s;
-}
-.kinds-restore:not(:disabled):hover { color: var(--accent); border-color: var(--accent); }
-.kinds-restore:disabled { opacity: 0.55; }
 
 /* ==================================================== إصلاحاتُ الواجهة */
 /* ما أُصلح في الفحص الشامل، مجموعًا في موضعٍ واحد لا مبثوثًا في الملف:
@@ -5222,14 +4959,16 @@ button.kn-chip:hover { border-color: var(--accent); color: var(--accent-soft); }
   font-size: 14.5px;
   color: var(--text);
 }
-.kn-comment-tag {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 3px;
-  font-size: 11px;
+/* «قلتُ» صدرُ التعليق في سطرٍ وحده، بالحُمرة وبخطٍّ غير خطِّه — كما يميّز
+   النُّسّاخُ كلامَهم من كلام المؤلِّف. وأميري محمَّلٌ في كل صفحة، فلا يُجلب له شيء */
+.kn-comment-said {
+  display: block;
+  margin-bottom: 2px;
+  font-family: 'Amiri', serif;
+  font-size: 15.5px;
   font-weight: 700;
-  color: var(--accent-soft);
+  line-height: 1.6;
+  color: var(--ic-rose);
 }
 
 .kn-card-foot {
@@ -5986,12 +5725,6 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-editor-foot { padding: 10px 14px; }
   .kn-editor-status { flex-basis: 100%; order: -1; text-align: start; }
   .kn-editor-foot .kn-btn { flex: 1; padding-inline: 10px; font-size: 12.5px; }
-  /* ونافذةُ إعدادات الفوائد على شكلها: عمودٌ واحدٌ وحواشٍ أضيق */
-  .perk-editor-body { grid-template-columns: 1fr; padding: 14px 16px 18px; gap: 12px; }
-  .perk-editor { border-radius: 14px; }
-  .perk-editor-head { padding: 13px 16px; }
-  .perk-editor-foot { padding: 11px 16px; gap: 8px; }
-  .perk-editor-foot button { padding-inline: 14px; font-size: 12.5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6004,4 +5737,502 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-feed { display: block; }
   .kn-folded { max-height: none; -webkit-mask-image: none; mask-image: none; }
   .kn-card { box-shadow: none; break-inside: avoid; }
+}
+
+/* ======================================================== منتقي الأيقونة
+ *
+ * ثلاثةُ أثلاث: صدرٌ فيه المختارةُ الآن، فشريطٌ فيه البحثُ والأبوابُ **خارج
+ * الجوف** فلا يجري معه ولا يُحتاج فيه إلى `sticky`، فجوفٌ يُمرَّر، فذيل.
+ *
+ * وكان حقلُ البحث يرث `flex: 1 1 260px` من `.kn-search-sm` — وهو صفٌّ في
+ * شريط الأدوات — فلمّا وُضع في عمودٍ صار أساسُه ٢٦٠ بكسلًا **طولًا** فقام
+ * صندوقًا يأكل نصفَ النافذة. فلا يُستعار ههنا صنفُ الحجم، والحقلُ `flex: none`.
+ */
+.kn-ip {
+  width: min(820px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+.kn-ip-now {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.kn-ip-now.on {
+  border: 1px solid color-mix(in oklch, var(--tone) 35%, transparent);
+  background: color-mix(in oklch, var(--tone) 12%, var(--surface));
+}
+.kn-ip-for { font-size: 14px; font-weight: 400; color: var(--muted); }
+.kn-ip-for::before { content: '— '; }
+
+.kn-ip-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.kn-ip-search { flex: none; padding: 10px 14px; border-radius: 12px; }
+.kn-ip-search input { font-size: 14.5px; }
+
+/* الأبوابُ شريطٌ واحدٌ يُمرَّر أفقيًّا، ولكلّ بابٍ عددُ ما فيه مما يطابق البحث */
+.kn-ip-groups {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: -4px;
+  scrollbar-width: thin;
+}
+.kn-ip-groups .kn-pill { flex: none; white-space: nowrap; }
+.kn-ip-groups .kn-pill em {
+  margin-inline-start: 4px;
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.kn-ip-groups .kn-pill:disabled { opacity: 0.4; cursor: default; }
+.kn-ip-groups .kn-pill:disabled:hover { border-color: var(--border); }
+
+.kn-ip-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 20px 22px;
+}
+.kn-ip-section + .kn-ip-section { margin-top: 6px; }
+.kn-ip-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-soft);
+}
+.kn-ip-group em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--header);
+  color: var(--muted);
+}
+.kn-ip-group::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.kn-ip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.kn-ip-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s, transform 0.18s var(--ease), box-shadow 0.15s;
+}
+/* أرضُ الرمز من لونه: تُعرف الأبوابُ في الشبكة بألوانها قبل أن تُقرأ أسماؤها */
+.kn-ip-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--tone) 10%, var(--surface));
+  transition: background 0.15s, transform 0.18s var(--ease-spring);
+}
+.kn-ip-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kn-ip-cell:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--tone) 55%, var(--border));
+  box-shadow: var(--shadow-1);
+}
+.kn-ip-cell:hover .kn-ip-glyph {
+  background: color-mix(in oklch, var(--tone) 17%, var(--surface));
+  transform: scale(1.06);
+}
+.kn-ip-cell:hover .kn-ip-name { color: var(--text); }
+.kn-ip-cell.on {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 9%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 16%, transparent);
+}
+.kn-ip-cell.on .kn-ip-name { color: var(--accent); font-weight: 700; }
+.kn-ip-tick {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.kn-ip-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 44px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.kn-ip-empty p { margin: 0; }
+.kn-ip-empty .kn-pill { margin-top: 10px; }
+
+.kn-ip-none {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+.kn-ip-none:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.kn-ip-none:disabled { opacity: 0.45; cursor: default; }
+
+/* زرُّ الأيقونة في الصفّ: الرمزُ على أرضٍ من لونه، والشاغرُ دائرةٌ منقوطة */
+.kn-ic-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  transition: border-color 0.15s, background 0.15s, transform 0.18s var(--ease);
+}
+.kn-ic-choice-md { width: 42px; height: 42px; border-radius: 12px; }
+.kn-ic-choice-sm { width: 34px; height: 34px; border-radius: 10px; }
+.kn-ic-choice.on {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--tone) 32%, transparent);
+  background: color-mix(in oklch, var(--tone) 11%, var(--surface));
+}
+.kn-ic-choice:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+@media (max-width: 620px) {
+  .kn-ip-bar { padding: 12px 14px 10px; }
+  .kn-ip-body { padding: 4px 14px 18px; }
+  .kn-ip-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+  .kn-ip-glyph { width: 44px; height: 44px; border-radius: 12px; }
+  .kn-ip-now { width: 40px; height: 40px; }
+}
+
+/* موضعُ «بالقرعة» حين لا قرعة: عمودٌ فارغ يحفظ الشبكة، ويسقط على الجوّال
+   حيث الشبكةُ عمودان لا ثلاثة */
+.kn-pager-gap { width: 0; }
+@media (max-width: 720px) {
+  .kn-pager-gap { display: none; }
+}
+
+/* ===================================================== إعداداتُ الفوائد
+ *
+ * على طراز نموذج الفائدة (`kn-editor`): صدرٌ وذيلٌ ثابتان، وبينهما عمودُ
+ * الأبواب ولوحٌ يُمرَّر. وعلى الجوّال يصير العمودُ شريطًا فوق اللوح.
+ */
+.kn-set { width: min(980px, 100%); }
+.kn-set-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+}
+
+.kn-set-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 12px;
+  border-inline-end: 1px solid var(--border);
+  background: color-mix(in oklch, var(--header) 45%, var(--surface));
+  overflow-y: auto;
+}
+.kn-set-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  text-align: start;
+  transition: background 0.15s, border-color 0.15s;
+}
+.kn-set-tab:hover { background: var(--surface); border-color: var(--border); }
+.kn-set-tab.on {
+  background: var(--surface);
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+  box-shadow: var(--shadow-1);
+}
+.kn-set-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+}
+.kn-set-tab.on .kn-set-tab-icon { background: color-mix(in oklch, var(--accent) 15%, var(--surface)); }
+.kn-set-tab-text { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+.kn-set-tab-text b { font-size: 14.5px; }
+.kn-set-tab-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.kn-set-tab em {
+  flex: none;
+  min-width: 24px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--header);
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--muted);
+}
+.kn-set-tab.on em { background: var(--accent); color: var(--on-accent); }
+.kn-set-tab em.warn { background: var(--danger); color: var(--on-accent); }
+
+.kn-set-pane {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px 26px;
+}
+
+.kn-set-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in oklch, var(--danger) 40%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--danger) 8%, var(--surface));
+  font-size: 13px;
+  line-height: 1.8;
+}
+.kn-set-warn > svg { flex: none; margin-top: 3px; }
+.kn-set-warn > span { flex: 1; }
+
+.kn-set-intro h3 { margin: 0 0 4px; font-size: 19px; }
+.kn-set-intro p { margin: 0; font-size: 13.5px; line-height: 1.9; color: var(--muted); }
+.kn-set-intro strong { color: var(--text); }
+.kn-set-intro .kn-set-safe {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--ic-green) 9%, var(--surface));
+  color: var(--text);
+  font-size: 12px;
+}
+
+.kn-set-tools {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px -22px 12px;
+  padding: 10px 22px;
+  border-block: 1px solid var(--border);
+  background: var(--surface);
+}
+.kn-set-filter { flex: 1 1 220px; padding: 7px 12px; border-radius: 10px; }
+.kn-set-filter input { font-size: 13.5px; }
+.kn-set-restored { font-size: 12px; color: var(--muted); padding-inline: 4px; }
+
+.kn-set-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* الصفّ: أيقونتُه، فحقولُه، فعددُ فوائده، فزرُّ حذفه */
+.kn-set-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.kn-set-row:focus-within {
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 10%, transparent);
+}
+.kn-set-row.dup {
+  border-color: var(--danger);
+  background: color-mix(in oklch, var(--danger) 5%, var(--surface));
+}
+.kn-set-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  flex: 1;
+  min-width: 0;
+}
+/* الحقولُ بلا إطارٍ حتى تُمسّ: الصفُّ نفسُه إطارُها، فلا يُرى صندوقٌ في صندوق */
+.kn-set-fields input {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.kn-set-fields input:hover { background: var(--bg); }
+.kn-set-fields input:focus {
+  outline: none;
+  border-color: var(--border);
+  background: var(--bg);
+}
+.kn-set-name {
+  flex: 1 1 160px;
+  font-family: var(--heading-font);
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.kn-set-note { flex: 2 1 200px; font-size: 13px; color: var(--muted) !important; }
+.kn-set-death { flex: 1 1 140px; }
+.kn-set-kids-count { font-size: 12px; color: var(--muted); padding-inline: 8px; }
+
+.kn-set-count {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--accent) 10%, var(--surface));
+  color: var(--accent-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kn-set-count.none { background: var(--header); color: var(--muted); font-weight: 400; }
+
+.kn-set-drop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  transition: color 0.15s, background 0.15s;
+}
+.kn-set-drop:hover { background: var(--danger); color: var(--on-accent); }
+
+/* التصنيفُ الرئيس لوحٌ، وفروعُه مُزاحةٌ تحته بخيط */
+.kn-set-topic {
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: color-mix(in oklch, var(--accent) 3%, var(--surface));
+}
+.kn-set-topic > .kn-set-row { border-color: transparent; background: none; }
+.kn-set-topic > .kn-set-row:focus-within { background: var(--surface); }
+.kn-set-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 26px 6px 6px;
+  padding-inline-start: 14px;
+  border-inline-start: 2px solid color-mix(in oklch, var(--accent) 22%, transparent);
+}
+.kn-set-row-sm { padding: 5px 8px 5px 6px; border-radius: 11px; }
+.kn-set-row-sm .kn-set-name { font-size: 14px; }
+.kn-set-add-kid {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.kn-set-add-kid:hover { color: var(--accent); border-color: var(--accent); }
+
+.kn-set-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 16px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13.5px;
+}
+.kn-set-empty p { margin: 0; }
+.kn-set-dirty { color: var(--accent-soft); font-weight: 600; }
+
+@media (max-width: 760px) {
+  .kn-set-main { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .kn-set-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px 10px;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .kn-set-tab { flex: none; padding: 6px 10px; }
+  .kn-set-tab-icon { width: 30px; height: 30px; }
+  .kn-set-tab-text small { display: none; }
+  .kn-set-pane { padding: 14px 14px 20px; }
+  .kn-set-tools { top: -14px; margin-inline: -14px; padding-inline: 14px; }
+  .kn-set-row { flex-wrap: wrap; }
+  .kn-set-fields { flex-basis: calc(100% - 60px); }
+  .kn-set-count { margin-inline-start: 52px; }
+  .kn-set-drop { margin-inline-start: auto; }
+  .kn-set-kids { margin-inline-end: 0; }
 }
