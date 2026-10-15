@@ -412,7 +412,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
         <div className="kn-editor-body thin-scroll">
           {/* ------------------------------------------- لوحُ الكتابة */}
-          <div className="kn-editor-write">
+          <div className="kn-editor-write thin-scroll">
             <label className="kn-field">
               <span className="kn-field-label">عنوانُها <em>اختياريّ</em></span>
               <input
@@ -468,7 +468,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
           </div>
 
           {/* ------------------------------------------- لوحُ الوصف */}
-          <div className="kn-editor-describe">
+          <div className="kn-editor-describe thin-scroll">
             <Part title="مصدرُها" icon="citation">
               <div className="kn-seg kn-seg-wide" role="group" aria-label="مصدرُها">
                 <button

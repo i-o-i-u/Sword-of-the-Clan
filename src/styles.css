@@ -590,6 +590,8 @@ body::after {
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
+  /* يُمرَّر عرضًا لا طولًا، كشريط أبواب الكنّاش (انظر `.kn-tabs`) */
+  overflow-y: hidden;
   scrollbar-width: none;
 }
 .head-nav::-webkit-scrollbar { display: none; }
@@ -4571,7 +4573,12 @@ a.head-tab-on, a.head-tab-on:hover { color: var(--on-accent); }
 
 /* ------------------------------------------------------------ الأبواب */
 /* شريطٌ لاصقٌ تحت الرأس: الأبوابُ ستّة، ومن ابتعد في القائمة لا يُطالَب
-   بالصعود إليها ليغيّر بابه */
+   بالصعود إليها ليغيّر بابه.
+   **ويُمرَّر عرضًا وحده لا طولًا**: كان خطُّ الباب المفتوح يفيض عن الشريط
+   بكسلًا (`margin-bottom: -1px`)، والشريطُ يُمرَّر عرضًا فصار يُمرَّر طولًا
+   أيضًا بقدر ذلك الفيض — فمن مرّر عجلةَ الفأرة فوقه في فيرفكس نزلت الأبوابُ
+   في شريطها وانقصّت أسفلُها، ولم تجرِ الصفحة. فالخطُّ الذي تحت الشريط ظلٌّ
+   في جوفه لا حدٌّ خارجه، وخطُّ الباب يقع عليه بلا فيض، والطولُ مقفل. */
 .kn-tabs {
   position: sticky;
   top: var(--header-h);
@@ -4581,8 +4588,10 @@ a.head-tab-on, a.head-tab-on:hover { color: var(--on-accent); }
   margin: 0 0 22px;
   padding: 0 4px;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--border);
   background: color-mix(in oklch, var(--bg) 92%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -4594,7 +4603,6 @@ a.head-tab-on, a.head-tab-on:hover { color: var(--on-accent); }
   gap: 8px;
   flex: none;
   padding: 13px 14px 12px;
-  margin-bottom: -1px;
   border-bottom: 2.5px solid transparent;
   color: var(--muted);
   font-size: 14px;
@@ -5647,6 +5655,26 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-editor-describe { border-inline-start: none; border-top: 1px solid var(--border); }
 }
 
+/*
+ * **ولوحا النموذج يُمرَّران كلٌّ وحده** على الشاشة الواسعة: كانا في جوفٍ واحدٍ
+ * يُمرَّر بهما معًا، فمن نزل إلى الأعلام والوسوم في لوح الوصف غاب عنه النصُّ
+ * الذي يصفه، ومن نزل في النصّ الطويل غاب عنه المصدر. فالجوفُ لا يُمرَّر، ولكلّ
+ * لوحٍ تمريرُه، ولا يسري تمريرُ أحدهما إلى الآخر ولا إلى ما خلف النافذة.
+ * وعلى الشاشة الضيّقة اللوحان عمودٌ واحد، فيُمرَّران معًا كما كانا.
+ */
+@media (min-width: 1081px) {
+  .kn-editor-body {
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .kn-editor-write,
+  .kn-editor-describe {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 /* دون ٩٠٠: العمودُ دُرجٌ يُفتح من طرف الشاشة، والقائمةُ تأخذ العرضَ كلَّه */
 @media (max-width: 900px) {
   .kn-feed { grid-template-columns: minmax(0, 1fr); }
@@ -5800,6 +5828,7 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   display: flex;
   gap: 6px;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
   margin-bottom: -4px;
   scrollbar-width: thin;
@@ -6229,6 +6258,7 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-set-nav {
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
     padding: 8px 10px;
     border-inline-end: none;
     border-bottom: 1px solid var(--border);
@@ -6302,27 +6332,72 @@ mark.kn-hit {
 .kn-index li.picked { background: color-mix(in oklch, var(--accent) 6%, transparent); }
 .kn-index-check { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
 
-/* شريطُ التعديل الجماعي: يلصق بأسفل الشاشة ما دام التحديدُ قائمًا */
+/*
+ * شريطُ التعديل الجماعي: **سطرٌ واحدٌ مضغوطٌ** يلصق بأسفل عمود القائمة ما دام
+ * التحديدُ قائمًا، لا لوحٌ. وكان لوحًا يأكل نصفَ الشاشة: حقولُه تأخذ نمطَ
+ * الإدخال العامّ (`inputStyle`) وعرضُه كاملٌ مكتوبٌ في النمط السطريّ فيغلب كلَّ
+ * قاعدةٍ هنا، فقام كلُّ حقلٍ في سطرٍ وغطّى الشريطُ ما يُحدَّد منه. فحقولُه
+ * أصنافٌ تخصّه (`kn-bulk-ctl`) لا نمطٌ مستعار.
+ */
 .kn-bulk {
   position: sticky;
   bottom: 14px;
   z-index: 30;
-  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px 18px;
-  margin-top: 18px;
-  padding: 12px 16px;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 16px auto 0;
+  padding: 7px 8px 7px 10px;
   border: 1px solid color-mix(in oklch, var(--accent) 40%, var(--border));
-  border-radius: 16px;
+  border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow-3);
+  font-size: 13px;
 }
-.kn-bulk-count { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; }
-.kn-bulk-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.kn-bulk-form select, .kn-bulk-form input { width: auto; min-width: 130px; padding-block: 7px; }
+.kn-bulk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kn-bulk-sep { width: 1px; height: 22px; background: var(--border); }
+.kn-bulk .kn-seg button { padding: 4px 10px; font-size: 12.5px; }
+.kn-bulk-ctl {
+  height: 32px;
+  max-width: 170px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.kn-bulk-ctl:focus { outline: none; border-color: var(--accent); }
+.kn-bulk .kn-btn { height: 32px; padding: 0 14px; font-size: 12.5px; border-radius: 999px; }
+.kn-bulk-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.kn-bulk-close:hover { background: var(--header); color: var(--text); }
+/* والقائمةُ تنتهي فوقه لا تحته: آخرُ ما فيها لا يغيب خلف الشريط */
+.kn-feed-selecting .kn-main { padding-bottom: 8px; }
 
 /* ------------------------------------------------- صفحةُ الفائدة الواحدة */
 .kn-pager-where {
@@ -6530,7 +6605,8 @@ mark.kn-hit {
 
 @media (max-width: 640px) {
   .kn-bulk { bottom: 8px; padding: 10px 12px; }
-  .kn-bulk-form select, .kn-bulk-form input { flex: 1 1 120px; min-width: 0; }
+  .kn-bulk { border-radius: 16px; justify-content: center; }
+  .kn-bulk-ctl { flex: 1 1 110px; max-width: none; }
   .kn-arrange-list li { flex-wrap: wrap; }
   .kn-arrange-tools { width: 100%; justify-content: flex-end; }
   .kn-export .kn-btn span { display: none; }

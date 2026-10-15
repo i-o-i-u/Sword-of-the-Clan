@@ -594,7 +594,7 @@ function Feed(
   const railCount = chips.filter((c) => c.field !== 'query').length
 
   return (
-    <div className={railOpen ? 'kn-feed kn-rail-open' : 'kn-feed'}>
+    <div className={`kn-feed${railOpen ? ' kn-rail-open' : ''}${selecting ? ' kn-feed-selecting' : ''}`}>
       {/* ------------------------------------------------- عمودُ الترشيح */}
       <aside className="kn-rail thin-scroll" aria-label="ترشيح الفوائد">
         <div className="kn-rail-head">
@@ -867,20 +867,21 @@ function Feed(
         </div>
 
         <MoreSentinel shown={page.length} total={perks.length} onMore={more} />
-      </div>
 
-      {selecting && (
-        <BulkBar
-          ids={[...picked].filter((id) => perks.some((p) => p.id === id))}
-          shown={perks}
-          kinds={kinds}
-          topics={topics}
-          tags={tags}
-          onAll={() => setPicked(new Set(perks.map((p) => p.id)))}
-          onNone={() => setPicked(new Set())}
-          onDone={() => { setSelecting(false); setPicked(new Set()) }}
-        />
-      )}
+        {/* في عمود القائمة لا عرضَ الصفحة: يلصق تحت ما يُحدَّد منه */}
+        {selecting && (
+          <BulkBar
+            ids={[...picked].filter((id) => perks.some((p) => p.id === id))}
+            shown={perks}
+            kinds={kinds}
+            topics={topics}
+            tags={tags}
+            onAll={() => setPicked(new Set(perks.map((p) => p.id)))}
+            onNone={() => setPicked(new Set())}
+            onDone={() => { setSelecting(false); setPicked(new Set()) }}
+          />
+        )}
+      </div>
 
       {/* ظلُّ الدُّرج على الجوّال: الضغطُ عليه يُغلقه */}
       <button
@@ -954,69 +955,77 @@ function BulkBar(
 
   return (
     <div className="kn-bulk" role="region" aria-label="التعديل الجماعي">
-      <div className="kn-bulk-count">
-        <strong>{countLabel(ids.length, { noun: 'المحدَّد' })}</strong>
+      <span className="kn-bulk-count">{countLabel(ids.length, { noun: 'المحدَّد' })}</span>
+      {/* «الكلّ» حتى يُحدَّد المعروضُ كلُّه، ثم «لا شيء» */}
+      {ids.length < shown.length ? (
         <button type="button" className="kn-link-btn" onClick={onAll}>
-          حدِّد المعروضَ كلَّه ({formatNumber(shown.length)})
+          حدِّد المعروضَ ({formatNumber(shown.length)})
         </button>
-        {ids.length > 0 && (
-          <button type="button" className="kn-link-btn" onClick={onNone}>ارفع التحديد</button>
-        )}
-      </div>
+      ) : (
+        <button type="button" className="kn-link-btn" onClick={onNone}>ارفع التحديد</button>
+      )}
 
-      <div className="kn-bulk-form">
-        <div className="kn-seg" role="group" aria-label="العمل">
-          <button type="button" className={op === 'add' ? 'on' : ''} onClick={() => setOp('add')}>
-            أضِف
-          </button>
-          <button type="button" className={op === 'remove' ? 'on' : ''} onClick={() => setOp('remove')}>
-            ارفع
-          </button>
-        </div>
+      <span className="kn-bulk-sep" aria-hidden="true" />
+
+      <div className="kn-seg" role="group" aria-label="العمل">
+        <button type="button" className={op === 'add' ? 'on' : ''} onClick={() => setOp('add')}>
+          أضِف
+        </button>
+        <button type="button" className={op === 'remove' ? 'on' : ''} onClick={() => setOp('remove')}>
+          ارفع
+        </button>
+      </div>
+      <select
+        className="kn-bulk-ctl"
+        value={field}
+        onChange={(e) => { setField(e.target.value as api.BulkField); setValue('') }}
+        aria-label="الصفة"
+      >
+        {BULK_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+      </select>
+      {choices ? (
         <select
-          value={field}
-          onChange={(e) => { setField(e.target.value as api.BulkField); setValue('') }}
-          style={inputStyle}
-          aria-label="الصفة"
+          className="kn-bulk-ctl"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="القيمة"
         >
-          {BULK_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          <option value="">— اختر —</option>
+          {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
-        {choices ? (
-          <select
+      ) : (
+        <>
+          <input
+            className="kn-bulk-ctl"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            style={inputStyle}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void apply() } }}
+            list="kn-bulk-list"
+            placeholder={field === 'tags' ? 'الوسم' : 'اسمُ العَلَم'}
             aria-label="القيمة"
-          >
-            <option value="">— اختر —</option>
-            {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
-        ) : (
-          <>
-            <input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void apply() } }}
-              list="kn-bulk-list"
-              placeholder={field === 'tags' ? 'الوسم' : 'اسمُ العَلَم'}
-              style={inputStyle}
-              aria-label="القيمة"
-            />
-            <datalist id="kn-bulk-list">
-              {suggestions.map((s) => <option key={s} value={s} />)}
-            </datalist>
-          </>
-        )}
-        <button
-          type="button"
-          className="kn-btn kn-btn-primary"
-          disabled={busy || !ids.length || !value.trim()}
-          onClick={() => void apply()}
-        >
-          {busy ? 'يُحفَظ…' : 'نفِّذ'}
-        </button>
-        <button type="button" className="kn-btn kn-btn-ghost" onClick={onDone}>تمّ</button>
-      </div>
+          />
+          <datalist id="kn-bulk-list">
+            {suggestions.map((s) => <option key={s} value={s} />)}
+          </datalist>
+        </>
+      )}
+      <button
+        type="button"
+        className="kn-btn kn-btn-primary"
+        disabled={busy || !ids.length || !value.trim()}
+        onClick={() => void apply()}
+      >
+        {busy ? 'يُحفَظ…' : 'نفِّذ'}
+      </button>
+      <button
+        type="button"
+        className="kn-bulk-close"
+        onClick={onDone}
+        title="أنهِ التحديد"
+        aria-label="أنهِ التحديد"
+      >
+        <ClearIcon size={13} />
+      </button>
     </div>
   )
 }
