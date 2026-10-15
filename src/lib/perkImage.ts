@@ -9,7 +9,7 @@
 // والشعرُ يُرسم شعرًا: البيتُ صدرُه في اليمين وعَجُزُه في اليسار، والرجزُ
 // شطرٌ في الوسط — كما يُصفّ في البطاقة.
 
-import { stretchShatr } from './tatweel'
+import { POEM_SLACK, stretchShatr } from './tatweel'
 import { LIBRARY_NAME } from './types'
 
 const W = 1080
@@ -27,6 +27,7 @@ function palette() {
     muted: v('--muted', '#6b655c'),
     accent: v('--accent', '#7a4b2e'),
     border: v('--border', '#d8ccbb'),
+    rule: v('--border', '#d8ccbb'),
   }
 }
 
@@ -112,6 +113,7 @@ function drawJustified(
  */
 function layout(
   ctx: CanvasRenderingContext2D, lines: Line[], size: number, family: string, color: string,
+  muted: string, rule: string,
 ): Laid[] {
   const lh = size * 1.95
   const inner = W - PAD * 2
@@ -119,11 +121,26 @@ function layout(
   ctx.font = font
   const measure = (t: string) => ctx.measureText(t).width
 
-  const half = (inner - GUTTER) / 2
-  const verseCol = Math.min(half, Math.max(0, ...lines.flatMap((l) =>
+  // ولكلّ بيتٍ رقمُه في يمينه كما في البطاقة، إلّا البيتَ الواحد
+  const numbered = lines.filter((l) => l.kind !== 'prose').length > 1
+  const noW = numbered ? size * 1.1 : 0
+  const half = (inner - GUTTER - noW * 2) / 2
+  const verseCol = Math.min(half, POEM_SLACK * Math.max(0, ...lines.flatMap((l) =>
     l.kind === 'verse' ? [measure(l.a), measure(l.b)] : [])))
-  const rajazCol = Math.min(inner, Math.max(0, ...lines.flatMap((l) =>
+  const rajazCol = Math.min(inner - noW * 2, POEM_SLACK * Math.max(0, ...lines.flatMap((l) =>
     l.kind === 'rajaz' ? [measure(l.text)] : [])))
+  // `stretchShatr` يقف دون العرض بهامش أمانٍ (٢٪)، فيُطلب منه ما فوقه ثم
+  // يُحدّ الرسمُ بالعرض نفسه (`maxWidth`) فتستوي الأطرافُ استواءً تامًّا
+  const ask = (w: number) => w / 0.98
+  const small = `${Math.round(size * 0.5)}px ${family}`
+  const drawNo = (n: number, x: number, y: number) => {
+    if (!numbered) return
+    ctx.font = small
+    ctx.fillStyle = muted
+    ctx.textAlign = 'center'
+    ctx.fillText(String(n), x, y - size * 0.08)
+  }
+  let bayt = 0
 
   const out: Laid[] = []
   let prev: Line['kind'] | null = null
@@ -134,6 +151,8 @@ function layout(
     }
     prev = line.kind
     if (line.kind === 'prose') {
+      // والقصيدةُ بعد النثر يُبدأ عدُّها من أوّله، كما في البطاقة
+      bayt = 0
       const rows = wrap(ctx, line.text, inner)
       rows.forEach((row, i) => {
         const last = i === rows.length - 1
@@ -147,25 +166,37 @@ function layout(
         })
       })
     } else if (line.kind === 'rajaz') {
-      const text = stretchShatr(line.text, rajazCol, font)
+      const text = stretchShatr(line.text, ask(rajazCol), font)
+      const n = ++bayt
+      const right = W / 2 + rajazCol / 2
       out.push({
         height: lh,
         draw: (y) => {
+          drawNo(n, right + noW / 2 + 8, y)
           ctx.font = font
           ctx.fillStyle = color
           ctx.textAlign = 'right'
-          ctx.fillText(text, W / 2 + rajazCol / 2, y, rajazCol)
+          ctx.fillText(text, right, y, rajazCol)
         },
       })
     } else {
-      // البيتُ: صدرُه في العمود الأيمن وعَجُزُه في الأيسر، ممدودَين إلى عرضهما
-      const a = stretchShatr(line.a, verseCol, font)
-      const b = stretchShatr(line.b, verseCol, font)
+      // البيتُ: صدرُه في العمود الأيمن وعَجُزُه في الأيسر، ممدودَين إلى عرضهما،
+      // وبينهما خيطٌ كما في البطاقة
+      const a = stretchShatr(line.a, ask(verseCol), font)
+      const b = stretchShatr(line.b, ask(verseCol), font)
+      const n = ++bayt
       const right = W / 2 + GUTTER / 2 + verseCol
       const left = W / 2 - GUTTER / 2 - verseCol
       out.push({
         height: lh,
         draw: (y) => {
+          drawNo(n, right + noW / 2 + 8, y)
+          ctx.strokeStyle = rule
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(W / 2, y - size * 1.3)
+          ctx.lineTo(W / 2, y + size * 0.65)
+          ctx.stroke()
           ctx.font = font
           ctx.fillStyle = color
           ctx.textAlign = 'right'
@@ -232,11 +263,11 @@ export async function renderPerkImage(input: PerkImageInput): Promise<Blob> {
   // النصُّ: أكبرُ خطٍّ يتّسع له، من ٤٤ إلى ٢٦
   const lines = readLines(input.text)
   let size = 44
-  let laid = layout(ctx, lines, size, family, c.text)
+  let laid = layout(ctx, lines, size, family, c.text, c.muted, c.rule)
   const room = bottom - top - titleH
   while (size > 26 && laid.reduce((h, l) => h + l.height, 0) > room) {
     size -= 2
-    laid = layout(ctx, lines, size, family, c.text)
+    laid = layout(ctx, lines, size, family, c.text, c.muted, c.rule)
   }
   let used = 0
   let cut = false

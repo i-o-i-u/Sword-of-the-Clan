@@ -20,7 +20,7 @@
 
 import { useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { layoutPoemsHtml, orderedFootnotes, sanitizeHtml, type Footnote } from '../lib/richtext'
-import { fontOf, stretchShatr } from '../lib/tatweel'
+import { fitPoemWidth, fontOf, stretchShatr } from '../lib/tatweel'
 import { highlightIn } from '../lib/highlight'
 import { highlightPattern } from '../lib/search'
 import Prose from './Prose'
@@ -59,6 +59,16 @@ export default function RichText(
       lastWidth.current = width
 
       const font = fontOf(cells[0])
+      for (const wrap of host.querySelectorAll<HTMLElement>('.poem-wrap')) {
+        const own = [...wrap.querySelectorAll<HTMLElement>('[data-original]')]
+        fitPoemWidth(
+          wrap,
+          own.map((c) => c.dataset.original ?? ''),
+          font,
+          wrap.classList.contains('poem-wrap-rajaz') ? 1 : 2,
+          wrap.querySelectorAll('tr').length > 1,
+        )
+      }
       for (const cell of cells) {
         const original = cell.dataset.original
         if (!original) continue

@@ -10,7 +10,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import { parsePoetry, type PoemLine } from '../lib/poetry'
-import { fontOf, stretchShatr } from '../lib/tatweel'
+import { fitPoemWidth, fontOf, stretchShatr } from '../lib/tatweel'
 
 /**
  * النصّ المعروض. `className` يُمرَّر إلى فقرات النثر وحدها — الشعرُ له
@@ -65,6 +65,15 @@ function Poem({ kind, lines }: { kind: 'verse' | 'rajaz'; lines: PoemLine[] }) {
       lastWidth.current = width
 
       const font = fontOf(cells[0])
+      if (el.parentElement) {
+        fitPoemWidth(
+          el.parentElement,
+          cells.map((c) => c.dataset.original ?? ''),
+          font,
+          rajaz ? 1 : 2,
+          lines.length > 1,
+        )
+      }
       const next: Record<string, string> = {}
       for (const cell of cells) {
         const key = cell.dataset.key

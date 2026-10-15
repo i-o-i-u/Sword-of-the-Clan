@@ -141,6 +141,29 @@ export function stretchShatr(text: string, available: number, font: string): str
     .join(' ')
 }
 
+/**
+ * مقدارُ ما يزيد عمودُ الشعر على أطول شطرٍ فيه: فضلٌ يسيرٌ يُمدّ فيه أطولُها
+ * مدًّا يُرى ولا يُفحش، ويُمدّ ما دونه إليه فتستوي الأطراف.
+ */
+export const POEM_SLACK = 1.08
+
+/**
+ * يُحدّ عرضُ لوح الشعر بأطول شطرٍ فيه. كان اللوحُ يأخذ عرضَ النصّ كلَّه
+ * فيُمدّ الشطرُ حتى تصير الكلمةُ حروفًا متباعدةً بينها خيوط — والمدُّ زينةٌ
+ * تُسوّي الأطراف لا تملأ الفراغ. ويُستدعى قبل قياس الخلايا، فعليه تُقاس.
+ */
+export function fitPoemWidth(
+  wrap: HTMLElement, originals: string[], font: string, cols: number, numbered: boolean,
+) {
+  const ctx = measurer(font)
+  if (!ctx) return
+  const longest = Math.max(0, ...originals.map((t) => ctx.measureText(t).width))
+  if (!longest) return
+  // ١٦ حاشيتا الشطر، و٤٠ عمودُ الرقم، و٢ خيطُ ما بين الشطرين
+  const width = (longest * POEM_SLACK + 16) * cols + (numbered ? 40 : 0) + 2
+  wrap.style.maxWidth = `${Math.ceil(width)}px`
+}
+
 /** وصفُ خطّ العنصر كما يقرؤه القماش */
 export function fontOf(el: Element): string {
   const cs = getComputedStyle(el)
