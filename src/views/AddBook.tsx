@@ -22,7 +22,7 @@ import {
   ISSUE_HINTS, ISSUE_KINDS, LANGUAGES,
   MISSING_REASONS, ORIGINAL_LANGUAGES, SIZES, SOURCES, SOURCE_DETAILS,
   WITHIN_LABEL, WITH_LABEL, WORK_PHRASES, WORK_TYPES,
-  editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
+  VOLUMES_COUNT, countLabel, editionInWords, formatNumber, missingVolumesHeadline, ordinalName, parseNumber,
   sumVolumePages, type Category, type Contributor, type CoPublisher,
   type MissingVolume, type WithinTitle,
 } from '../lib/types'
@@ -1414,13 +1414,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
                 paddingTop: 10, borderTop: '1px solid var(--border)',
               }}>
                 الإجمالي: <strong style={{ color: 'var(--text)' }}>{formatNumber(volumeSum)}</strong>
-                {indexVolumes.length > 0 && ` — بلا ${indexVolumes.length} مجلَّد فهارس`}
+                {indexVolumes.length > 0 && ` — لا تُحسب فيه مجلَّداتُ الفهارس (${countLabel(indexVolumes.length, VOLUMES_COUNT)})`}
               </div>
 
               {liveMissing.length > 0 && (
                 <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>
-                  {missingVolumesHeadline(liveMissing.length)}:{' '}
-                  {liveMissing
+                  {missingVolumesHeadline(liveMissing.length)} — {liveMissing
                     .slice()
                     .sort((a, b) => a.no - b.no)
                     .map((m) => `المجلَّد ${ordinalName(m.no)}`)

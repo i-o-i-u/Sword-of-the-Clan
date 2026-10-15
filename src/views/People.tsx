@@ -93,11 +93,10 @@ export default function People() {
                   mark: author.name.replace(/^ال/, '').trim().charAt(0) || '؟',
                   lines: [
                     { icon: <HourglassIcon size={12} />, text: deathLabel(author) },
-                    // لا يُوصَل عددٌ باسمٍ إلا من `countLabel`: «كتابٌ واحد»
-                    // ثم «كتابان» ثم «٣ كتبٍ» ثم «١١ كتابًا»
+                    // لا يُوصَل عددٌ باسمٍ إلا من `countLabel`: «عدد الكتب: 3»
                     {
                       icon: <OpenBookIcon size={12} />,
-                      text: `${countLabel(count, BOOKS_COUNT)} في المكتبة`,
+                      text: countLabel(count, BOOKS_COUNT, 'في المكتبة'),
                       tone: 'accent' as const,
                     },
                   ],

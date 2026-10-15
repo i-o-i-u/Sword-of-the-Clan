@@ -8,7 +8,7 @@
 // يُستثنى ما هو إجراءٌ لا حقل — رفع صورة، وإضافة صفٍّ أو حذفه — فذاك يمضي
 // حين يُضغط، ولا معنى لتأجيله.
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { pressable } from '../lib/router'
@@ -24,7 +24,7 @@ import {
 import ImageSlot from './ImageSlot'
 import {
   CloseButton, DebouncedInput, DebouncedTextarea, Overlay, ToggleRow,
-  cardStyle, chipStyle, outlineTabStyle, viewToggleStyle,
+  cardStyle, chipStyle, outlineTabStyle, tone, viewToggleStyle,
 } from './ui'
 
 type Tab = 'appearance' | 'landing' | 'library' | 'privacy'
@@ -43,7 +43,7 @@ type QuoteEdits = Record<string, { text?: string; author?: string }>
 type SetField = (patch: Partial<Settings>) => void
 
 export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
-  const { settings, previewSettings, saveSettings, reload } = useLibrary()
+  const { settings, previewSettings, discardPreview, saveSettings, reload } = useLibrary()
   const [tab, setTab] = useState<Tab>('appearance')
   const [quoteEdits, setQuoteEdits] = useState<QuoteEdits>({})
   const [saving, setSaving] = useState(false)
@@ -51,6 +51,10 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
 
   // ما كانت عليه الإعدادات لحظة الفتح: به نعرف المعلَّق، وإليه نردّ عند الإهمال
   const snapshot = useRef<Settings>(settings)
+
+  // والمعاينةُ لا تبقى بعد النافذة: ما لم يُحفظ فيها يسقط بإغلاقها، وإلّا بقي
+  // فوق كل ما يصل من الخادم بعدُ فردَّ كلَّ تعديلٍ لاحق إلى ما عُويِن هنا
+  useEffect(() => () => discardPreview(), [discardPreview])
 
   const fieldsDirty = JSON.stringify(settings) !== JSON.stringify(snapshot.current)
   const quotesDirty = Object.keys(quoteEdits).length > 0
@@ -87,7 +91,7 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
     if (dirty) {
       const goOn = window.confirm('فيه تعديلاتٌ لم تُحفظ بعد. أتُغلق النافذة وتُهملها؟')
       if (!goOn) return
-      previewSettings(snapshot.current)
+      discardPreview()
     }
     onClose()
   }
@@ -708,9 +712,9 @@ function PrivacyTab({ setField }: { setField: SetField }) {
       }}>
         ما تُطفئه هنا يختفي عن الزوار وحدهم، وأنت تراه كما هو حين تكون داخلًا بحسابك.
         <br />
-        مخفيّ عن الزوار: {countLabel(s.hidden_book_ids.length, BOOKS_COUNT)}،
-        و{countLabel(s.hidden_categories.length, CATEGORIES_COUNT)}،
-        و{countLabel(totalFields, FIELDS_COUNT)}.
+        المخفيّ عن الزوار — {countLabel(s.hidden_book_ids.length, BOOKS_COUNT)}،
+        {' '}{countLabel(s.hidden_categories.length, CATEGORIES_COUNT)}،
+        {' '}{countLabel(totalFields, FIELDS_COUNT)}.
         <br />
         والكتابُ المخفيُّ والمؤلِّفُ المخفيّ يسقطان من عدّ الزائر وحسابه، فلا
         يدلّ عليهما رقمٌ في الإحصاء.
@@ -1005,8 +1009,7 @@ function DocPicker(
               <span style={{
                 fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 999,
                 whiteSpace: 'nowrap',
-                color: on ? 'oklch(0.45 0.13 28)' : 'oklch(0.36 0.09 150)',
-                background: on ? 'oklch(0.94 0.05 28)' : 'oklch(0.93 0.04 150)',
+                ...tone(on ? 'danger' : 'ok'),
               }}>
                 {on ? 'مخفيّ' : 'ظاهر'}
               </span>

@@ -22,24 +22,40 @@
 //
 // وما حجبه الخادم عن الزائر لا يصل هذه الصفحة أصلًا: فوائدُ الكتاب المخفيّ
 // لا تُرسَل، ومفتاحُ «الفوائد والمقتطفات» في تبويب الزوار يُسقطها كلَّها.
+//
+// ومما زِيد بعدُ:
+//   • **ما بُحث به يُظلَّل** في البطاقات والفهرس والمطالعة.
+//   • **المفاتيح**: «/» للبحث، وj وk للتنقّل بين الفوائد، وo لفتح المُضاءة.
+//   • **التعديلُ الجماعيّ** لصاحب المكتبة: يُحدِّد فوائدَ ثم يضيف إليها صفةً
+//     أو يرفعها منها دفعةً واحدة.
+//   • **السابقةُ والتاليةُ في صفحة الفائدة تتبعان القائمةَ التي جاء منها
+//     القارئ** (`perks.trail`)، بترشيحها وترتيبها — لا ترتيبَ التقييد وحده.
+//   • **فوائدُ ذاتُ صلة** في صفحة الفائدة، بالأعلام والوسوم والأبواب.
+//   • **الكرّاسةُ بحثٌ مصغَّر**: تُرتَّب فوائدُها وتُقسَم فصولًا، وتُطبع وتُنزَّل
+//     مستندًا يفتحه «وورد» أو نصَّ Markdown.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as api from '../lib/api'
-import { useLibrary } from '../lib/library'
+import { useLibrary, useNeedPerks } from '../lib/library'
 import { goBack, hashFor, linkTo, navigate } from '../lib/router'
-import { useViewState } from '../lib/viewState'
+import { presetViewState, useViewState } from '../lib/viewState'
 import { Icon } from '../lib/icons'
-import { QUICK_OPTS, normalizeText } from '../lib/search'
+import { QUICK_OPTS, highlightPattern, normalizeText } from '../lib/search'
+import { Hl } from '../lib/highlight'
 import {
   EMPTY_FILTER, PERK_SORTS, PICK_FIELDS, activeFilters, facetCounts, filterIsOn,
-  filterPerks, isPickField, notebookTallies, perkDate, perkIndex, perkPeople,
+  filterPerks, isPickField, notebookTallies, perkDate, perkLink, perkName, perkPeople,
   perkSources, perkTags, perkTopics, randomPerk, sortPerks, sourceTitle,
   type PerkFilter, type PerkSort, type PickField, type Tally,
 } from '../lib/perks'
 import {
+  fileName, notebookDoc, notebookEntries, notebookMarkdown, toLayout, type NotebookItem,
+} from '../lib/perkExport'
+import { downloadBlob } from '../lib/perkImage'
+import {
   CATEGORIES_COUNT, FIGURES_COUNT, GEMS_COUNT, NOTEBOOKS_COUNT, PERKS_COUNT,
   PERK_SOURCE_KINDS, SOURCES_COUNT,
-  countLabel, countParts, formatNumber, perkCategoriesOf, perkKindsOf,
+  countLabel, countParts, formatNumber,
   type CountForms, type Notebook, type Perk, type PerkKindDef,
 } from '../lib/types'
 import PerkCard, { PerkComment } from '../components/PerkCard'
@@ -47,13 +63,24 @@ import Prose from '../components/Prose'
 import RichText from '../components/RichText'
 import PerkEditor from '../components/PerkEditor'
 import PerkSettings from '../components/PerkSettings'
+import { PerkSheet, usePrintJob } from '../components/PerkPrint'
 import { IconChoice } from '../components/IconPicker'
 import {
-  BackButton, ChevronIcon, ClearIcon, FilterIcon, GearIcon, GridIcon, HashIcon,
-  MoreSentinel, OpenBookIcon, OwnerIcon, PencilIcon, PerkIcon, QuoteIcon,
+  BackButton, ChevronIcon, ClearIcon, DownloadIcon, FilterIcon, GearIcon, GridIcon, HashIcon,
+  MoreSentinel, OpenBookIcon, OwnerIcon, PencilIcon, PerkIcon, PrinterIcon, QuoteIcon,
   ScrollIcon, SearchIcon, SuggestIcon, TableIcon, VerifyIcon, ghostButtonStyle,
-  inputStyle, primaryButtonStyle,
+  inputStyle, overlayOpen, primaryButtonStyle,
 } from '../components/ui'
+
+/**
+ * القائمةُ التي جاء منها القارئُ إلى صفحة الفائدة: معرّفاتُها على ترتيبها
+ * واسمُها. تُكتب حين يُفتح منها شيء، وبها تتبع السابقةُ والتاليةُ ما كان
+ * القارئ فيه — مُرشَّحًا ومرتَّبًا — لا ترتيبَ التقييد في الكنّاش كلِّه.
+ */
+interface Trail { ids: string[]; label: string }
+const NO_TRAIL: Trail = { ids: [], label: '' }
+const TRAIL_KEY = 'perks.trail'
+const rememberTrail = (ids: string[], label: string) => presetViewState(TRAIL_KEY, { ids, label })
 
 /** أبوابُ الكنّاش. المفتاحُ موضعُه من الرابط، والصدرُ بلا مفتاح. */
 const TABS = [
@@ -81,9 +108,10 @@ export default function Perks(
   { tab = '', pick: picked }: { tab?: string; pick?: { field: string; value: string } },
 ) {
   const {
-    perks, notebooks, perkKinds, perkCategories, perkFigures, bookById, settings,
-    isOwner, canEdit,
+    perks, notebooks, perkKindList, perkCategoryList, perkFigures, bookById, settings,
+    isOwner, canEdit, perkIndex: index,
   } = useLibrary()
+  const ready = useNeedPerks()
   const canSee = isOwner || settings.visibility.perks
 
   const [filter, setFilter] = useViewState<PerkFilter>('perks.filter', EMPTY_FILTER)
@@ -93,15 +121,9 @@ export default function Perks(
   const [settingsOpen, setSettingsOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ */
-  const kinds = useMemo(
-    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
-    [perkKinds, perks, settings.perk_kinds_set],
-  )
-  const cats = useMemo(
-    () => perkCategoriesOf(perkCategories, settings.perk_categories_set),
-    [perkCategories, settings.perk_categories_set],
-  )
+  /** الأنواعُ والتصنيفاتُ كما حُرِّرت، وإلّا فالمبدأ — محسوبةً في السياق مرّةً */
+  const kinds = perkKindList
+  const cats = perkCategoryList
 
   /**
    * ينتقل إلى باب «الفوائد» ويُصفِّيه بما ضُغط عليه، من أيّ بابٍ كان. **والترشيحُ
@@ -163,6 +185,8 @@ export default function Perks(
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
+      // ولا من تحت نافذة: كان «/» في نموذج الفائدة يقفز بالتركيز إلى ما خلفه
+      if (overlayOpen()) return
       const el = e.target as HTMLElement
       if (el.closest('input, textarea, select, [contenteditable="true"]')) return
       e.preventDefault()
@@ -180,7 +204,6 @@ export default function Perks(
   const tags = useMemo(() => perkTags(perks), [perks])
   const sources = useMemo(() => perkSources(perks, bookById), [perks, bookById])
   const gems = useMemo(() => perks.filter((p) => p.rating >= 3), [perks])
-  const index = useMemo(() => perkIndex(perks, bookById), [perks, bookById])
 
   const onFeed = tab === '' || tab === 'gems'
   const base = tab === 'gems' ? gems : perks
@@ -253,7 +276,7 @@ export default function Perks(
           </div>
         </div>
 
-        {canSee && perks.length > 0 && (
+        {canSee && ready && perks.length > 0 && (
           <>
             <label className="kn-search">
               <SearchIcon size={18} />
@@ -311,6 +334,9 @@ export default function Perks(
 
       {!canSee ? (
         <KnEmpty title="الفوائد والمقتطفات غير معروضة" />
+      ) : !ready ? (
+        // والفوائدُ في الطريق: لا يُقال «لم تُقيَّد فائدةٌ بعد» قبل أن تصل
+        <KnLoading />
       ) : perks.length === 0 && (tab === '' || tab === 'gems' || tab === 'sources') ? (
         <KnEmpty
           title="لم تُقيَّد فائدةٌ بعد"
@@ -403,10 +429,25 @@ function Stat(
   if (n <= 0) return null
   const { value, label } = countParts(n, forms)
   return (
-    <button type="button" className={gem ? 'kn-stat kn-stat-gem' : 'kn-stat'} onClick={onOpen}>
-      {value && <span className="kn-stat-value">{value}</span>}
+    <button
+      type="button"
+      className={gem ? 'kn-stat kn-stat-gem' : 'kn-stat'}
+      onClick={onOpen}
+      aria-label={countLabel(n, forms)}
+    >
+      <span className="kn-stat-value">{value}</span>
       <span className="kn-stat-label">{label}</span>
     </button>
+  )
+}
+
+/** الكنّاشُ في الطريق: موضعٌ بزخرفته يقول ذلك، لا صفحةٌ تدّعي الخلوّ */
+function KnLoading() {
+  return (
+    <div className="kn-empty kn-loading" role="status">
+      <span className="kn-empty-orn" aria-hidden="true" />
+      <p>يُحمَّل الكنّاش…</p>
+    </div>
   )
 }
 
@@ -451,17 +492,29 @@ function Feed(
     topics: Tally[]
     tags: Tally[]
     kinds: PerkKindDef[]
-    index: ReturnType<typeof perkIndex>
+    index: Map<string, string>
     onEdit?: (perk: Perk) => void
     onPick: (field: PickField, value: string) => void
     onDrop: (field: keyof PerkFilter) => void
     onClear: () => void
   },
 ) {
-  const { bookById, notebooks } = useLibrary()
+  const { bookById, notebooks, canEdit } = useLibrary()
   const [railOpen, setRailOpen] = useState(false)
   const on = filterIsOn(filter)
   const chips = activeFilters(filter, notebooks)
+  const listRef = useRef<HTMLDivElement>(null)
+  const re = useMemo(() => highlightPattern(filter.query), [filter.query])
+
+  // التحديدُ للتعديل الجماعي: لصاحب المكتبة وحده، ويُفتح بزرّه
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const togglePicked = (perk: Perk) => setPicked((prev) => {
+    const next = new Set(prev)
+    if (next.has(perk.id)) next.delete(perk.id)
+    else next.add(perk.id)
+    return next
+  })
 
   const facets = useMemo(
     () => facetCounts(all, filter, bookById, index),
@@ -479,6 +532,57 @@ function Feed(
   }, [key, view, setLimit])
   const page = perks.slice(0, limit)
   const more = () => setLimit((n) => n + PAGE[view])
+
+  /**
+   * القائمةُ المعروضة تُحفظ حين يُفتح منها شيء، فتتبعها السابقةُ والتاليةُ في
+   * صفحة الفائدة: من رشّح بعَلَمٍ ثم فتح فائدةً يمضي في فوائد ذلك العَلَم.
+   */
+  const trailLabel = gemsTab ? 'النفائس' : on ? 'القائمة المرشَّحة' : 'الكنّاش'
+  const keepTrail = () => rememberTrail(perks.map((p) => p.id), trailLabel)
+
+  /**
+   * التنقّلُ بالمفاتيح: j إلى التالية وk إلى السابقة، وo يفتح المُضاءة، وx
+   * يُحدِّدها في وضع التحديد. **بمواضع المفاتيح لا بحروفها** (`e.code`): لوحةُ
+   * المفاتيح العربية تكتب في موضع j حرفَ التاء، فلو سُئل عن الحرف لما عمل
+   * المفتاحُ إلا بعد تبديل اللغة.
+   */
+  const pageLen = page.length
+  const total = perks.length
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || overlayOpen()) return
+      const el = e.target as HTMLElement
+      if (el.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (!['KeyJ', 'KeyK', 'KeyO', 'KeyX'].includes(e.code)) return
+      const items = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-perk-id]') ?? [])]
+      if (!items.length) return
+      const current = items.findIndex((it) => it.contains(document.activeElement))
+      e.preventDefault()
+
+      if (e.code === 'KeyO' || e.code === 'KeyX') {
+        const item = items[current]
+        if (!item) return
+        const id = item.dataset.perkId!
+        if (e.code === 'KeyO') {
+          keepTrail()
+          navigate({ name: 'perk', id })
+        } else if (selecting) {
+          const perk = perks.find((p) => p.id === id)
+          if (perk) togglePicked(perk)
+        }
+        return
+      }
+      const step = e.code === 'KeyJ' ? 1 : -1
+      const next = Math.max(0, Math.min(items.length - 1, current + step))
+      // بلغ آخرَ المرسوم: تُرسم الدفعةُ التالية قبل أن يمضي
+      if (step > 0 && next >= items.length - 2 && pageLen < total) more()
+      const target = items[current < 0 ? 0 : next]
+      target.focus({ preventScroll: true })
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
 
   const toggle = (field: 'kind' | 'category' | 'subCategory' | 'tag', value: string) =>
     setFilter((prev) => ({
@@ -575,7 +679,7 @@ function Feed(
                   className={filter.minRating === n ? 'on' : ''}
                   aria-pressed={filter.minRating === n}
                   onClick={() => setFilter((prev) => ({ ...prev, minRating: n }))}
-                  title={n === 0 ? 'كلُّ النفاسات' : n === 3 ? 'النفائس وحدها' : `${n} فما فوق`}
+                  title={n === 0 ? 'كلُّ النفاسات' : n === 3 ? 'النفائس وحدها' : `النجوم: ${n} فما فوق`}
                 >
                   {n === 0 ? 'الكل' : '★'.repeat(n)}
                 </button>
@@ -589,6 +693,11 @@ function Feed(
             <TagCloud tags={tags} value={filter.tag} onToggle={(t) => toggle('tag', t)} />
           </RailGroup>
         )}
+
+        {/* ومفاتيحُ القسم مكتوبةً: خصلةٌ لا يُنتفع بها من لا يعلمها */}
+        <p className="kn-keys" aria-hidden="true">
+          <kbd>/</kbd> للبحث · <kbd>j</kbd> <kbd>k</kbd> للتنقّل · <kbd>o</kbd> للفتح
+        </p>
       </aside>
 
       {/* ---------------------------------------------------- القائمة */}
@@ -610,6 +719,19 @@ function Feed(
           </span>
 
           <span className="kn-toolbar-gap" />
+
+          {canEdit && view !== 'reading' && (
+            <button
+              type="button"
+              className={selecting ? 'kn-btn kn-btn-primary kn-btn-sm' : 'kn-btn kn-btn-ghost kn-btn-sm'}
+              onClick={() => { setSelecting((v) => !v); setPicked(new Set()) }}
+              aria-pressed={selecting}
+              title="حدِّد فوائدَ ثم أضِف إليها صفةً أو ارفعها منها دفعةً واحدة"
+            >
+              <VerifyIcon size={14} />
+              <span>{selecting ? 'أنهِ التحديد' : 'تحديد'}</span>
+            </button>
+          )}
 
           <label className="kn-sort">
             <span>الترتيب</span>
@@ -663,61 +785,102 @@ function Feed(
           </div>
         )}
 
-        {perks.length === 0 ? (
-          <KnEmpty
-            title={gemsTab && !on ? 'لم تُوسَم فائدةٌ بالنجوم الثلاث بعد' : 'لا فائدةَ تطابق'}
-            hint={gemsTab && !on
-              ? 'تُعلَّم النفاسةُ من صفحة الفائدة بعد قيدها.'
-              : 'جرِّب كلمةً أخرى، أو ارفع شرطًا من الترشيح.'}
-          />
-        ) : view === 'index' ? (
-          <ol className="kn-index">
-            {page.map((p) => (
-              <li key={p.id}>
-                <a {...linkTo({ name: 'perk', id: p.id })}>
-                  <span className="kn-index-kind">{p.kinds[0] ?? ''}</span>
-                  <span className="kn-index-title">
-                    {p.title || p.text.slice(0, 80) + (p.text.length > 80 ? '…' : '')}
-                  </span>
-                  <span className="kn-index-src">
-                    {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined)}
-                  </span>
-                  {p.rating > 0 && <span className="kn-stars">{'★'.repeat(p.rating)}</span>}
-                  <span className="kn-index-date">{perkDate(p)}</span>
-                </a>
-              </li>
-            ))}
-          </ol>
-        ) : view === 'reading' ? (
-          /*
-            مطالعةٌ متّصلة: النصوصُ وحدها يتلو بعضُها بعضًا كصفحةِ كتاب، ولكلٍّ
-            عزوُه تحته. **والنصُّ منسَّقٌ بهوامشه** كما في البطاقة سواءً بسواء،
-            ويُعرض معه تعليقُ المُقيِّد مفصولًا.
-          */
-          <div className="kn-reading">
-            {page.map((p) => (
-              <section key={p.id}>
-                {p.title && <h3>{p.title}</h3>}
-                <RichText html={p.text_html} text={p.text} footnotes={p.footnotes} />
-                {p.comment && <PerkComment text={p.comment} />}
-                <footer>
-                  <a {...linkTo({ name: 'perk', id: p.id })}>
-                    {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'الفائدة'}
+        <div
+          ref={listRef}
+          // ومن فتح فائدةً من القائمة حُفظت القائمةُ لصفحتها
+          onClickCapture={(e) => {
+            if ((e.target as Element).closest('a[href*="/perk/"]')) keepTrail()
+          }}
+        >
+          {perks.length === 0 ? (
+            <KnEmpty
+              title={gemsTab && !on ? 'لم تُوسَم فائدةٌ بالنجوم الثلاث بعد' : 'لا فائدةَ تطابق'}
+              hint={gemsTab && !on
+                ? 'تُعلَّم النفاسةُ من صفحة الفائدة بعد قيدها.'
+                : 'جرِّب كلمةً أخرى، أو ارفع شرطًا من الترشيح.'}
+            />
+          ) : view === 'index' ? (
+            <ol className="kn-index">
+              {page.map((p) => (
+                <li key={p.id} className={picked.has(p.id) ? 'picked' : undefined}>
+                  {selecting && (
+                    <input
+                      type="checkbox"
+                      className="kn-index-check"
+                      checked={picked.has(p.id)}
+                      onChange={() => togglePicked(p)}
+                      aria-label={`تحديد: ${perkName(p, 40)}`}
+                    />
+                  )}
+                  <a {...linkTo({ name: 'perk', id: p.id })} data-perk-id={p.id}>
+                    <span className="kn-index-kind">{p.kinds[0] ?? ''}</span>
+                    <span className="kn-index-title"><Hl text={perkName(p)} re={re} /></span>
+                    <span className="kn-index-src">
+                      {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined)}
+                    </span>
+                    {p.rating > 0 && <span className="kn-stars">{'★'.repeat(p.rating)}</span>}
+                    <span className="kn-index-date">{perkDate(p)}</span>
                   </a>
-                </footer>
-              </section>
-            ))}
-          </div>
-        ) : (
-          <div className="kn-list">
-            {page.map((p) => (
-              <PerkCard key={p.id} perk={p} onEdit={onEdit} onPick={onPick} />
-            ))}
-          </div>
-        )}
+                </li>
+              ))}
+            </ol>
+          ) : view === 'reading' ? (
+            /*
+              مطالعةٌ متّصلة: النصوصُ وحدها يتلو بعضُها بعضًا كصفحةِ كتاب، ولكلٍّ
+              عزوُه تحته. **والنصُّ منسَّقٌ بهوامشه** كما في البطاقة سواءً بسواء،
+              ويُعرض معه تعليقُ المُقيِّد مفصولًا.
+            */
+            <div className="kn-reading">
+              {page.map((p) => (
+                <section key={p.id} data-perk-id={p.id} tabIndex={-1}>
+                  {p.title && <h3><Hl text={p.title} re={re} /></h3>}
+                  <RichText
+                    html={p.text_html}
+                    text={p.text}
+                    footnotes={p.footnotes}
+                    highlight={filter.query}
+                  />
+                  {p.comment && <PerkComment text={p.comment} highlight={re} />}
+                  <footer>
+                    <a {...linkTo({ name: 'perk', id: p.id })}>
+                      {sourceTitle(p, p.book_id ? bookById(p.book_id) : undefined) || 'الفائدة'}
+                    </a>
+                  </footer>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="kn-list">
+              {page.map((p) => (
+                <PerkCard
+                  key={p.id}
+                  perk={p}
+                  onEdit={onEdit}
+                  onPick={onPick}
+                  highlight={filter.query}
+                  selected={picked.has(p.id)}
+                  onSelect={selecting ? togglePicked : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         <MoreSentinel shown={page.length} total={perks.length} onMore={more} />
       </div>
+
+      {selecting && (
+        <BulkBar
+          ids={[...picked].filter((id) => perks.some((p) => p.id === id))}
+          shown={perks}
+          kinds={kinds}
+          topics={topics}
+          tags={tags}
+          onAll={() => setPicked(new Set(perks.map((p) => p.id)))}
+          onNone={() => setPicked(new Set())}
+          onDone={() => { setSelecting(false); setPicked(new Set()) }}
+        />
+      )}
 
       {/* ظلُّ الدُّرج على الجوّال: الضغطُ عليه يُغلقه */}
       <button
@@ -727,6 +890,133 @@ function Feed(
         tabIndex={-1}
         onClick={() => setRailOpen(false)}
       />
+    </div>
+  )
+}
+
+/** الحقولُ التي تُعدَّل جماعيًّا، بأسمائها كما يقرؤها صاحبُ المكتبة */
+const BULK_FIELDS: { key: api.BulkField; label: string }[] = [
+  { key: 'categories', label: 'التصنيف' },
+  { key: 'sub_categories', label: 'الفرع' },
+  { key: 'kinds', label: 'النوع' },
+  { key: 'tags', label: 'الوسم' },
+  { key: 'people', label: 'العَلَم' },
+  { key: 'notebook_ids', label: 'الكرّاسة' },
+]
+
+/**
+ * شريطُ التعديل الجماعي: يلصق بأسفل الشاشة ما دام التحديدُ قائمًا. فيه عددُ
+ * المحدَّد، وتحديدُ المعروض كلِّه أو رفعُه، ثم الصفةُ وقيمتُها: «أضِف التصنيف
+ * الفقه» أو «ارفع الوسم كذا». والقيمةُ تُختار ممّا في الكنّاش، إلّا الوسمَ
+ * والعَلَم فيُكتبان — يُسجَّل العَلَمُ الجديد كما يُسجَّل من النموذج.
+ */
+function BulkBar(
+  { ids, shown, kinds, topics, tags, onAll, onNone, onDone }: {
+    ids: string[]
+    shown: Perk[]
+    kinds: PerkKindDef[]
+    topics: Tally[]
+    tags: Tally[]
+    onAll: () => void
+    onNone: () => void
+    onDone: () => void
+  },
+) {
+  const { notebooks, perkFigures, run } = useLibrary()
+  const [op, setOp] = useState<'add' | 'remove'>('add')
+  const [field, setField] = useState<api.BulkField>('categories')
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  /** ما يُختار منه لكل حقل: اسمٌ يُعرض وقيمةٌ تُحفظ */
+  const choices = useMemo((): { value: string; label: string }[] | null => {
+    const named = (names: string[]) => names.map((n) => ({ value: n, label: n }))
+    switch (field) {
+      case 'kinds': return named(kinds.map((k) => k.name))
+      case 'categories': return named(topics.map((t) => t.name))
+      case 'sub_categories': return named(topics.flatMap((t) => (t.children ?? []).map((c) => c.name)))
+      case 'notebook_ids': return notebooks.map((n) => ({ value: n.id, label: n.name }))
+      default: return null
+    }
+  }, [field, kinds, topics, notebooks])
+  const suggestions = field === 'tags'
+    ? tags.map((t) => t.name)
+    : field === 'people' ? perkFigures.map((f) => f.name) : []
+
+  async function apply() {
+    const v = value.trim()
+    if (!v || !ids.length) return
+    setBusy(true)
+    const ok = await run(() => api.bulkEditPerks(ids, field, op, v))
+    setBusy(false)
+    if (ok) setValue('')
+  }
+
+  return (
+    <div className="kn-bulk" role="region" aria-label="التعديل الجماعي">
+      <div className="kn-bulk-count">
+        <strong>{countLabel(ids.length, { noun: 'المحدَّد' })}</strong>
+        <button type="button" className="kn-link-btn" onClick={onAll}>
+          حدِّد المعروضَ كلَّه ({formatNumber(shown.length)})
+        </button>
+        {ids.length > 0 && (
+          <button type="button" className="kn-link-btn" onClick={onNone}>ارفع التحديد</button>
+        )}
+      </div>
+
+      <div className="kn-bulk-form">
+        <div className="kn-seg" role="group" aria-label="العمل">
+          <button type="button" className={op === 'add' ? 'on' : ''} onClick={() => setOp('add')}>
+            أضِف
+          </button>
+          <button type="button" className={op === 'remove' ? 'on' : ''} onClick={() => setOp('remove')}>
+            ارفع
+          </button>
+        </div>
+        <select
+          value={field}
+          onChange={(e) => { setField(e.target.value as api.BulkField); setValue('') }}
+          style={inputStyle}
+          aria-label="الصفة"
+        >
+          {BULK_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </select>
+        {choices ? (
+          <select
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            style={inputStyle}
+            aria-label="القيمة"
+          >
+            <option value="">— اختر —</option>
+            {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        ) : (
+          <>
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void apply() } }}
+              list="kn-bulk-list"
+              placeholder={field === 'tags' ? 'الوسم' : 'اسمُ العَلَم'}
+              style={inputStyle}
+              aria-label="القيمة"
+            />
+            <datalist id="kn-bulk-list">
+              {suggestions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          </>
+        )}
+        <button
+          type="button"
+          className="kn-btn kn-btn-primary"
+          disabled={busy || !ids.length || !value.trim()}
+          onClick={() => void apply()}
+        >
+          {busy ? 'يُحفَظ…' : 'نفِّذ'}
+        </button>
+        <button type="button" className="kn-btn kn-btn-ghost" onClick={onDone}>تمّ</button>
+      </div>
     </div>
   )
 }
@@ -1037,18 +1327,23 @@ function Notebooks({ rows }: { rows: Tally[] }) {
 // ----------------------------------------------------- صفحة الفائدة الواحدة
 /**
  * الفائدةُ وحدها في صفحتها: نصُّها تامًّا لا يُطوى، وعزوُها، وما اتّصل بها
- * من فوائد — ما كان في كرّاساتها، وما خرج من كتابها. **وههنا تُعلَّم نفاستُها**
- * — بالنجوم في صدر بطاقتها — لا من نموذجها.
+ * من فوائد — ما كان في كرّاساتها، وما خرج من كتابها، **وما شاركها في عَلَمٍ أو
+ * وسمٍ أو باب**. **وههنا تُعلَّم نفاستُها** — بالنجوم في صدر بطاقتها — لا من
+ * نموذجها.
  *
- * وفيها ما لم يكن: **سبيلٌ إلى السابقة والتالية** على ترتيب التقييد، فيُقرأ
- * الكنّاشُ فائدةً بعد فائدة بلا رجوعٍ إلى القائمة، و**قرعةٌ** تفتح غيرَها.
+ * و**السابقةُ والتاليةُ تتبعان القائمةَ التي جاء منها القارئ** (`perks.trail`):
+ * من رشّح بعَلَمٍ ثم فتح فائدةً مضى في فوائد ذلك العَلَم، ومن جاء من كرّاسةٍ
+ * مضى فيها على ترتيبها. ومن جاء من رابطٍ منسوخ فعلى ترتيب التقييد.
  *
  * وتقبل بادئةَ المعرّف كما تقبله تامًّا، كصفحة الكتاب: الرابطُ المنسوخ
  * مختصَر.
  */
 export function PerkPage({ perkId }: { perkId: string }) {
-  const { perks, notebooks, bookById, settings, isOwner, canEdit } = useLibrary()
+  const { perks, notebooks, bookById, authorById, settings, isOwner, canEdit } = useLibrary()
+  const ready = useNeedPerks()
   const [editing, setEditing] = useState(false)
+  const [trail] = useViewState<Trail>(TRAIL_KEY, NO_TRAIL)
+  const { print, sheet } = usePrintJob()
 
   const perk = useMemo(
     () => perks.find((p) => p.id === perkId) ?? perks.find((p) => p.id.startsWith(perkId)),
@@ -1069,19 +1364,57 @@ export function PerkPage({ perkId }: { perkId: string }) {
     }
   }, [perks, perk])
 
-  // الفوائدُ تصل مرتَّبةً بتاريخ تقييدها، فالسابقةُ والتاليةُ جارتاها فيها
-  const at = perk ? perks.indexOf(perk) : -1
-  const prev = at > 0 ? perks[at - 1] : undefined
-  const next = at >= 0 && at < perks.length - 1 ? perks[at + 1] : undefined
+  /**
+   * ذواتُ الصلة: ما شاركها في عَلَمٍ — وهو أقوى الصلات — ثم في وسم، ثم في
+   * باب. ولا يُعاد فيها ما عُرض في قسمَي الكرّاسة والكتاب، ويُذكر سببُ الصلة
+   * تحت كلّ واحدة فيُعرف لِمَ جاءت.
+   */
+  const related = useMemo(() => {
+    if (!perk) return []
+    const seen = new Set([
+      perk.id, ...kin.notebook.slice(0, 12).map((p) => p.id), ...kin.book.slice(0, 12).map((p) => p.id),
+    ])
+    const people = new Set(perk.people)
+    const tags = new Set(perk.tags)
+    const topics = new Set([...perk.categories, ...perk.sub_categories])
+    return perks
+      .filter((p) => !seen.has(p.id))
+      .map((p) => {
+        const sharedPeople = p.people.filter((x) => people.has(x))
+        const sharedTags = p.tags.filter((x) => tags.has(x))
+        const sharedTopics = [...p.categories, ...p.sub_categories].filter((x) => topics.has(x))
+        return {
+          p,
+          why: [...sharedPeople, ...sharedTags.map((t) => `#${t}`), ...sharedTopics],
+          score: sharedPeople.length * 3 + sharedTags.length * 2 + sharedTopics.length,
+        }
+      })
+      .filter((x) => x.score >= 2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+  }, [perks, perk, kin])
 
-  if (!(isOwner || settings.visibility.perks) || !perk) {
+  // السابقةُ والتاليةُ: من القائمة التي جاء منها القارئ إن كانت فيها، وإلّا
+  // فعلى ترتيب التقييد — والفوائدُ تصل مرتَّبةً به
+  const byId = useMemo(() => new Map(perks.map((p) => [p.id, p])), [perks])
+  const fromTrail = !!perk && trail.ids.includes(perk.id)
+  const seq = fromTrail
+    ? trail.ids.filter((id) => byId.has(id))
+    : perks.map((p) => p.id)
+  const at = perk ? seq.indexOf(perk.id) : -1
+  const prev = at > 0 ? byId.get(seq[at - 1]) : undefined
+  const next = at >= 0 && at < seq.length - 1 ? byId.get(seq[at + 1]) : undefined
+
+  if (!(isOwner || settings.visibility.perks) || !ready || !perk) {
     return (
       <main className="app-main kn-page">
         <BackButton label="العودة إلى الفوائد" onClick={() => goBack({ name: 'perks' })} />
-        <KnEmpty
-          title="لم يُعثَر على هذه الفائدة"
-          hint="قد تكون حُذفت، أو أنها غير ظاهرةٍ للزوار."
-        />
+        {(isOwner || settings.visibility.perks) && !ready ? <KnLoading /> : (
+          <KnEmpty
+            title="لم يُعثَر على هذه الفائدة"
+            hint="قد تكون حُذفت، أو أنها غير ظاهرةٍ للزوار."
+          />
+        )}
       </main>
     )
   }
@@ -1089,6 +1422,19 @@ export function PerkPage({ perkId }: { perkId: string }) {
   const book = perk.book_id ? bookById(perk.book_id) : undefined
   const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
   const crumbTopic = perk.categories[0]
+
+  function printIt() {
+    if (!perk) return
+    print(
+      <PerkSheet
+        title={perk.title || 'فائدة'}
+        kicker="فائدةٌ من كنّاش المكتبة"
+        entries={[{ kind: 'perk', perk, book, author: book ? authorById(book.author_id) : null }]}
+        link={perkLink(perk.id, perks.map((p) => p.id))}
+        single
+      />,
+    )
+  }
 
   return (
     <main className="app-main kn-page kn-single">
@@ -1106,13 +1452,25 @@ export function PerkPage({ perkId }: { perkId: string }) {
         <span aria-current="page">{perk.title || 'فائدة'}</span>
       </nav>
 
-      <PerkCard perk={perk} full onEdit={canEdit ? () => setEditing(true) : undefined} />
+      <PerkCard
+        perk={perk}
+        full
+        onEdit={canEdit ? () => setEditing(true) : undefined}
+        onPrint={printIt}
+      />
+
+      {/* موضعُها من القائمة التي جاء منها القارئ: يُعرف أين هو وكم بقي */}
+      {seq.length > 1 && (
+        <p className="kn-pager-where">
+          {fromTrail ? trail.label : 'على ترتيب التقييد'} — {formatNumber(at + 1)} من {formatNumber(seq.length)}
+        </p>
+      )}
 
       <div className="kn-pager">
         {prev ? (
           <a className="kn-pager-link" {...linkTo({ name: 'perk', id: prev.id })}>
             <span className="kn-pager-dir">→ السابقة</span>
-            <span className="kn-pager-title">{prev.title || prev.text.slice(0, 60)}</span>
+            <span className="kn-pager-title">{perkName(prev, 60)}</span>
           </a>
         ) : <span className="kn-pager-void" />}
         {/* والوسطُ قائمٌ وإن لم تكن قرعة: الشبكةُ ثلاثةُ أعمدة، فلو سقط الأوسطُ
@@ -1134,7 +1492,7 @@ export function PerkPage({ perkId }: { perkId: string }) {
         {next ? (
           <a className="kn-pager-link kn-pager-next" {...linkTo({ name: 'perk', id: next.id })}>
             <span className="kn-pager-dir">التالية ←</span>
-            <span className="kn-pager-title">{next.title || next.text.slice(0, 60)}</span>
+            <span className="kn-pager-title">{perkName(next, 60)}</span>
           </a>
         ) : <span className="kn-pager-void" />}
       </div>
@@ -1145,7 +1503,7 @@ export function PerkPage({ perkId }: { perkId: string }) {
             {inNotebooks.length === 1
               ? `من كرّاسة «${inNotebooks[0].name}»`
               : 'من كرّاساتها'}
-            <span>{countLabel(kin.notebook.length, PERKS_COUNT)} أخرى</span>
+            <span>{countLabel(kin.notebook.length, PERKS_COUNT, 'الأخرى')}</span>
           </h2>
           <div className="kn-list">
             {kin.notebook.slice(0, 12).map((p) => <PerkCard key={p.id} perk={p} />)}
@@ -1157,7 +1515,7 @@ export function PerkPage({ perkId }: { perkId: string }) {
         <section className="kn-kin">
           <h2>
             من «{book.title}»
-            <span>{countLabel(kin.book.length, PERKS_COUNT)} أخرى</span>
+            <span>{countLabel(kin.book.length, PERKS_COUNT, 'الأخرى')}</span>
           </h2>
           <div className="kn-list">
             {kin.book.slice(0, 12).map((p) => <PerkCard key={p.id} perk={p} hideSource />)}
@@ -1165,9 +1523,28 @@ export function PerkPage({ perkId }: { perkId: string }) {
         </section>
       )}
 
+      {related.length > 0 && (
+        <section className="kn-kin">
+          <h2>ذواتُ صلةٍ بها</h2>
+          <ul className="kn-related">
+            {related.map(({ p, why }) => (
+              <li key={p.id}>
+                <a {...linkTo({ name: 'perk', id: p.id })}>
+                  <span className="kn-related-title">{perkName(p, 90)}</span>
+                  <span className="kn-related-why">
+                    {why.slice(0, 4).map((w) => <span key={w}>{w}</span>)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {editing && (
         <PerkEditor key={perk.id} perk={perk} onClose={() => setEditing(false)} />
       )}
+      {sheet}
     </main>
   )
 }
@@ -1179,14 +1556,23 @@ export function PerkPage({ perkId }: { perkId: string }) {
  * بعد أن يجتمع لها شيء، فتُجمع إليها مما قُيِّد لا مما يُقيَّد.
  *
  * وهي عرضٌ حتى يُضغط القلم، كصفحتَي المؤلِّف والدار. **وللكرّاسة وصفٌ** يُكتب
- * — المسألةُ التي تُجمع لها، وحدودُها — وكان حقلُه في المخطّط لا يُكتب من
- * موضع.
+ * — المسألةُ التي تُجمع لها، وحدودُها.
+ *
+ * **والكرّاسةُ بحثٌ مصغَّر**: تُرتَّب فوائدُها بيد صاحبها وتُقسَم فصولًا
+ * (`layout`)، ويُعرض في صدرها فهرسُ فصولها، وتُطبع أو تُحفظ PDF، وتُنزَّل
+ * مستندًا يفتحه «وورد» أو نصَّ Markdown — وكلُّ ذلك للزائر كما هو لصاحبها،
+ * إلّا الترتيبَ فلصاحبها وحده.
  */
 export function NotebookPage({ notebookId }: { notebookId: string }) {
-  const { perks, notebooks, settings, isOwner, canEdit, run, reload } = useLibrary()
+  const {
+    perks, notebooks, settings, isOwner, canEdit, run, bookById, authorById, perkIndex,
+  } = useLibrary()
+  const ready = useNeedPerks()
   const [editing, setEditing] = useState(false)
   const [picking, setPicking] = useState(false)
+  const [arranging, setArranging] = useState(false)
   const [query, setQuery] = useState('')
+  const { print, sheet } = usePrintJob()
 
   const notebook = useMemo<Notebook | undefined>(
     () => notebooks.find((n) => n.id === notebookId)
@@ -1194,33 +1580,38 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
     [notebooks, notebookId],
   )
 
-  const inside = useMemo(
-    () => (notebook ? perks.filter((p) => p.notebook_ids.includes(notebook.id)) : []),
-    [perks, notebook],
+  /** فوائدُها وفصولُها على ترتيبها */
+  const items = useMemo(
+    () => (notebook ? notebookEntries(notebook, perks) : []),
+    [notebook, perks],
   )
+  const inside = useMemo(
+    () => items.flatMap((i) => (i.kind === 'perk' ? [i.perk] : [])),
+    [items],
+  )
+  const headings = items.filter((i) => i.kind === 'heading').length
+
   /**
    * ما ليس فيها من الفوائد، يُبحث فيه بمعيار البحث في المكتبة نفسه — بلا
-   * تشكيلٍ ولا تفريقٍ بين الهمزات.
+   * تشكيلٍ ولا تفريقٍ بين الهمزات — ومن نصوصه المُطبَّعة سلفًا.
    */
   const outside = useMemo(() => {
     if (!notebook) return []
-    const needle = normalizeText(query.trim(), QUICK_OPTS)
-    return perks
-      .filter((p) => !p.notebook_ids.includes(notebook.id))
-      .filter((p) => !needle
-        || normalizeText(`${p.title} ${p.text} ${p.tags.join(' ')} ${p.people.join(' ')}`, QUICK_OPTS)
-          .includes(needle))
-      .slice(0, 40)
-  }, [perks, notebook, query])
+    const rest = perks.filter((p) => !p.notebook_ids.includes(notebook.id))
+    return (query.trim()
+      ? filterPerks(rest, { ...EMPTY_FILTER, query }, bookById, perkIndex)
+      : rest).slice(0, 40)
+  }, [perks, notebook, query, bookById, perkIndex])
 
-  if (!(isOwner || settings.visibility.perks) || !notebook) {
+  const canSee = isOwner || settings.visibility.perks
+  if (!canSee || !ready || !notebook) {
     return (
       <main className="app-main kn-page">
         <BackButton
           label="العودة إلى الكرّاسات"
           onClick={() => goBack({ name: 'perks', tab: 'notebooks' })}
         />
-        <KnEmpty title="لم يُعثَر على هذه الكرّاسة" />
+        {canSee && !ready ? <KnLoading /> : <KnEmpty title="لم يُعثَر على هذه الكرّاسة" />}
       </main>
     )
   }
@@ -1229,14 +1620,52 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
     const next = inIt
       ? [...perk.notebook_ids, notebook.id]
       : perk.notebook_ids.filter((n) => n !== notebook.id)
-    if (await run(() => api.setPerkNotebooks(perk.id, next))) await reload()
+    await run(() => api.setPerkNotebooks(perk.id, next))
   }
 
   const update = (patch: { name?: string; note?: string; icon?: string }) =>
-    void run(async () => {
-      await api.updateNotebook(notebook.id, patch)
-      await reload()
-    })
+    void run(() => api.updateNotebook(notebook.id, patch))
+
+  const ctx = { bookById, authorById }
+  const keepTrail = () => rememberTrail(inside.map((p) => p.id), `كرّاسة «${notebook.name}»`)
+
+  function printIt() {
+    if (!notebook) return
+    print(
+      <PerkSheet
+        title={notebook.name}
+        note={notebook.note}
+        kicker="كرّاسةٌ من كنّاش المكتبة"
+        entries={items.map((i) => (i.kind === 'heading'
+          ? i
+          : {
+            kind: 'perk' as const,
+            perk: i.perk,
+            book: i.perk.book_id ? bookById(i.perk.book_id) : undefined,
+            author: (() => {
+              const b = i.perk.book_id ? bookById(i.perk.book_id) : undefined
+              return b ? authorById(b.author_id) : null
+            })(),
+          }))}
+        link={`${window.location.origin}${window.location.pathname}#/notebook/${notebook.id}`}
+      />,
+    )
+  }
+
+  function download(kind: 'doc' | 'md') {
+    if (!notebook) return
+    if (kind === 'doc') {
+      downloadBlob(
+        new Blob(['\ufeff', notebookDoc(notebook, items, ctx)], { type: 'application/msword' }),
+        fileName(notebook.name, 'doc'),
+      )
+    } else {
+      downloadBlob(
+        new Blob([notebookMarkdown(notebook, items, ctx)], { type: 'text/markdown;charset=utf-8' }),
+        fileName(notebook.name, 'md'),
+      )
+    }
+  }
 
   return (
     <main className="app-main kn-page">
@@ -1266,7 +1695,9 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
                     defaultValue={notebook.name}
                     onBlur={(e) => {
                       const name = e.target.value.trim()
-                      if (name && name !== notebook.name) update({ name })
+                      // والاسمُ لا يُمحى: الحقلُ الفارغ يعود إلى ما كان
+                      if (!name) e.target.value = notebook.name
+                      else if (name !== notebook.name) update({ name })
                     }}
                     style={inputStyle}
                     aria-label="اسم الكرّاسة"
@@ -1290,62 +1721,110 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
                 {notebook.note && <Prose text={notebook.note} className="kn-hero-note prose" />}
                 <p>
                   {inside.length > 0
-                    ? `جُمع فيها ${countLabel(inside.length, PERKS_COUNT)}.`
+                    ? [
+                      countLabel(inside.length, PERKS_COUNT, 'المجموعة فيها'),
+                      headings > 0 && countLabel(headings, { noun: 'الفصول' }),
+                    ].filter(Boolean).join(' — ') + '.'
                     : 'كرّاسةٌ خالية بعدُ. أضِفْ إليها ما يخصُّ مسألتَها من الفوائد.'}
                 </p>
               </>
             )}
           </div>
 
-          {canEdit && (
-            <div className="kn-hero-actions">
-              {editing ? (
-                <button type="button" className="kn-btn kn-btn-primary" onClick={() => setEditing(false)}>
-                  تمّ
+          <div className="kn-hero-actions">
+            {/* والتصديرُ للزائر كما هو لصاحبها: الكرّاسةُ بحثٌ يُقرأ ويُنقل */}
+            {inside.length > 0 && !editing && !arranging && (
+              <div className="kn-export" role="group" aria-label="تصدير الكرّاسة">
+                <button type="button" className="kn-btn kn-btn-ghost kn-btn-sm" onClick={printIt}
+                  title="اطبعها — ومن نافذة الطباعة تُحفظ PDF">
+                  <PrinterIcon size={14} />
+                  <span>طباعة / PDF</span>
                 </button>
-              ) : (
-                <>
+                <button type="button" className="kn-btn kn-btn-ghost kn-btn-sm" onClick={() => download('doc')}
+                  title="مستندٌ يُفتح في «وورد» ويُحرَّر">
+                  <DownloadIcon size={14} />
+                  <span>وورد</span>
+                </button>
+                <button type="button" className="kn-btn kn-btn-ghost kn-btn-sm" onClick={() => download('md')}
+                  title="نصُّ Markdown — للمدوّنة">
+                  <DownloadIcon size={14} />
+                  <span>Markdown</span>
+                </button>
+              </div>
+            )}
+
+            {canEdit && (editing ? (
+              <button type="button" className="kn-btn kn-btn-primary" onClick={() => setEditing(false)}>
+                تمّ
+              </button>
+            ) : !arranging && (
+              <>
+                <button
+                  type="button"
+                  className="kn-btn kn-btn-primary"
+                  onClick={() => setPicking((v) => !v)}
+                  aria-expanded={picking}
+                >
+                  {picking ? 'أغلِق الاختيار' : '+ أضِفْ فوائدَ إليها'}
+                </button>
+                {inside.length > 1 && (
                   <button
                     type="button"
-                    className="kn-btn kn-btn-primary"
-                    onClick={() => setPicking((v) => !v)}
-                    aria-expanded={picking}
+                    className="kn-btn kn-btn-ghost"
+                    onClick={() => { setArranging(true); setPicking(false) }}
+                    title="رتِّب فوائدَها وقسِّمها فصولًا"
                   >
-                    {picking ? 'أغلِق الاختيار' : '+ أضِفْ فوائدَ إليها'}
+                    <ScrollIcon size={15} />
+                    <span>رتِّبها</span>
                   </button>
-                  <button
-                    type="button"
-                    className="kn-btn kn-btn-icon"
-                    onClick={() => setEditing(true)}
-                    title="تعديل اسم الكرّاسة ووصفها وأيقونتها"
-                    aria-label="تعديل الكرّاسة"
-                  >
-                    <PencilIcon size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="kn-btn kn-btn-icon kn-btn-danger"
-                    onClick={() => {
-                      // الحذفُ لا رجعةَ فيه، فيُستأذَن — ويُقال ما يقع بفوائدها
-                      if (!window.confirm(
-                        `حذفُ كرّاسة «${notebook.name}»؟ تخرج منها فوائدُها ولا تُحذف.`,
-                      )) return
-                      void run(async () => {
-                        await api.deleteNotebook(notebook.id)
-                        await reload()
-                        navigate({ name: 'perks', tab: 'notebooks' })
-                      })
-                    }}
-                    title="حذف الكرّاسة — ولا تُحذف فوائدُها، وإنما تخرج منها"
-                    aria-label="حذف الكرّاسة"
-                  >
-                    <ClearIcon size={16} />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+                )}
+                <button
+                  type="button"
+                  className="kn-btn kn-btn-icon"
+                  onClick={() => setEditing(true)}
+                  title="تعديل اسم الكرّاسة ووصفها وأيقونتها"
+                  aria-label="تعديل الكرّاسة"
+                >
+                  <PencilIcon size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="kn-btn kn-btn-icon kn-btn-danger"
+                  onClick={() => {
+                    // الحذفُ لا رجعةَ فيه، فيُستأذَن — ويُقال ما يقع بفوائدها
+                    if (!window.confirm(
+                      `حذفُ كرّاسة «${notebook.name}»؟ تخرج منها فوائدُها ولا تُحذف.`,
+                    )) return
+                    void run(async () => {
+                      await api.deleteNotebook(notebook.id)
+                      navigate({ name: 'perks', tab: 'notebooks' })
+                    })
+                  }}
+                  title="حذف الكرّاسة — ولا تُحذف فوائدُها، وإنما تخرج منها"
+                  aria-label="حذف الكرّاسة"
+                >
+                  <ClearIcon size={16} />
+                </button>
+              </>
+            ))}
+          </div>
         </div>
+
+        {/* فهرسُ الفصول: يُعرض متى قُسمت الكرّاسةُ فصلين فأكثر */}
+        {headings > 1 && !arranging && (
+          <nav className="kn-toc" aria-label="فصول الكرّاسة">
+            {items.map((item, i) => (item.kind === 'heading' ? (
+              <button
+                key={`toc${i}`}
+                type="button"
+                onClick={() => document.getElementById(`kn-ch-${i}`)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                {item.text}
+              </button>
+            ) : null))}
+          </nav>
+        )}
       </header>
 
       {/* لوحُ الاختيار: الفوائدُ التي ليست فيها، تُضاف بضغطة */}
@@ -1365,7 +1844,7 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
             {outside.map((p) => (
               <li key={p.id}>
                 <span className="kn-picker-text">
-                  <span className="kn-picker-title">{p.title || p.text.slice(0, 90) + '…'}</span>
+                  <span className="kn-picker-title">{perkName(p, 90)}</span>
                   {p.kinds[0] && <span className="kn-picker-kind">{p.kinds.join('، ')}</span>}
                 </span>
                 <button type="button" className="kn-btn kn-btn-ghost" onClick={() => void setMembership(p, true)}>
@@ -1378,18 +1857,35 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
         </div>
       )}
 
-      {inside.length === 0 ? (
+      {arranging ? (
+        <Arrange
+          items={items}
+          onCancel={() => setArranging(false)}
+          onSave={async (next) => {
+            if (await run(() => api.updateNotebook(notebook.id, { layout: toLayout(next) }))) {
+              setArranging(false)
+            }
+          }}
+        />
+      ) : inside.length === 0 ? (
         <KnEmpty title="لم يُجمع فيها شيءٌ بعد" />
       ) : (
-        <div className="kn-list">
-          {inside.map((p) => (
-            <div key={p.id} className="kn-notebook-item">
-              <PerkCard perk={p} />
+        <div
+          className="kn-list"
+          onClickCapture={(e) => {
+            if ((e.target as Element).closest('a[href*="/perk/"]')) keepTrail()
+          }}
+        >
+          {items.map((item, i) => (item.kind === 'heading' ? (
+            <h2 key={`h${i}`} id={`kn-ch-${i}`} className="kn-chapter">{item.text}</h2>
+          ) : (
+            <div key={item.perk.id} className="kn-notebook-item">
+              <PerkCard perk={item.perk} />
               {canEdit && (
                 <button
                   type="button"
                   className="kn-link-btn kn-notebook-drop"
-                  onClick={() => void setMembership(p, false)}
+                  onClick={() => void setMembership(item.perk, false)}
                   title="أخرِجْها من هذه الكرّاسة — ولا تُحذف الفائدة"
                 >
                   <ClearIcon size={12} />
@@ -1397,9 +1893,127 @@ export function NotebookPage({ notebookId }: { notebookId: string }) {
                 </button>
               )}
             </div>
-          ))}
+          )))}
         </div>
       )}
+      {sheet}
     </main>
+  )
+}
+
+/**
+ * ترتيبُ الكرّاسة: الفوائدُ صفوفٌ مختصرة تُسحب أو تُنقل بالسهمين، وبينها عناوينُ
+ * فصولٍ تُكتب وتُحذف. **ولا يُحفظ شيءٌ حتى يُضغط «احفظ الترتيب»**: الترتيبُ
+ * عملٌ متّصل، ولو حُفظ مع كل نقلةٍ لتراجعت الصفحةُ تحت اليد.
+ *
+ * والسهمان مع السحب لا بدلَه: السحبُ لا يُبلغ بلوحة المفاتيح ولا يصلح على
+ * الجوّال، والسهمان يصلحان في الحالين.
+ */
+function Arrange(
+  { items, onCancel, onSave }: {
+    items: NotebookItem[]
+    onCancel: () => void
+    onSave: (next: NotebookItem[]) => Promise<void>
+  },
+) {
+  const [draft, setDraft] = useState<NotebookItem[]>(items)
+  const [drag, setDrag] = useState<number | null>(null)
+  const [over, setOver] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const move = (from: number, to: number) => setDraft((prev) => {
+    if (to < 0 || to >= prev.length || from === to) return prev
+    const next = [...prev]
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item)
+    return next
+  })
+
+  const addHeading = (at: number) => setDraft((prev) => {
+    const next = [...prev]
+    next.splice(at, 0, { kind: 'heading', text: '' })
+    return next
+  })
+
+  const setHeading = (at: number, text: string) =>
+    setDraft((prev) => prev.map((it, i) => (i === at && it.kind === 'heading' ? { ...it, text } : it)))
+
+  const dropHeading = (at: number) => setDraft((prev) => prev.filter((_, i) => i !== at))
+
+  return (
+    <section className="kn-arrange">
+      <p className="kn-hint">
+        اسحب الصفوفَ أو انقلها بالسهمين، وأضِف بينها عناوينَ فصول. ولا يُحفظ شيءٌ حتى
+        تضغط «احفظ الترتيب».
+      </p>
+
+      <ol className="kn-arrange-list">
+        {draft.map((item, i) => (
+          <li
+            key={item.kind === 'perk' ? item.perk.id : `h${i}`}
+            className={[
+              item.kind === 'heading' ? 'is-heading' : '',
+              drag === i ? 'dragging' : '',
+              over === i && drag !== null && drag !== i ? 'over' : '',
+            ].filter(Boolean).join(' ')}
+            draggable
+            onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move' }}
+            onDragOver={(e) => { e.preventDefault(); setOver(i) }}
+            onDragLeave={() => setOver((o) => (o === i ? null : o))}
+            onDrop={(e) => {
+              e.preventDefault()
+              if (drag !== null) move(drag, i)
+              setDrag(null)
+              setOver(null)
+            }}
+            onDragEnd={() => { setDrag(null); setOver(null) }}
+          >
+            <span className="kn-arrange-grip" aria-hidden="true">⋮⋮</span>
+            {item.kind === 'heading' ? (
+              <input
+                value={item.text}
+                onChange={(e) => setHeading(i, e.target.value)}
+                placeholder="عنوانُ الفصل"
+                style={inputStyle}
+                aria-label="عنوان الفصل"
+                autoFocus={!item.text}
+              />
+            ) : (
+              <span className="kn-arrange-title">{perkName(item.perk, 90)}</span>
+            )}
+            <span className="kn-arrange-tools">
+              <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0}
+                aria-label="انقله إلى أعلى" title="إلى أعلى">▲</button>
+              <button type="button" onClick={() => move(i, i + 1)} disabled={i === draft.length - 1}
+                aria-label="انقله إلى أسفل" title="إلى أسفل">▼</button>
+              <button type="button" onClick={() => addHeading(i)}
+                title="أضِف عنوانَ فصلٍ قبله" aria-label="أضِف عنوان فصل قبله">+ فصل</button>
+              {item.kind === 'heading' && (
+                <button type="button" onClick={() => dropHeading(i)}
+                  aria-label="احذف عنوان الفصل" title="احذف العنوان">
+                  <ClearIcon size={11} />
+                </button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="kn-arrange-foot">
+        <button type="button" className="kn-btn kn-btn-ghost" onClick={() => addHeading(draft.length)}>
+          + فصلٌ في الآخر
+        </button>
+        <span className="kn-toolbar-gap" />
+        <button type="button" className="kn-btn kn-btn-ghost" onClick={onCancel}>إلغاء</button>
+        <button
+          type="button"
+          className="kn-btn kn-btn-primary"
+          disabled={busy}
+          onClick={async () => { setBusy(true); await onSave(draft); setBusy(false) }}
+        >
+          {busy ? 'يُحفَظ…' : 'احفظ الترتيب'}
+        </button>
+      </div>
+    </section>
   )
 }

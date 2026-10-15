@@ -7,6 +7,7 @@
 
 import { convex } from './convexClient'
 import { shrinkImage } from './imageResize'
+import type { FunctionReference } from 'convex/server'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import {
@@ -97,6 +98,7 @@ function toPerk(row: Record<string, unknown>): Perk {
     rating: (row.rating as number) ?? 0,
     notebook_ids: (row.notebook_ids as string[]) ?? [],
     comment: (row.comment as string) ?? '',
+    within_title: (row.within_title as string) ?? '',
     // ومصدرُ ما ليس في المكتبة صار أجناسًا — كتابٌ وسماعٌ وشبكةٌ وتواصلٌ
     // وتسجيل — فما قُيِّد قبلها لا `kind` له، وهو كتابٌ بالضرورة: ذاك كلُّ
     // ما كان يُقبل يومئذٍ. ويُسدّ ههنا مرّةً واحدة فلا تحرسه الواجهةُ في كل
@@ -139,6 +141,7 @@ const toNotebook = (r: Row): Notebook => ({
   name: (r.name as string) ?? '',
   note: (r.note as string) ?? '',
   icon: (r.icon as string) ?? '',
+  layout: (r.layout as Notebook['layout']) ?? [],
   created_at: (r.created_at as string) ?? '',
 })
 
@@ -151,12 +154,15 @@ function toSettings(row: Row): Settings {
   }
 }
 
-/** المكتبةُ كلُّها كما تقرؤها الواجهة */
+/**
+ * المكتبةُ كما تقرؤها الواجهة. **والفوائدُ ليست فيها**: تُطلب وحدها متى
+ * احتاجتها صفحة (`watchPerks`)، فلا يُحمَّل كنّاشٌ كاملٌ إلى من فتح صفحة
+ * الهبوط.
+ */
 export interface LibrarySnapshot {
   books: Book[]
   authors: Author[]
   works: BookWork[]
-  perks: Perk[]
   loans: Loan[]
   publishers: Publisher[]
   categories: Category[]
@@ -169,21 +175,17 @@ export interface LibrarySnapshot {
   notebooks: Notebook[]
 }
 
-/**
- * المكتبةُ كلُّها في استعلامٍ واحد (`library.snapshot`).
- *
- * كانت أربعةَ عشرَ استعلامًا عند كل تحميل وبعد كل حفظ، وكلٌّ منها يقرأ جدولَ
- * الكتب في الخادم من أوّله ليعرف ما يظهر منه — فصارت واحدًا يقرؤه مرّةً.
- * والسدُّ ههنا كما كان: `toBook` و`toPerk` وأخواتُهما.
- */
-export async function fetchSnapshot(): Promise<LibrarySnapshot> {
-  const r = await convex.query(api.library.snapshot, {})
+/** وسيطُ `snapshot` واحدٌ في كل نداء: به يتشارك الرصدُ والطلبُ جوابًا واحدًا */
+const SNAPSHOT_ARGS = { withPerks: false }
+
+type SnapshotRow = typeof api.library.snapshot._returnType
+
+function toSnapshot(r: SnapshotRow): LibrarySnapshot {
   const rows = (x: unknown) => x as Row[]
   return {
     books: rows(r.books).map(toBook),
     authors: r.authors as unknown as Author[],
     works: r.works as unknown as BookWork[],
-    perks: rows(r.perks).map(toPerk),
     loans: r.loans as unknown as Loan[],
     publishers: r.publishers as unknown as Publisher[],
     categories: r.categories,
@@ -195,6 +197,67 @@ export async function fetchSnapshot(): Promise<LibrarySnapshot> {
     perkFigures: rows(r.perkFigures).map(toPerkFigure),
     notebooks: rows(r.perkNotebooks).map(toNotebook),
   }
+}
+
+/**
+ * المكتبةُ كلُّها في استعلامٍ واحد (`library.snapshot`).
+ *
+ * كانت أربعةَ عشرَ استعلامًا عند كل تحميل وبعد كل حفظ، وكلٌّ منها يقرأ جدولَ
+ * الكتب في الخادم من أوّله ليعرف ما يظهر منه — فصارت واحدًا يقرؤه مرّةً.
+ * والسدُّ ههنا كما كان: `toBook` و`toPerk` وأخواتُهما.
+ *
+ * وما دام الرصدُ قائمًا (`watchSnapshot`) فهذا الطلبُ يُجاب من نسخته في
+ * المتصفّح بلا جولةٍ على الشبكة: Convex يُشرك الطلبَ والرصدَ بوسيطٍ واحد.
+ */
+export async function fetchSnapshot(): Promise<LibrarySnapshot> {
+  return toSnapshot(await convex.query(api.library.snapshot, SNAPSHOT_ARGS))
+}
+
+/**
+ * **المكتبةُ حيّة**: يُرصد الاستعلامُ فيُبلَّغ بكل تبدُّلٍ فيه، فتتحدّث الصفحاتُ
+ * وحدها بعد كل حفظ — من هذا المتصفّح أو من غيره — بلا إعادة تحميلٍ يدويّة.
+ * وكانت الواجهةُ تطلب المكتبةَ كلَّها من جديد بعد كل نقرة نجمة.
+ *
+ * وConvex يضمن أنّ الحفظَ لا يُجاب حتى يصل أثرُه إلى ما يُرصد، فمن حفظ ثم قرأ
+ * وجد ما حفظ. ويُعيد الاستعلامَ بنفسه إذا تبدّلت الهويّة — دخل صاحبُ المكتبة
+ * أو خرج — فيصل كلٌّ ما يحقّ له.
+ */
+export function watchSnapshot(
+  onData: (snap: LibrarySnapshot) => void,
+  onError: (e: unknown) => void,
+): () => void {
+  return watch(api.library.snapshot, SNAPSHOT_ARGS, (r) => onData(toSnapshot(r)), onError)
+}
+
+/** فوائدُ الكنّاش، تُرصد وحدها متى احتاجتها صفحة */
+export function watchPerks(
+  onData: (perks: Perk[]) => void,
+  onError: (e: unknown) => void,
+): () => void {
+  return watch(api.library.perks, {}, (r) => onData((r as unknown as Row[]).map(toPerk)), onError)
+}
+
+/** رصدُ استعلام: يُبلَّغ بجوابه الحاضر إن كان، ثم بكل جوابٍ جديد */
+function watch<Q extends FunctionReference<'query'>>(
+  query: Q,
+  args: Q['_args'],
+  onData: (r: Q['_returnType']) => void,
+  onError: (e: unknown) => void,
+): () => void {
+  const w = convex.watchQuery(query, args)
+  const emit = () => {
+    let result: Q['_returnType'] | undefined
+    try {
+      result = w.localQueryResult()
+    } catch (e) {
+      onError(e)
+      return
+    }
+    if (result !== undefined) onData(result)
+  }
+  const stop = w.onUpdate(emit)
+  emit()
+  return stop
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +344,19 @@ export async function setPerkNotebooks(id: string, notebookIds: string[]): Promi
   })
 }
 
+/** الحقلُ الذي يُعدَّل جماعيًّا، واسمُه كما في المستند */
+export type BulkField =
+  | 'kinds' | 'categories' | 'sub_categories' | 'tags' | 'people' | 'notebook_ids'
+
+/** صفةٌ تُضاف إلى فوائدَ كثيرة أو تُرفع منها دفعةً واحدة */
+export async function bulkEditPerks(
+  ids: string[], field: BulkField, op: 'add' | 'remove', value: string,
+): Promise<void> {
+  await convex.mutation(api.catalog.bulkEditPerks, {
+    ids: ids as Id<'perks'>[], field, op, value,
+  })
+}
+
 export async function deletePerk(id: string): Promise<void> {
   await convex.mutation(api.catalog.deletePerk, { id: id as Id<'perks'> })
 }
@@ -324,7 +400,8 @@ export async function insertNotebook(
 }
 
 export async function updateNotebook(
-  id: string, patch: { name?: string; note?: string; icon?: string },
+  id: string,
+  patch: { name?: string; note?: string; icon?: string; layout?: Notebook['layout'] },
 ): Promise<void> {
   await convex.mutation(api.catalog.updateNotebook, {
     id: id as Id<'perk_notebooks'>, patch,

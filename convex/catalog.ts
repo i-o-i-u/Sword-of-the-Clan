@@ -239,6 +239,7 @@ const perkFields = {
   people: v.optional(v.array(v.string())),
   comment: v.optional(v.string()),
   source: v.optional(perkSource),
+  within_title: v.optional(v.string()),
 }
 
 export const insertPerk = mutation({
@@ -283,6 +284,45 @@ export const setPerkNotebooks = mutation({
   },
 })
 
+/**
+ * التعديلُ الجماعيّ: صفةٌ تُضاف إلى فوائدَ كثيرةٍ أو تُرفع منها دفعةً واحدة —
+ * تصنيفٌ أو فرعٌ أو نوعٌ أو وسمٌ أو عَلَمٌ أو كرّاسة. وكان ذلك يُصنع فائدةً
+ * فائدةً من نموذجها.
+ *
+ * والمعاملةُ واحدة: يقع كلُّه أو لا يقع منه شيء. ولا يمسّ من الفائدة إلا
+ * الحقلَ المسمّى، فلا يمحو ما سواه.
+ */
+export const bulkEditPerks = mutation({
+  args: {
+    ids: v.array(v.id('perks')),
+    field: v.union(
+      v.literal('kinds'), v.literal('categories'), v.literal('sub_categories'),
+      v.literal('tags'), v.literal('people'), v.literal('notebook_ids'),
+    ),
+    op: v.union(v.literal('add'), v.literal('remove')),
+    value: v.string(),
+  },
+  handler: async (ctx, { ids, field, op, value }) => {
+    await requireOwner(ctx)
+    const name = value.trim()
+    if (!name) throw new Error('القيمة فارغة.')
+    // ومن أضاف عَلَمًا لم يُسجَّل سُجِّل، كما يُسجَّل من نموذج الفائدة
+    if (field === 'people' && op === 'add') {
+      const found = await ctx.db.query('perk_figures')
+        .withIndex('by_name', (q) => q.eq('name', name)).first()
+      if (!found) await ctx.db.insert('perk_figures', { name, death: '', note: '', icon: '' })
+    }
+    for (const id of new Set(ids)) {
+      const p = await ctx.db.get(id)
+      if (!p) continue
+      const list: string[] = p[field] ?? []
+      const has = list.includes(name)
+      if (op === 'add' && !has) await ctx.db.patch(id, { [field]: [...list, name] })
+      if (op === 'remove' && has) await ctx.db.patch(id, { [field]: list.filter((x) => x !== name) })
+    }
+  },
+})
+
 export const deletePerk = mutation({
   args: { id: v.id('perks') },
   handler: async (ctx, { id }) => {
@@ -295,37 +335,84 @@ export const deletePerk = mutation({
 // أثاثُ قسم الفوائد: الأنواع والتصنيفات والأعلام والكرّاسات
 // ---------------------------------------------------------------------------
 
+/** قوائمُ الفائدة التي تحمل أسماءً من جداول القسم */
+type ListField = 'kinds' | 'categories' | 'sub_categories' | 'people'
+
 /**
- * مزامنةُ اسمٍ تبدّل على ما نُسب إليه من فوائد.
- *
- * وهذا ما كانت Postgres تفعله بمفتاحٍ أجنبيّ ونحن نكتبه صراحةً — كما
- * يُزامَن اسمُ المؤلِّف على كتبه. وإغفالُه يترك فوائدَ موسومةً بنوعٍ أو
- * تصنيفٍ لا وجود له، فلا تُصفَّى به ولا يُعرف بابُها.
+ * القائمةُ كما تقرؤها الواجهة: الحقلُ المفرد القديم (`kind`، `category`،
+ * `sub_category`) مرفوعٌ إليها كما في `api.toPerk`. وكانت المزامنةُ تقرأ القائمةَ
+ * وحدها، فيبقى الاسمُ القديم على فائدةٍ فُهرست قبل القوائم بعد أن تبدّل.
  */
-async function syncRename(
-  ctx: MutationCtx,
-  field: 'kinds' | 'categories' | 'sub_categories' | 'people',
-  from: string,
-  to: string,
-) {
-  if (!from || !to || from === to) return
-  for (const p of await ctx.db.query('perks').collect()) {
-    const list = p[field] ?? []
-    if (!list.includes(from)) continue
-    await ctx.db.patch(p._id, {
-      [field]: [...new Set(list.map((x) => (x === from ? to : x)))],
-    })
-  }
+function listOf(p: Doc<'perks'>, field: ListField): string[] {
+  const list = p[field]
+  if (list) return list
+  if (field === 'kinds') return p.kind ? [p.kind] : []
+  if (field === 'categories') return p.category ? [p.category] : []
+  if (field === 'sub_categories') return p.sub_category ? [p.sub_category] : []
+  return []
 }
 
 /**
- * رفعُ اسمٍ حُذف صفُّه من كل فائدةٍ نُسبت إليه.
- *
- * **ولا تُحذف الفائدة**: التصنيفُ صفةٌ لها لا وعاءٌ يحويها. وإغفالُ هذا هو
- * الذي كان يُظهر أنّ الحذف لم يقع: الاسمُ يبقى في الفوائد، فتُعيده
- * `perkKindsOf` و`perkTopics` إلى القوائم كي لا تسقط فائدةٌ من العرض —
- * فيُرى المحذوفُ قائمًا.
+ * ما يقع على الفوائد من حفظ قائمةٍ من قوائم القسم: أسماءٌ تبدّلت، وأسماءٌ
+ * انتقلت من حقلٍ إلى حقل (رئيسٌ صار فرعًا أو عكسُه)، وأسماءٌ حُذفت صفوفُها.
  */
+interface NamePlan {
+  rename: Partial<Record<ListField, Map<string, string>>>
+  move: { name: string; from: ListField; to: ListField }[]
+  drop: Partial<Record<ListField, Set<string>>>
+}
+
+const emptyPlan = (): NamePlan => ({ rename: {}, move: [], drop: {} })
+
+function planRename(plan: NamePlan, field: ListField, from: string, to: string) {
+  if (!from || !to || from === to) return
+  ;(plan.rename[field] ??= new Map()).set(from, to)
+}
+
+function planDrop(plan: NamePlan, field: ListField, names: string[]) {
+  for (const n of names) if (n) (plan.drop[field] ??= new Set()).add(n)
+}
+
+/**
+ * يُمضي الخطّةَ على الفوائد **في مرورٍ واحد**.
+ *
+ * وهذا ما كانت Postgres تفعله بمفتاحٍ أجنبيّ ونحن نكتبه صراحةً — كما يُزامَن
+ * اسمُ المؤلِّف على كتبه. وإغفالُه يترك فوائدَ موسومةً بنوعٍ أو تصنيفٍ لا وجود
+ * له، فلا تُصفَّى به ولا يُعرف بابُها. **ولا تُحذف فائدة**: التصنيفُ صفةٌ لها
+ * لا وعاءٌ يحويها، فالمحذوفُ يُرفع اسمُه منها وحده.
+ *
+ * وكان لكلّ اسمٍ تبدّل مرورٌ على الفوائد كلِّها، ولكلّ اسمٍ حُذف مرورٌ، ولكلّ
+ * درجةٍ تبدّلت مرور — فحفظُ نافذة الإعدادات بعشرين تعديلًا يقرأ الكنّاشَ
+ * عشرين مرّة في معاملةٍ واحدة، وللمعاملة حدٌّ فيما تقرأ.
+ */
+async function applyNamePlan(ctx: MutationCtx, plan: NamePlan) {
+  const fields = new Set<ListField>([
+    ...(Object.keys(plan.rename) as ListField[]),
+    ...(Object.keys(plan.drop) as ListField[]),
+    ...plan.move.flatMap((m) => [m.from, m.to]),
+  ])
+  if (!fields.size) return
+
+  for (const p of await ctx.db.query('perks').collect()) {
+    const next = new Map<ListField, string[]>()
+    for (const f of fields) {
+      next.set(f, listOf(p, f).map((x) => plan.rename[f]?.get(x) ?? x))
+    }
+    for (const m of plan.move) {
+      const from = next.get(m.from)!
+      if (!from.includes(m.name)) continue
+      next.set(m.from, from.filter((x) => x !== m.name))
+      next.set(m.to, [...next.get(m.to)!, m.name])
+    }
+    const patch: Partial<Record<ListField, string[]>> = {}
+    for (const f of fields) {
+      const list = [...new Set(next.get(f)!.filter((x) => !plan.drop[f]?.has(x)))]
+      if (JSON.stringify(list) !== JSON.stringify(listOf(p, f))) patch[f] = list
+    }
+    if (Object.keys(patch).length) await ctx.db.patch(p._id, patch)
+  }
+}
+
 /**
  * يرفع علامةَ «حُرِّرت هذه القائمة» في الإعدادات.
  *
@@ -339,20 +426,6 @@ async function markSet(
   const row = await ctx.db.query('library_settings').first()
   if (row) await ctx.db.patch(row._id, { [field]: true })
   else await ctx.db.insert('library_settings', { ...DEFAULT_SETTINGS, [field]: true })
-}
-
-async function syncDrop(
-  ctx: MutationCtx,
-  field: 'kinds' | 'categories' | 'sub_categories' | 'people',
-  names: string[],
-) {
-  const gone = names.filter(Boolean)
-  if (!gone.length) return
-  for (const p of await ctx.db.query('perks').collect()) {
-    const list = p[field] ?? []
-    if (!list.some((x) => gone.includes(x))) continue
-    await ctx.db.patch(p._id, { [field]: list.filter((x) => !gone.includes(x)) })
-  }
 }
 
 /**
@@ -376,6 +449,7 @@ export const savePerkKinds = mutation({
     await requireOwner(ctx)
     const old = await ctx.db.query('perk_kinds').collect()
     const kept = new Set<string>()
+    const plan = emptyPlan()
 
     for (const [i, row] of rows.entries()) {
       const name = row.name.trim()
@@ -383,7 +457,7 @@ export const savePerkKinds = mutation({
       const doc = old.find((o) => o._id === row.id)
       if (doc) {
         kept.add(doc._id)
-        if (doc.name !== name) await syncRename(ctx, 'kinds', doc.name, name)
+        planRename(plan, 'kinds', doc.name, name)
         await ctx.db.patch(doc._id, {
           name, icon: row.icon ?? '', hint: row.hint ?? '', order: i,
         })
@@ -394,7 +468,8 @@ export const savePerkKinds = mutation({
       }
     }
     const gone = old.filter((o) => !kept.has(o._id))
-    await syncDrop(ctx, 'kinds', gone.map((o) => o.name))
+    planDrop(plan, 'kinds', gone.map((o) => o.name))
+    await applyNamePlan(ctx, plan)
     for (const doc of gone) await ctx.db.delete(doc._id)
     await markSet(ctx, 'perk_kinds_set')
   },
@@ -413,6 +488,9 @@ export const savePerkCategories = mutation({
     await requireOwner(ctx)
     const old = await ctx.db.query('perk_categories').collect()
     const kept = new Set<string>()
+    const plan = emptyPlan()
+    /** اسمُ كلّ صفٍّ قائمٍ بعد الحفظ، ودرجتُه: بهما يُعرف ما يُرفع من الفوائد */
+    const after = new Map<string, { name: string; sub: boolean }>()
 
     for (const [i, row] of rows.entries()) {
       const name = row.name.trim()
@@ -425,7 +503,7 @@ export const savePerkCategories = mutation({
         const isSub = !!parent
 
         if (doc.name !== name) {
-          await syncRename(ctx, wasSub ? 'sub_categories' : 'categories', doc.name, name)
+          planRename(plan, wasSub ? 'sub_categories' : 'categories', doc.name, name)
           // واسمُ الرئيس مكتوبٌ في فروعه أيضًا، فيُنقل إليها — وإلّا صار
           // الفرعُ يتيمًا لا رئيسَ له
           if (!wasSub) {
@@ -439,18 +517,15 @@ export const savePerkCategories = mutation({
         // اسمُه في الفوائد من حقلٍ إلى حقل. وإغفالُه يُبقي التصنيفَ مكتوبًا
         // في غير موضعه، فلا يُصفَّى به ولا يُعرف بابُ فائدته.
         if (wasSub !== isSub) {
-          const from = wasSub ? 'sub_categories' : 'categories'
-          const to = wasSub ? 'categories' : 'sub_categories'
-          for (const p of await ctx.db.query('perks').collect()) {
-            if (!(p[from] ?? []).includes(name)) continue
-            await ctx.db.patch(p._id, {
-              [from]: (p[from] ?? []).filter((x) => x !== name),
-              [to]: [...new Set([...(p[to] ?? []), name])],
-            })
-          }
+          plan.move.push({
+            name,
+            from: wasSub ? 'sub_categories' : 'categories',
+            to: wasSub ? 'categories' : 'sub_categories',
+          })
         }
 
         await ctx.db.patch(doc._id, { name, parent, icon: row.icon ?? '', order: i })
+        after.set(doc._id, { name, sub: isSub })
       } else {
         kept.add(await ctx.db.insert('perk_categories', {
           name, parent, icon: row.icon ?? '', order: i,
@@ -461,23 +536,19 @@ export const savePerkCategories = mutation({
     // حذفُ الرئيس يحذف فروعَه معه: الفرعُ لا يقوم بغير رئيسه
     const gone = old.filter((o) => !kept.has(o._id))
     const goneNames = gone.map((o) => o.name)
-    // والفرعُ الذي حُذف رئيسُه يُقرأ اسمُه من القاعدة لا من النسخة التي
-    // بين اليدين: قد يكون سُمّي في هذا الحفظ نفسِه، فالمحفوظُ هو الذي في
-    // الفوائد الآن
-    const orphans = []
-    for (const o of old) {
-      if (!kept.has(o._id) || !goneNames.includes(o.parent ?? '')) continue
-      const now = await ctx.db.get(o._id)
-      orphans.push({ _id: o._id, name: now?.name ?? o.name, parent: now?.parent ?? o.parent })
+    // والفرعُ الذي حُذف رئيسُه يُرفع باسمه **بعد هذا الحفظ**: قد يكون سُمّي فيه
+    // نفسِه، والخطّةُ تُبدّل الاسمَ في الفوائد قبل أن ترفعه
+    const orphans = old.filter((o) => kept.has(o._id) && goneNames.includes(o.parent ?? ''))
+    for (const o of gone) {
+      planDrop(plan, (o.parent ?? '') ? 'sub_categories' : 'categories', [o.name])
     }
-    const dropped = [...gone, ...orphans]
+    for (const o of orphans) {
+      const now = after.get(o._id) ?? { name: o.name, sub: !!(o.parent ?? '') }
+      planDrop(plan, now.sub ? 'sub_categories' : 'categories', [now.name])
+    }
 
-    // ويُرفع المحذوفُ من الفوائد المنسوبة إليه، رئيسًا كان أو فرعًا — ولا
-    // تُحذف فائدةٌ واحدة
-    await syncDrop(ctx, 'categories', dropped.filter((o) => !(o.parent ?? '')).map((o) => o.name))
-    await syncDrop(ctx, 'sub_categories', dropped.filter((o) => !!(o.parent ?? '')).map((o) => o.name))
-
-    for (const doc of dropped) await ctx.db.delete(doc._id)
+    await applyNamePlan(ctx, plan)
+    for (const doc of [...gone, ...orphans]) await ctx.db.delete(doc._id)
     await markSet(ctx, 'perk_categories_set')
   },
 })
@@ -496,6 +567,7 @@ export const savePerkFigures = mutation({
     await requireOwner(ctx)
     const old = await ctx.db.query('perk_figures').collect()
     const kept = new Set<string>()
+    const plan = emptyPlan()
 
     for (const row of rows) {
       const name = row.name.trim()
@@ -503,7 +575,7 @@ export const savePerkFigures = mutation({
       const doc = old.find((o) => o._id === row.id)
       if (doc) {
         kept.add(doc._id)
-        if (doc.name !== name) await syncRename(ctx, 'people', doc.name, name)
+        planRename(plan, 'people', doc.name, name)
         await ctx.db.patch(doc._id, {
           name, death: row.death ?? '', note: row.note ?? '', icon: row.icon ?? '',
         })
@@ -514,7 +586,8 @@ export const savePerkFigures = mutation({
       }
     }
     const gone = old.filter((o) => !kept.has(o._id))
-    await syncDrop(ctx, 'people', gone.map((o) => o.name))
+    planDrop(plan, 'people', gone.map((o) => o.name))
+    await applyNamePlan(ctx, plan)
     for (const doc of gone) await ctx.db.delete(doc._id)
   },
 })
@@ -559,10 +632,36 @@ export const updateNotebook = mutation({
       name: v.optional(v.string()),
       note: v.optional(v.string()),
       icon: v.optional(v.string()),
+      layout: v.optional(v.array(v.object({
+        perk_id: v.optional(v.string()),
+        heading: v.optional(v.string()),
+      }))),
     }),
   },
   handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
+    // الاسمُ لا يُمحى: كرّاسةٌ بلا اسمٍ لا يُدلّ عليها في قائمة ولا في رابط.
+    // والواجهةُ تمنع ذلك، غير أنّ الحارسَ في الخادم لا فيها
+    if (patch.name !== undefined) {
+      const name = patch.name.trim()
+      if (!name) throw new Error('اسم الكرّاسة فارغ.')
+      patch = { ...patch, name }
+    }
+    if (patch.layout) {
+      // الفصلُ الفارغ لا يُحفظ، والفائدةُ لا تُذكر في الترتيب مرّتين
+      const seen = new Set<string>()
+      patch = {
+        ...patch,
+        layout: patch.layout.filter((e) => {
+          if (e.perk_id) {
+            if (seen.has(e.perk_id)) return false
+            seen.add(e.perk_id)
+            return true
+          }
+          return !!e.heading?.trim()
+        }).map((e) => (e.perk_id ? { perk_id: e.perk_id } : { heading: e.heading!.trim() })),
+      }
+    }
     await ctx.db.patch(id, patch)
   },
 })

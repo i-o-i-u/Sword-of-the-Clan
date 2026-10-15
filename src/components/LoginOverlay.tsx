@@ -6,7 +6,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { claimOwnership, fetchOwnerRecord, ownerExists } from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { CloseButton, Overlay, cardStyle } from './ui'
+import { CloseButton, Overlay, cardStyle, tone } from './ui'
 
 const MIN_PASSWORD = 6
 
@@ -183,7 +183,7 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
 
           {error && (
             <div style={{
-              fontSize: 12.5, color: 'oklch(0.5 0.15 28)', background: 'oklch(0.95 0.04 28)',
+              fontSize: 12.5, ...tone('danger'),
               borderRadius: 8, padding: '8px 12px',
             }}>
               {error}

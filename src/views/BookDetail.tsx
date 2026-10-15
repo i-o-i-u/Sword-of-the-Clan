@@ -12,7 +12,7 @@
 import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as api from '../lib/api'
-import { useLibrary } from '../lib/library'
+import { useLibrary, useNeedPerks } from '../lib/library'
 import { goBack, hashFor, navigate, pressable, shortBookLink } from '../lib/router'
 import { citationOf } from '../lib/citation'
 import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
@@ -30,7 +30,7 @@ import {
 import ImageSlot from '../components/ImageSlot'
 import PerkCard from '../components/PerkCard'
 import PerkEditor from '../components/PerkEditor'
-import { PerkIcon } from '../components/ui'
+import { PerkIcon, tone } from '../components/ui'
 import {
   ArchiveIcon, BackButton, ChevronIcon, ClearIcon, CopyButton, CopyIcon,
   EmptyState, HourglassIcon, InfoIcon, LinkIcon, Money, OpenBookIcon, OwnerIcon,
@@ -68,6 +68,8 @@ export default function BookDetail({ bookId }: { bookId: string }) {
     books, bookById, authorById, works, perks, loans, publishers, settings,
     isOwner, canEdit, patchBook, run, reload,
   } = useLibrary()
+  // فوائدُ الكتاب تُعرض في بطاقته، والفوائدُ لا تصل حتى تُطلب
+  const perksReady = useNeedPerks()
 
   // المعرّف التامّ أوّلًا، فإن لم يُصَب فبادئته: الرابط المختصر `#/b/xxxxxx`
   // لا يحمل إلا أوّل المعرّف، فتُعرف منه صفحةُ الكتاب.
@@ -506,7 +508,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           )}
           {!hidden('within') && inside.length > 0 && <PrintedWithin books={inside} />}
 
-          {showTo('perks') && <PerksPanel bookId={book.id} perks={bookPerks} />}
+          {showTo('perks') && perksReady && <PerksPanel bookId={book.id} perks={bookPerks} />}
 
           {/* حالة القراءة والتقييم: كلاهما يُرفع فيصير غير مثبَت، فليس كل
               كتابٍ في المكتبة قد استقرّ له حكم. */}
@@ -1205,10 +1207,10 @@ function WithinTitlesPanel(
       <button type="button" onClick={onToggle} className="within-toggle" aria-expanded={open}>
         <ChevronIcon size={13} />
         <span>
-          {countLabel(titles.length, BOOKS_COUNT)}
           {isCollection(book)
-            ? ' طُبعت في هذه المجموعة، لكلٍّ منها مؤلِّفُه'
-            : ' طُبعت مع هذا الكتاب في نشرةٍ واحدة'}
+            ? 'كتبٌ طُبعت في هذه المجموعة، لكلٍّ منها مؤلِّفُه'
+            : 'كتبٌ طُبعت مع هذا الكتاب في نشرةٍ واحدة'}
+          {` (${countLabel(titles.length, BOOKS_COUNT)})`}
         </span>
       </button>
 
@@ -1269,7 +1271,7 @@ function PrintedWithin({ books }: { books: Book[] }) {
     <section style={{ ...cardStyle, borderRadius: 12, padding: '15px 18px 17px', marginBottom: 16 }}>
       <SectionHead icon={<ArchiveIcon size={16} />} title="طُبِع ضمنه من الكتب" />
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 11, lineHeight: 1.9 }}>
-        {countLabel(books.length, BOOKS_COUNT)}، لكلٍّ منها في الفهرس صفحتُه —
+        {countLabel(books.length, BOOKS_COUNT)} — لكلٍّ منها في الفهرس صفحتُه،
         فهي كتبٌ مستقلَّة وإن جمعها مجلَّدٌ واحد.
       </div>
 
@@ -1450,14 +1452,12 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
           <div className="book-perks-head">
             <div>
               <h2>ما قُيِّد منه من فوائد</h2>
-              {/* والعددُ يُوصَل باسمه من `countLabel` لا بقالبٍ نصّيّ: «١ نقل»
-                  و«٢ تحرير» لحن، وإنما «نقلٌ واحد» و«تحريران». وأنواعُ الفوائد
-                  يزيدها صاحبُ المكتبة ويُسمّيها، فلا تُعرف صيغُ معدودها —
-                  فيُقال «من نوع كذا» ويسلم اللفظ. */}
+              {/* والعددُ بالصيغة المحايدة: «نقل: 3». وأنواعُ الفوائد يزيدها
+                  صاحبُ المكتبة ويُسمّيها، فلا يُصرَّف اسمٌ لا تُعرف صيغُه */}
               <p>
-                {counts
-                  .map(({ kind, n }) => `${countLabel(n, PERKS_COUNT)} من «${kind}»`)
-                  .join('، و')}
+                {countLabel(perks.length, PERKS_COUNT)}
+                {counts.length > 0 && ' — '}
+                {counts.map(({ kind, n }) => `${kind}: ${formatNumber(n)}`).join('، ')}
               </p>
             </div>
             <div className="book-perks-tools">
@@ -1573,9 +1573,7 @@ function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeo
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
                   fontSize: 11, padding: '2px 8px', borderRadius: 6,
-                  ...(loan.returned
-                    ? { color: 'oklch(0.4 0.08 150)', background: 'oklch(0.93 0.03 150)' }
-                    : { color: 'oklch(0.45 0.1 70)', background: 'oklch(0.94 0.04 75)' }),
+                  ...tone(loan.returned ? 'ok' : 'warn'),
                 }}>
                   {loan.returned ? 'تم الإرجاع' : 'قيد الإعارة'}
                 </span>

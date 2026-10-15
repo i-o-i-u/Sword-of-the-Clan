@@ -143,8 +143,16 @@ function sourceCitation(source: PerkSource): string {
 export function perkCitation(
   perk: Perk, book: Book | undefined, author: Author | null, withText = true,
 ): string {
+  // والعنوانُ المضموم يُعزى إليه أوّلًا ثم إلى ضامِّه: «الأربعون النووية،
+  // النووي، ضمن: متون طالب العلم…» — فمن راجع وجده في موضعه من المجموع
+  const within = book && perk.within_title
+    ? (book.within_titles ?? []).find((t) => t.title.trim() === perk.within_title.trim())
+    : undefined
+  const head = within
+    ? `${[within.title.trim(), within.author_name.trim()].filter(Boolean).join('، ')}، ضمن: `
+    : ''
   const source = book
-    ? citationOf(book, author)
+    ? head + citationOf(book, author)
     : (perk.source ? sourceCitation(perk.source) : '')
 
   const place = perkLocation(perk)

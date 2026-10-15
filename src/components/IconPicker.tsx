@@ -241,7 +241,9 @@ export default function IconPicker(
             <ClearIcon size={14} /> بلا أيقونة
           </button>
           <span className="kn-editor-status">
-            {shown === ICONS.length ? `${ICONS.length} أيقونة في ${ICON_GROUPS.length} أبواب` : `يُعرض ${shown} من ${ICONS.length}`}
+            {shown === ICONS.length
+              ? `عدد الأيقونات: ${ICONS.length} — عدد الأبواب: ${ICON_GROUPS.length}`
+              : `المعروض: ${shown} من ${ICONS.length}`}
           </span>
         </footer>
       </div>

@@ -28,18 +28,20 @@
 // ليس في الفهرس، وسماعٌ، وصفحةُ شبكة، ومنشورٌ، وتسجيل. **ولكلّ جنسٍ ألفاظُ
 // حقوله**، وما لا يُسأل عنه لا يُعرض حقلُه.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
-import { perkTags } from '../lib/perks'
+import { perkName, perkTags } from '../lib/perks'
+import { hashFor } from '../lib/router'
+import { QUICK_OPTS, normalizeText } from '../lib/search'
 import { Icon } from '../lib/icons'
 import {
   htmlIsEmpty, htmlToText, layoutPoemsHtml, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
-  PERK_SOURCE_KINDS, SOURCE_BOOK, perkCategoriesOf, perkKindsOf, sourceKindOf,
-  type Perk,
+  PERK_SOURCE_KINDS, SAVED_COUNT, SOURCE_BOOK, countLabel, perkCategoriesOf, perkKindsOf,
+  sourceKindOf, type Book, type Perk,
 } from '../lib/types'
 import { ClearIcon, CloseButton, Combobox, Overlay, inputStyle } from './ui'
 
@@ -59,7 +61,16 @@ interface Draft {
   footnotes: Footnote[]
   comment: string
   fromLibrary: boolean
+  /** ما في حقل الكتاب مكتوبًا: عنوانُه، وما يميّزه إن شاركه في العنوان غيرُه */
   bookName: string
+  /**
+   * معرّفُ الكتاب المختار. **والنسبةُ به لا بالعنوان**: النشرتان لكتابٍ واحد
+   * عنوانُهما واحد، فكانت الفائدةُ المنسوبةُ إلى الثانية تُنقل إلى الأولى
+   * بأوّل حفظٍ للتعديل — يُطابَق العنوانُ فيُؤخذ أوّلُ ما طابقه.
+   */
+  bookId: string
+  /** العنوانُ المضموم الذي منه الفائدة، إن كان الكتابُ مجموعًا أو مطبوعًا معه غيرُه */
+  withinTitle: string
   /** جنسُ المصدر حين لا يكون من الفهرس، من `PERK_SOURCE_KINDS` */
   sourceKind: string
   sourceTitle: string
@@ -85,7 +96,9 @@ function readDraft(): Draft | null {
     const raw = localStorage.getItem(DRAFT_KEY)
     if (!raw) return null
     const d = JSON.parse(raw) as Draft
-    return d && typeof d.html === 'string' && !htmlIsEmpty(d.html) ? d : null
+    if (!d || typeof d.html !== 'string' || htmlIsEmpty(d.html)) return null
+    // ومسوّدةٌ حُفظت قبل أن يُعرف الكتابُ بمعرّفه لا تحمله، فيُعرف من اسمه
+    return { ...d, bookId: d.bookId ?? '', withinTitle: d.withinTitle ?? '' }
   } catch { return null }
 }
 
@@ -116,6 +129,13 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     ? bookById(perk.book_id)
     : (bookId ? bookById(bookId) : undefined)
 
+  /**
+   * كتبُ الفهرس كما تُعرض في حقل الاختيار. **وما شاركه غيرُه في عنوانه يُميَّز
+   * بداره وطبعته وسنته** — النشرتان لكتابٍ واحد عنوانُهما واحد — فلا يُعرض
+   * في القائمة اسمان لا يُفرَّق بينهما.
+   */
+  const bookChoices = useMemo(() => bookOptions(books), [books])
+
   const initial = useMemo<Draft>(() => ({
     kinds: perk?.kinds ?? [],
     title: perk?.title ?? '',
@@ -126,7 +146,9 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     comment: perk?.comment ?? '',
     // الجديدةُ من الفهرس افتراضًا: أكثرُ ما يُقيَّد إنما يُقيَّد من كتب البيت
     fromLibrary: perk ? perk.book_id !== null : true,
-    bookName: startBook?.title ?? '',
+    bookName: startBook ? (bookChoices.labelOf.get(startBook.id) ?? startBook.title) : '',
+    bookId: startBook?.id ?? '',
+    withinTitle: perk?.within_title ?? '',
     sourceKind: perk?.source?.kind || SOURCE_BOOK,
     sourceTitle: perk?.source?.title ?? '',
     sourceAuthor: perk?.source?.author ?? '',
@@ -178,7 +200,6 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   }, [d, dirty, perk, stash])
 
   // ------------------------------------------------------- ما يُختار منه
-  const bookTitles = useMemo(() => books.map((b) => b.title), [books])
   const mains = useMemo(() => cats.filter((c) => !c.parent), [cats])
   /** الفروعُ المعروضة فروعُ ما اختِير من الرئيس: فرعٌ بلا رئيسه لا يدلّ */
   const subs = useMemo(
@@ -188,13 +209,42 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   const knownTags = useMemo(() => perkTags(perks).map((t) => t.name), [perks])
   const figureNames = useMemo(() => perkFigures.map((f) => f.name), [perkFigures])
 
-  /** الكتابُ المختار من الفهرس، يُطابَق بعنوانه كما يُطابَق في نموذج الكتاب */
-  const chosen = useMemo(
-    () => books.find((b) => b.title.trim() === d.bookName.trim()),
-    [books, d.bookName],
+  /**
+   * الكتابُ المختار من الفهرس: بمعرّفه إن عُرف، وإلّا فبما في الحقل مطابقًا
+   * لاسمٍ من القائمة — ومسوّدةٌ حُفظت قبل المعرّف لا تحمله.
+   */
+  const chosen = useMemo(() => {
+    if (d.bookId) return bookById(d.bookId)
+    const id = bookChoices.idOf.get(d.bookName.trim())
+    return id ? bookById(id) : undefined
+  }, [bookById, bookChoices, d.bookId, d.bookName])
+
+  /** ما طُبع في الكتاب المختار أو معه من عناوين، فتُنسب الفائدةُ إلى أحدها */
+  const withinChoices = useMemo(
+    () => (chosen?.within_titles ?? []).map((t) => t.title.trim()).filter(Boolean),
+    [chosen],
   )
 
   const text = useMemo(() => htmlToText(d.html), [d.html])
+
+  /**
+   * أقُيِّد هذا النصُّ من قبل؟ يُقارَن مُطبَّعًا — بلا تشكيلٍ ولا همزات — بنصوص
+   * الكنّاش: مطابقًا، أو داخلًا في غيره أو غيرُه داخلًا فيه إن طال. وهو تنبيهٌ
+   * لا منع: قد يُقيَّد النصُّ الواحد من مصدرين قصدًا.
+   */
+  const others = useMemo(
+    () => perks.filter((p) => p.id !== perk?.id)
+      .map((p) => ({ p, n: normalizeText(p.text, QUICK_OPTS) })),
+    [perks, perk],
+  )
+  const settledText = useDeferredValue(text)
+  const twin = useMemo(() => {
+    const n = normalizeText(settledText.trim(), QUICK_OPTS)
+    if (n.length < 24) return undefined
+    return others.find((o) => o.n === n
+      || (n.length >= 60 && o.n.includes(n))
+      || (o.n.length >= 60 && n.includes(o.n)))?.p
+  }, [others, settledText])
   /** جنسُ المصدر المختار، وبه تُعرف حقولُه وألفاظُها */
   const sk = useMemo(() => sourceKindOf(d.sourceKind), [d.sourceKind])
 
@@ -218,6 +268,11 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     const html = layoutPoemsHtml(sanitizeHtml(d.html))
     const input: api.PerkInput = {
       book_id: d.fromLibrary ? (chosen?.id ?? null) : null,
+      // والعنوانُ المضموم لا يبقى إلّا إذا كان في الكتاب المختار: من بدّل الكتابَ
+      // بعد اختياره لا تُنسب فائدتُه إلى عنوانٍ ليس فيه
+      within_title: d.fromLibrary && withinChoices.includes(d.withinTitle.trim())
+        ? d.withinTitle.trim()
+        : '',
       kinds: d.kinds,
       title: d.title.trim(),
       text: text.trim(),
@@ -311,6 +366,11 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     setStash(null)
   }
 
+  // Ctrl+Enter يحفظ بأحدث ما في النموذج: قد يكون في حقل الأعلام اسمٌ يُضاف في
+  // الضغطة نفسها، فلو حُفظ بما كان قبلها لسقط ذلك الاسم
+  const saveRef = useRef(save)
+  saveRef.current = save
+
   if (!canEdit) return null
 
   return (
@@ -321,7 +381,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
           // Ctrl+Enter يحفظ من أيّ حقل، كما في أكثر محرِّرات الكتابة
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
-            void save()
+            setTimeout(() => void saveRef.current(), 0)
           }
         }}
       >
@@ -333,7 +393,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             <h2>{perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
             {savedCount > 0 && (
               <p className="kn-editor-sub">
-                قُيِّد في هذه الجلسة: {savedCount === 1 ? 'فائدةٌ واحدة' : savedCount === 2 ? 'فائدتان' : `${savedCount} فوائد`}
+                {countLabel(savedCount, SAVED_COUNT)}
               </p>
             )}
           </div>
@@ -374,6 +434,17 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 onFootnotes={(v) => set('footnotes', v)}
                 placeholder="النصُّ كما هو في الكتاب"
               />
+              {twin && (
+                <p className="kn-field-warn" role="status">
+                  <Icon name="compare" size={13} plain />
+                  <span>
+                    يشبه هذا النصُّ فائدةً قُيِّدت من قبل:{' '}
+                    <a href={hashFor({ name: 'perk', id: twin.id })} target="_blank" rel="noreferrer">
+                      {perkName(twin, 50)}
+                    </a>
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* تعليقُ المُقيِّد تنسيقُه ثابتٌ مغايرٌ لتنسيق النصّ: كلامُه لا
@@ -423,8 +494,13 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                   <span className="kn-field-label">الكتاب</span>
                   <Combobox
                     value={d.bookName}
-                    onChange={(v) => set('bookName', v)}
-                    options={bookTitles}
+                    onChange={(v) => setD((prev) => ({
+                      ...prev,
+                      bookName: v,
+                      // المكتوبُ يُطابَق باسمٍ من القائمة فيُعرف معرّفُه، وإلّا فلا كتاب
+                      bookId: bookChoices.idOf.get(v.trim()) ?? '',
+                    }))}
+                    options={bookChoices.labels}
                     placeholder="اكتب أوّل العنوان…"
                     emptyHint={
                       d.bookName.trim() && !chosen
@@ -439,7 +515,27 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                     </span>
                   )}
                 </label>
-              ) : (
+              ) : null}
+
+              {/* والكتابُ المجموعُ تُنسب الفائدةُ إلى ما طُبع فيه منه: «الأربعون
+                  النووية» في «متون طالب العلم» — فيُعزى إليها لا إلى المجموع */}
+              {d.fromLibrary && withinChoices.length > 0 ? (
+                <label className="kn-field">
+                  <span className="kn-field-label">
+                    من أيِّ عنوانٍ فيه؟ <em>اختياريّ</em>
+                  </span>
+                  <select
+                    value={withinChoices.includes(d.withinTitle) ? d.withinTitle : ''}
+                    onChange={(e) => set('withinTitle', e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">{chosen?.is_collection ? 'المجموعُ كلُّه' : 'الكتابُ نفسُه'}</option>
+                    {withinChoices.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+              ) : null}
+
+              {d.fromLibrary ? null : (
                 <>
                   {/* جنسُ المصدر: به تُعرف حقولُه وألفاظُها */}
                   <div className="kn-pills" role="group" aria-label="جنسُ المصدر">
@@ -712,13 +808,25 @@ function TokenField(
   },
 ) {
   const [draft, setDraft] = useState('')
+  // الإضافتان قد تقعان في حدثٍ واحد — اختيارٌ ثم Enter — قبل أن يُرسم الحقل
+  // بقائمته الجديدة، فتُقرأ القائمةُ من مرجعٍ يُحدَّث مع كل إضافة لا من الرسم
   const valuesRef = useRef(values)
   valuesRef.current = values
 
+  /** الاسمُ المكتوب كما هو في السجلّ إن طابقه بلا تشكيلٍ ولا همزات */
+  const canonical = (v: string) => {
+    const n = normalizeText(v, QUICK_OPTS)
+    return options.find((o) => normalizeText(o, QUICK_OPTS) === n) ?? v
+  }
+
   function add(raw: string) {
-    const fresh = raw.split(/[,،]/).map((v) => v.trim()).filter(Boolean)
+    const fresh = raw.split(/[,،]/).map((v) => canonical(v.trim())).filter(Boolean)
       .filter((v, i, all) => !valuesRef.current.includes(v) && all.indexOf(v) === i)
-    if (fresh.length) onChange([...valuesRef.current, ...fresh])
+    if (fresh.length) {
+      const next = [...valuesRef.current, ...fresh]
+      valuesRef.current = next
+      onChange(next)
+    }
     setDraft('')
   }
 
@@ -743,23 +851,28 @@ function TokenField(
         <span
           className="kn-token-input"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
-              e.preventDefault()
-              add(draft)
+            // ما أخذته القائمةُ (اختيارٌ بالأسهم ثم Enter) لا يُضاف ثانيةً بما كُتب
+            if (e.key === 'Enter' && !e.defaultPrevented) {
+              if (!e.ctrlKey && !e.metaKey) e.preventDefault()
+              // وCtrl+Enter يحفظ النموذج: يُضاف المكتوبُ قبلها فلا يسقط
+              if (draft.trim()) add(draft)
             } else if (e.key === 'Backspace' && !draft && values.length) {
               onChange(values.slice(0, -1))
             }
           }}
+          // ومن كتب اسمًا ثم مضى إلى غيره ولم يضغط Enter لا يضيع ما كتب
+          onBlur={() => { if (draft.trim()) add(draft) }}
         >
           <Combobox
             value={draft}
             onChange={(v) => {
-              // الاختيارُ من القائمة يُضيف رأسًا، والفاصلةُ تُضيف ما قبلها،
-              // والكتابةُ تنتظر Enter
-              if (options.includes(v)) add(v)
-              else if (/[,،]/.test(v)) add(v)
+              // الفاصلةُ تُضيف ما قبلها، والكتابةُ تنتظر Enter أو الاختيار —
+              // **ولا يُضاف الاسمُ لأنّ المكتوب طابقه في منتصف الكتابة**
+              if (/[,،]/.test(v)) add(v)
               else setDraft(v)
             }}
+            onPick={add}
+            autoHighlight={false}
             options={options.filter((o) => !values.includes(o))}
             placeholder={placeholder}
           />
@@ -768,4 +881,40 @@ function TokenField(
       <p className="kn-field-hint">{hint}</p>
     </div>
   )
+}
+
+/**
+ * كتبُ الفهرس أسماءً تُختار، ومعها جدولان: من الاسم إلى المعرّف ومن المعرّف إلى
+ * الاسم. والاسمُ عنوانُ الكتاب، **فإن شاركه فيه غيرُه زِيد عليه ما يميّزه**:
+ * دارُه، فطبعتُه، فسنتُه — وإلّا فرقمُه بين أخواته.
+ */
+function bookOptions(books: Book[]) {
+  const byTitle = new Map<string, Book[]>()
+  for (const b of books) {
+    const t = b.title.trim()
+    if (!t) continue
+    byTitle.set(t, [...(byTitle.get(t) ?? []), b])
+  }
+  const labels: string[] = []
+  const idOf = new Map<string, string>()
+  const labelOf = new Map<string, string>()
+  for (const [title, group] of byTitle) {
+    group.forEach((b, i) => {
+      let label = title
+      if (group.length > 1) {
+        const marks = [
+          b.publisher?.trim(),
+          b.edition?.trim() ? `ط ${b.edition.trim()}` : '',
+          b.year ? String(b.year) : '',
+        ].filter(Boolean)
+        label = `${title} — ${marks.length ? marks.join('، ') : `النشرة ${i + 1}`}`
+        // وإن بقي اسمان سواءً بعد ذلك فبرقمه
+        if (idOf.has(label)) label = `${label} (${i + 1})`
+      }
+      labels.push(label)
+      idOf.set(label, b.id)
+      labelOf.set(b.id, label)
+    })
+  }
+  return { labels, idOf, labelOf }
 }

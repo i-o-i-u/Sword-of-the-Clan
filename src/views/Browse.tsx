@@ -1028,7 +1028,7 @@ function CatalogBadge({ book }: { book: Book }) {
   return (
     <span
       className="catalog-badge"
-      title={`فُهرِس ${score.filled} من ${score.total} حقلًا — ناقصٌ ${score.missing}٪`}
+      title={`الحقول المفهرسة: ${score.filled} من ${score.total} — الناقص: ${score.missing}٪`}
       style={{
         background: `conic-gradient(${tone} ${score.percent * 3.6}deg, oklch(0.85 0.01 60) 0)`,
       }}
@@ -1193,7 +1193,7 @@ function ShelfView(
                 {cabinet ? `دولاب ${cabinet}` : 'كتبٌ بلا موضع'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                {booksLabel(roomBooks.length)} — {countLabel(spineCount, VOLUMES_COUNT)} على الرفّ
+                {booksLabel(roomBooks.length)} — {countLabel(spineCount, VOLUMES_COUNT, 'على الرفّ')}
               </div>
             </div>
 
@@ -1264,7 +1264,7 @@ function ShelfView(
                       {volume === 1 && withinTitlesOf(book).length > 0 && (
                         <span
                           className="spine-within"
-                          title={`${withinLabelOf(book)} ${countLabel(withinTitlesOf(book).length, BOOKS_COUNT)}`}
+                          title={`${withinLabelOf(book)} (${countLabel(withinTitlesOf(book).length, BOOKS_COUNT)})`}
                         >
                           <WithinIcon size={9} />
                           {formatNumber(withinTitlesOf(book).length)}

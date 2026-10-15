@@ -256,8 +256,8 @@ export default function Stats() {
         <p>
           {s.titles === 0
             ? 'لم يُفهرَس كتابٌ بعد، فلا أرقام.'
-            : `أرقامُ المكتبة كما هي اليوم: ${countLabel(s.titles, BOOKS_COUNT)}`
-              + `، و${countLabel(s.volumes, VOLUMES_COUNT)}.`}
+            : `أرقامُ المكتبة كما هي اليوم — ${countLabel(s.titles, BOOKS_COUNT)}`
+              + `، ${countLabel(s.volumes, VOLUMES_COUNT)}.`}
         </p>
       </header>
 
@@ -421,7 +421,7 @@ function BarCard({ title, icon, rows }: { title: string; icon: ReactNode; rows: 
         <div key={row.name} className="stats-row">
           <div className="stats-row-head">
             <span className="stats-row-name">{row.name}</span>
-            <span className="stats-row-count">{countLabel(row.count, BOOKS_COUNT)}</span>
+            <span className="stats-row-count">{formatNumber(row.count)}</span>
           </div>
           <div className="stats-track">
             <span style={{ width: `${Math.round((row.count / top) * 100)}%` }} />

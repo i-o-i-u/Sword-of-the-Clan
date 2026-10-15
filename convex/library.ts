@@ -12,6 +12,7 @@
 // `snapshot` في جوابٍ واحد. وبقيت الاستعلاماتُ المفردة على حالها لمن ناداها
 // من نسخةٍ سابقة من الواجهة ما زالت مفتوحةً في متصفّح.
 
+import { v } from 'convex/values'
 import { query, type QueryCtx } from './_generated/server'
 import type { Doc } from './_generated/dataModel'
 import {
@@ -177,8 +178,18 @@ async function perkFiguresOf(ctx: QueryCtx, base: ReadBase) {
     .sort((a, b) => a.name.localeCompare(b.name, 'ar')))
 }
 async function perkNotebooksOf(ctx: QueryCtx, base: ReadBase) {
-  return perkSide(base, (await ctx.db.query('perk_notebooks').collect())
-    .sort((a, b) => a._creationTime - b._creationTime))
+  const rows = (await ctx.db.query('perk_notebooks').collect())
+    .sort((a, b) => a._creationTime - b._creationTime)
+  if (base.owner || !rows.some((n) => (n.layout ?? []).length > 0)) return perkSide(base, rows)
+  // وترتيبُ الكرّاسة يحمل معرّفاتِ فوائدها، فما حُجب منها عن الزائر يسقط من
+  // ترتيبه كما يسقط من القائمة: الدلالةُ على المحجوب حجبٌ ناقص
+  const visible = new Set(
+    perksOf(base, await ctx.db.query('perks').collect()).map((p) => p.id as string),
+  )
+  return perkSide(base, rows.map((n) => ({
+    ...n,
+    layout: (n.layout ?? []).filter((e) => !e.perk_id || visible.has(e.perk_id)),
+  })))
 }
 
 async function landingImagesOf(ctx: QueryCtx) {
@@ -194,15 +205,21 @@ async function landingQuotesOf(ctx: QueryCtx) {
 /**
  * المكتبةُ كلُّها في جوابٍ واحد: ما يحتاجه أوّلُ رسمٍ وما يُعاد بعد كل حفظ.
  * والكتبُ والإعداداتُ وهويّةُ الطالب تُقرأ مرّةً واحدة ويُبنى عليها الباقي.
+ *
+ * **والفوائدُ خارجه إن طُلب ذلك** (`withPerks: false`): نصوصُها أثقلُ ما في
+ * المكتبة — كلُّ فائدةٍ بنصّها مرّتين، مجرَّدًا ومنسَّقًا — وكانت تُحمل إلى
+ * كلّ زائرٍ في أوّل طلب وإن لم يفتح إلّا صفحةَ الهبوط. فالواجهةُ تطلبها من
+ * `perks` وحده متى احتاجتها. والأصلُ أن تُرسل، لنسخةٍ سابقةٍ من الواجهة ما
+ * زالت مفتوحةً في متصفّح، تنادي `snapshot` بلا وسيط وتنتظر فيه الفوائد.
  */
 export const snapshot = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { withPerks: v.optional(v.boolean()) },
+  handler: async (ctx, { withPerks = true }) => {
     const base = await readBase(ctx)
     const [authors, works, perks, loans, publishers, categories] = await Promise.all([
       ctx.db.query('authors').collect(),
       ctx.db.query('book_works').collect(),
-      ctx.db.query('perks').collect(),
+      withPerks ? ctx.db.query('perks').collect() : Promise.resolve([]),
       ctx.db.query('loans').collect(),
       ctx.db.query('publishers').collect(),
       ctx.db.query('categories').collect(),

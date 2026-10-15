@@ -47,7 +47,7 @@ import { useLibrary } from '../lib/library'
 import { QUICK_OPTS, normalizeText } from '../lib/search'
 import { IconChoice } from './IconPicker'
 import {
-  DEFAULT_PERK_CATEGORIES, DEFAULT_PERK_KINDS, PERKS_COUNT, countLabel,
+  DEFAULT_PERK_CATEGORIES, DEFAULT_PERK_KINDS, PERKS_COUNT, countLabel, formatNumber,
   perkCategoriesOf, perkKindsOf,
   type PerkCategory, type PerkFigure, type PerkKindDef,
 } from '../lib/types'
@@ -495,7 +495,7 @@ export default function PerkSettings({ onClose }: { onClose: () => void }) {
                           autoFocus={main.uid === fresh}
                         />
                         <span className="kn-set-kids-count">
-                          {allKids.length ? `${allKids.length} من الفروع` : 'بلا فروع'}
+                          {allKids.length ? `عدد الفروع: ${formatNumber(allKids.length)}` : 'بلا فروع'}
                         </span>
                       </SetRow>
 
@@ -696,7 +696,7 @@ function DropButton(
   },
 ) {
   const tail = [
-    n > 0 && `يُرفع اسمُه عند الحفظ من ${countLabel(n, PERKS_COUNT)}`,
+    n > 0 && `يُرفع اسمُه عند الحفظ من فوائده (${countLabel(n, PERKS_COUNT)})`,
     kids > 0 && `وتُحذف فروعُه (${kids})`,
   ].filter(Boolean).join('، ')
 

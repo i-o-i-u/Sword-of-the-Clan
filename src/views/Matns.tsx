@@ -59,7 +59,7 @@ export default function Matns() {
       </h1>
       <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--muted)' }}>
         ما في المكتبة من متونٍ تُقرأ على الشيوخ وتُحفَظ، مقسومةً بفنونها.
-        {total > 0 && ` وهي ${countLabel(total, MATNS_COUNT)}.`}
+        {total > 0 && ` ${countLabel(total, MATNS_COUNT)}.`}
       </p>
 
       {groups.length === 0 ? (

@@ -121,7 +121,7 @@ export default function Publishers() {
                 { icon: <GlobeIcon size={12} />, text: p.place },
                 {
                   icon: <OpenBookIcon size={12} />,
-                  text: `${countLabel(counts.get(p.id) ?? 0, BOOKS_COUNT)} في المكتبة`,
+                  text: countLabel(counts.get(p.id) ?? 0, BOOKS_COUNT, 'في المكتبة'),
                   tone: 'accent' as const,
                 },
               ],
@@ -298,7 +298,7 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
                 color: 'var(--accent-soft)', fontWeight: 600,
               }}>
                 <OpenBookIcon size={13} />
-                {countLabel(houseBooks.length, BOOKS_COUNT)} في المكتبة
+                {countLabel(houseBooks.length, BOOKS_COUNT, 'في المكتبة')}
               </span>
             </div>
           </div>
@@ -389,7 +389,7 @@ export function PublisherPage({ publisherId }: { publisherId: string }) {
         fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12,
       }}>
         <PressIcon size={18} />
-        كتبُها في المكتبة ({countLabel(houseBooks.length, BOOKS_COUNT)})
+        كتبُها في المكتبة ({formatNumber(houseBooks.length)})
       </div>
 
       {houseBooks.length === 0 ? (

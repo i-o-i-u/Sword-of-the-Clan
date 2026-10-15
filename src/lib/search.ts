@@ -1,7 +1,7 @@
 // خوارزمية البحث العربي (§٥-٢). هي قلب البحث في هذا الفهرس:
 // تُسقِط التشكيل والتطويل، وتوحّد الهمزات والتاء المربوطة ما لم يُطلب خلاف ذلك.
 
-import type { Book, Perk, WithinTitle } from './types'
+import type { Book, WithinTitle } from './types'
 
 export interface SearchOptions {
   caseSensitive: boolean
@@ -146,26 +146,34 @@ export function matchWithin(t: WithinTitle, query: string, o: SearchOptions): bo
   return hay.includes(needle)
 }
 
+// ---------------------------------------------------------------------------
+// تظليلُ ما طابق البحث
+// ---------------------------------------------------------------------------
+
+/** ما يُسقطه البحثُ من الحروف: التشكيلُ والتطويل. يُقبل منه ما شاء بين كل حرفين */
+const MARKS = '[\u064B-\u0670\u0640]*'
+
+/** ما يُسوّي البحثُ بينه: الحرفُ المُطبَّع وأشكالُه في النصّ كما كُتب */
+const KIN: Record<string, string> = {
+  'ا': '[اأإآٱ]',
+  'و': '[وؤ]',
+  'ي': '[يئى]',
+  'ه': '[هة]',
+}
+
+const escapeRe = (ch: string) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /**
- * الفائدةُ تُطابَق بنصّها وعنوانها وتعليقها وأنواعها وتصنيفاتها وأعلامها
- * ووسومها، ثم بعنوان مصدرها ومؤلِّفه — بمعيار البحث نفسه: بلا تشكيلٍ ولا
- * تفريقٍ بين الهمزات. والنصُّ المقروء هو المجرَّد لا المنسَّق، فلا يُطابَق
- * اسمُ وسمٍ في HTML ويُحسَب كلامَ المؤلِّف.
- *
- * و`sourceText` يأتي من خارج: الكتابُ في `perks` معرّفٌ لا عنوان، ومن يبحث
- * عن «مجالس ثعلب» يريد ما قُيِّد منه.
+ * نمطُ التظليل: كلماتُ البحث كما يطابقها البحثُ نفسُه — بلا تشكيلٍ ولا تطويلٍ
+ * ولا تفريقٍ بين الهمزات — فيُظلَّل في النصّ المكتوب بتشكيله ما وُجدت الفائدةُ
+ * به. والكلمةُ ذاتُ الحرف الواحد لا تُظلَّل: تُصيب كلَّ سطر.
  */
-export function matchPerk(p: Perk, query: string, o: SearchOptions, sourceText = ''): boolean {
-  const needle = normalizeText(query, o)
-  if (!needle) return true
-  const hay = normalizeText([
-    p.title, p.text, p.comment,
-    (p.kinds ?? []).join(' '),
-    (p.categories ?? []).join(' '), (p.sub_categories ?? []).join(' '),
-    (p.tags ?? []).join(' '), (p.people ?? []).join(' '),
-    p.source?.title ?? '', p.source?.author ?? '', p.source?.edition ?? '',
-    sourceText,
-  ].join(' '), o)
-  if (o.anyOrder) return needle.split(' ').filter(Boolean).every((w) => hay.includes(w))
-  return hay.includes(needle)
+export function highlightPattern(query: string): RegExp | null {
+  const words = normalizeText(query, QUICK_OPTS).split(' ').filter((w) => w.length >= 2)
+  if (!words.length) return null
+  const parts = [...new Set(words)]
+    .sort((a, b) => b.length - a.length)
+    // والتشكيلُ بعد آخر حرفٍ يُظلَّل معه، فلا تُقطع الضمّةُ عن الدال في «أحمدُ»
+    .map((w) => [...w].map((ch) => KIN[ch] ?? escapeRe(ch)).join(MARKS) + MARKS)
+  return new RegExp(parts.join('|'), 'gi')
 }

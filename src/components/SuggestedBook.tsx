@@ -15,7 +15,9 @@ import { useCallback, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import { deathLabel } from '../lib/hijri'
-import { contributorLabel, formatNumber, type Book } from '../lib/types'
+import {
+  PAGES_COUNT, VOLUMES_COUNT, contributorLabel, countLabel, type Book,
+} from '../lib/types'
 import { pressesLine } from '../lib/editions'
 import ImageSlot from './ImageSlot'
 import {
@@ -58,8 +60,8 @@ export default function SuggestedBook({ onClose }: { onClose: () => void }) {
   const volumes = book.single_volume ? 1 : (book.volumes ?? 0)
   const marks = [
     presses,
-    volumes > 1 ? `${formatNumber(volumes)} مجلَّدًا` : '',
-    (book.pages ?? 0) > 0 ? `${formatNumber(book.pages)} صفحة` : '',
+    volumes > 1 ? countLabel(volumes, VOLUMES_COUNT) : '',
+    (book.pages ?? 0) > 0 ? countLabel(book.pages ?? 0, PAGES_COUNT) : '',
   ].filter(Boolean)
 
   return (

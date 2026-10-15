@@ -83,7 +83,7 @@ export default function Series() {
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                 }}>
                   <OpenBookIcon size={13} />
-                  {countLabel(group.books.length, BOOKS_COUNT)} في المكتبة
+                  {countLabel(group.books.length, BOOKS_COUNT, 'في المكتبة')}
                 </span>
               </div>
 

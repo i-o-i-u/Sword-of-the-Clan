@@ -72,11 +72,22 @@ export interface PerkFigure {
 export const FIGURE_ICON = 'person'
 
 /** كرّاسة: مسألةٌ يُجمع لها المتفرِّق من الفوائد */
+/**
+ * صفٌّ في ترتيب الكرّاسة: فائدةٌ بمعرّفها، أو عنوانُ فصلٍ يُقسَم به ما بعده.
+ * والعضويّةُ في `Perk.notebook_ids` لا ههنا؛ هذا ترتيبُ ما فيها لا غير.
+ */
+export interface NotebookEntry {
+  perk_id?: string
+  heading?: string
+}
+
 export interface Notebook {
   id: string
   name: string
   note: string
   icon: string
+  /** ترتيبُ فوائدها وعناوينُ فصولها، كما رتّبها صاحبُها */
+  layout: NotebookEntry[]
   created_at: string
 }
 
@@ -746,6 +757,8 @@ export interface Perk {
   /** تعليقُ المُقيِّد على النصّ، يُميَّز عنه */
   comment: string
   source: PerkSource | null
+  /** العنوانُ المضموم الذي منه الفائدة في كتابها، وفراغُه: الكتابُ نفسُه */
+  within_title: string
   created_at: string
 }
 
@@ -1059,113 +1072,66 @@ export function formatNumber(n: number | null | undefined): string {
 }
 
 /**
- * تمييزُ المعدود في العربية. «١ كتابًا» لحنٌ، والصواب «كتابٌ واحد»؛ وما بين
- * الثلاثة والعشرة جمعُ قلّةٍ مجرور، وما جاوزها مفردٌ منصوب. فلا يُوصل عددٌ
- * باسمٍ في هذه الواجهة إلا من هنا.
+ * المعدودُ بصيغةٍ محايدة: «عدد الكتب: 102». **بطلبٍ صريحٍ من صاحب المكتبة**.
+ *
+ * وكانت الواجهةُ تصوغ العددَ مع معدوده على قواعد العربية: «كتابٌ واحد»،
+ * «كتابان»، «٣ كتبٍ»، «١١ كتابًا». وتلك قواعدُ لا تنتهي — المئةُ التامّة
+ * يُجرّ تمييزُها مفردًا، و١٠٣ تتبع آخرَ مرتبتين فتعود جمعًا مجرورًا،
+ * والصفةُ تُطابق المثنّى («فائدتان أُخريان») — فكان يُخطئ فيها ما لم تُكتب
+ * له صيغة، فيُقرأ «١٠٣ كتابًا» و«٢٠٠ فائدةً». فالصيغةُ المحايدة لا يُلحن
+ * فيها لأنها لا تُصرِّف شيئًا: اسمُ المعدود معرَّفًا مجموعًا، ثم الرقم.
+ *
+ * فلا يُوصَل عددٌ باسمٍ في هذه الواجهة إلا من هنا، ولا يُكتب «٣ كتب» بقالبٍ
+ * نصّيّ. وحيث يكون اسمُ المعدود مذكورًا قبله — عنوانُ قسمٍ يقول «كتبُها في
+ * المكتبة» — يُكتب الرقمُ وحده بين قوسين، فلا يُعاد الاسمُ مرّتين.
  */
 export interface CountForms {
-  /** حين لا شيء: «لا كتاب» */
-  none: string
-  /** الواحد: «كتابٌ واحد» */
-  one: string
-  /** الاثنان: «كتابان» */
-  two: string
-  /** ٣–١٠: «كتبٍ» */
-  few: string
-  /** ١١ فصاعدًا: «كتابًا» */
-  many: string
-}
-
-export function countLabel(n: number, forms: CountForms): string {
-  const { value, label } = countParts(n, forms)
-  return value ? `${value} ${label}` : label
+  /** اسمُ المعدود معرَّفًا مجموعًا: «الكتب»، «الفوائد» */
+  noun: string
 }
 
 /**
- * المعدودُ مقسومًا: رقمُه على حِدَة ولفظُه على حِدَة. وهي `countLabel` نفسُها
- * مفصولةً، لموضعٍ يُبرَز فيه الرقمُ على لفظه — كلوحِ العدد في صدر الكنّاش.
- *
- * **والواحدُ والاثنان لا رقمَ لهما**: «فائدةٌ واحدة» و«فائدتان» صيغتان لا
- * يتقدَّمهما عدد، فيبقى اللفظُ وحده ويخلو موضعُ الرقم. وذاك أصحُّ من «١
- * فائدةً» — وهو ما كان في ألواح الصدر، تُلحَم فيها الأرقامُ بالأسماء بلا
- * صيغة، فيُقرأ «٢ فائدةً» و«١ عَلَمًا».
- *
- * وهي والقاعدةُ واحدة: من عرض عددًا مع اسمه فمن ههنا لا بقالبٍ نصّيّ.
+ * «عدد الكتب: 102». و`qualifier` ما يُقيَّد به المعدود: «عدد الكتب في
+ * المكتبة: 3». والرقمُ بفاصلةٍ بين المراتب كسائر الأرقام (`formatNumber`).
+ */
+export function countLabel(n: number, forms: CountForms, qualifier = ''): string {
+  const value = formatNumber(Number.isFinite(n) && n > 0 ? n : 0)
+  return `عدد ${forms.noun}${qualifier ? ` ${qualifier}` : ''}: ${value}`
+}
+
+/**
+ * المعدودُ مقسومًا: رقمُه على حِدَة واسمُه على حِدَة، لموضعٍ يُبرَز فيه الرقمُ
+ * على اسمه — كلوحِ العدد في صدر الكنّاش، رقمٌ كبيرٌ تحته «الفوائد».
  */
 export function countParts(n: number, forms: CountForms): { value: string; label: string } {
-  if (!Number.isFinite(n) || n <= 0) return { value: '', label: forms.none }
-  if (n === 1) return { value: '', label: forms.one }
-  if (n === 2) return { value: '', label: forms.two }
-  return { value: formatNumber(n), label: n <= 10 ? forms.few : forms.many }
+  return { value: formatNumber(Number.isFinite(n) && n > 0 ? n : 0), label: forms.noun }
 }
 
-export const BOOKS_COUNT: CountForms = {
-  none: 'لا كتاب', one: 'كتابٌ واحد', two: 'كتابان', few: 'كتبٍ', many: 'كتابًا',
-}
-
-export const VOLUMES_COUNT: CountForms = {
-  none: 'لا مجلَّد', one: 'مجلَّدٌ واحد', two: 'مجلَّدان',
-  few: 'مجلَّداتٍ', many: 'مجلَّدًا',
-}
-
-export const AUTHORS_COUNT: CountForms = {
-  none: 'لا مؤلِّف', one: 'مؤلِّفٌ واحد', two: 'مؤلِّفان',
-  few: 'مؤلِّفين', many: 'مؤلِّفًا',
-}
-
-export const PRESSES_COUNT: CountForms = {
-  none: 'لا دار', one: 'دارٌ واحدة', two: 'دارانِ', few: 'دُورٍ', many: 'دارًا',
-}
-
-export const PERKS_COUNT: CountForms = {
-  none: 'لا فائدة', one: 'فائدةٌ واحدة', two: 'فائدتان', few: 'فوائدَ', many: 'فائدةً',
-}
-
+export const BOOKS_COUNT: CountForms = { noun: 'الكتب' }
+export const VOLUMES_COUNT: CountForms = { noun: 'المجلَّدات' }
+export const PAGES_COUNT: CountForms = { noun: 'الصفحات' }
+export const AUTHORS_COUNT: CountForms = { noun: 'المؤلِّفين' }
+export const PRESSES_COUNT: CountForms = { noun: 'الدُّور' }
+export const PERKS_COUNT: CountForms = { noun: 'الفوائد' }
 /** أعلامُ الكنّاش: من ذُكر في فائدة */
-export const FIGURES_COUNT: CountForms = {
-  none: 'لا عَلَم', one: 'عَلَمٌ واحد', two: 'عَلَمان', few: 'أعلامٍ', many: 'عَلَمًا',
-}
-
+export const FIGURES_COUNT: CountForms = { noun: 'الأعلام' }
 /** ما أفاد: كتبُ المكتبة وما قُرئ أو سُمع من خارجها */
-export const SOURCES_COUNT: CountForms = {
-  none: 'لا مصدر', one: 'مصدرٌ واحد أفاد', two: 'مصدران أفادا',
-  few: 'مصادرَ أفادت', many: 'مصدرًا أفاد',
-}
-
+export const SOURCES_COUNT: CountForms = { noun: 'المصادر التي أفادت' }
 /** ما بلغ النجومَ الثلاث */
-export const GEMS_COUNT: CountForms = {
-  none: 'لا نفيسة', one: 'نفيسةٌ واحدة', two: 'نفيستان', few: 'نفائسَ', many: 'نفيسةً',
-}
+export const GEMS_COUNT: CountForms = { noun: 'النفائس' }
+export const QUOTES_COUNT: CountForms = { noun: 'المقتطفات' }
+export const CATEGORIES_COUNT: CountForms = { noun: 'التصنيفات' }
+export const FIELDS_COUNT: CountForms = { noun: 'الحقول' }
+export const COPIES_COUNT: CountForms = { noun: 'النُّسَخ' }
+export const TITLES_COUNT: CountForms = { noun: 'العناوين' }
+export const MATNS_COUNT: CountForms = { noun: 'المتون' }
+export const ISSUES_COUNT: CountForms = { noun: 'النشرات' }
+export const NOTEBOOKS_COUNT: CountForms = { noun: 'الكرّاسات' }
+export const RESULTS_COUNT: CountForms = { noun: 'النتائج' }
+/** ما قُيِّد في نافذة الفائدة بـ«احفظ وقيِّد أخرى» */
+export const SAVED_COUNT: CountForms = { noun: 'ما قُيِّد في هذه الجلسة' }
 
-export const QUOTES_COUNT: CountForms = {
-  none: 'لا مقتطف', one: 'مقتطفٌ واحد', two: 'مقتطفان', few: 'مقتطفاتٍ', many: 'مقتطفًا',
-}
-
-export const CATEGORIES_COUNT: CountForms = {
-  none: 'لا تصنيف', one: 'تصنيفٌ واحد', two: 'تصنيفان', few: 'تصنيفاتٍ', many: 'تصنيفًا',
-}
-
-export const FIELDS_COUNT: CountForms = {
-  none: 'لا حقل', one: 'حقلٌ واحد', two: 'حقلان', few: 'حقولٍ', many: 'حقلًا',
-}
-
-export const COPIES_COUNT: CountForms = {
-  none: 'لا نسخة', one: 'نسخةٌ واحدة', two: 'نسختان', few: 'نُسَخٍ', many: 'نسخةً',
-}
-
-export const TITLES_COUNT: CountForms = {
-  none: 'لا عنوان', one: 'عنوانٌ واحد', two: 'عنوانان', few: 'عناوينَ', many: 'عنوانًا',
-}
-
-export const MATNS_COUNT: CountForms = {
-  none: 'لا متن', one: 'مَتْنٌ واحد', two: 'مَتْنان', few: 'مُتُونٍ', many: 'مَتْنًا',
-}
-
-export const ISSUES_COUNT: CountForms = {
-  none: 'لا نشرة', one: 'نشرةٌ واحدة', two: 'نشرتان', few: 'نشَراتٍ', many: 'نشرةً',
-}
-
-/** «كتابٌ واحد» و«٣ كتبٍ» و«١٢ كتابًا» — أكثر ما يُعدّ في هذه الواجهة */
+/** «عدد الكتب: 12» — أكثر ما يُعدّ في هذه الواجهة */
 export function booksLabel(n: number): string {
   return countLabel(n, BOOKS_COUNT)
 }
@@ -1254,15 +1220,12 @@ export function missingVolumeLabel(m: MissingVolume): string {
 }
 
 /**
- * خبرُ النقص جملةً تامّة، والعددُ فيها مُطابِقٌ لمعدوده: «ناقصٌ منه مجلَّدٌ
- * واحد»، «ناقصان منه»، «ناقصةٌ منه ٣ مجلَّداتٍ». فالمفردُ يُذكَّر، والاثنان
- * يُثنَّى الوصفُ لهما، وما جاوزهما جمعُ ما لا يعقل فيُؤنَّث وصفُه.
+ * خبرُ النقص بالصيغة المحايدة: «عدد المجلَّدات الناقصة: 2». وكان جملةً تُطابَق
+ * بمعدودها — «ناقصٌ منه مجلَّدٌ واحد»، «ناقصان منه» — فصار كسائر الأعداد.
  */
 export function missingVolumesHeadline(count: number): string {
   if (count <= 0) return ''
-  if (count === 1) return 'ناقصٌ منه مجلَّدٌ واحد'
-  if (count === 2) return 'ناقصان منه'
-  return `ناقصةٌ منه ${countLabel(count, VOLUMES_COUNT)}`
+  return countLabel(count, { noun: 'المجلَّدات الناقصة' })
 }
 
 // ------------------------------------------------------ تمام الفهرسة
@@ -1379,7 +1342,3 @@ export function aboutTextOf(saved: string | null | undefined): string {
   return !text || text.includes(SEEDED_ABOUT) ? ABOUT_TEXT : text
 }
 
-/** كرّاساتُ الكنّاش */
-export const NOTEBOOKS_COUNT: CountForms = {
-  none: 'لا كرّاسة', one: 'كرّاسةٌ واحدة', two: 'كرّاستان', few: 'كرّاساتٍ', many: 'كرّاسةً',
-}

@@ -13,8 +13,11 @@
 //
 // **والنفاسة تُعلَّم من صفحة الفائدة وحدها**: هي حكمٌ على المقيَّد بعد النظر
 // فيه، فلا تُسأل ساعةَ الكتابة ولا تُبدَّل من صفّ البطاقات مرورًا.
+//
+// وفي صفحتها أداتان زائدتان: **صورةٌ للمشاركة** (`lib/perkImage.ts`)
+// و**الطباعة** (`PerkPrint`).
 
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useLibrary } from '../lib/library'
 import { linkTo, navigate } from '../lib/router'
 import * as api from '../lib/api'
@@ -22,14 +25,14 @@ import Prose from './Prose'
 import RichText from './RichText'
 import { Icon } from '../lib/icons'
 import { perkCitation, perkLocation } from '../lib/citation'
-import { perkDate, perkLink, sourceAuthor, sourceTitle } from '../lib/perks'
+import { perkDate, perkLink, sourceAuthor, sourceTitle, withinOf } from '../lib/perks'
 import type { PickField } from '../lib/perks'
+import { Hl } from '../lib/highlight'
+import { highlightPattern } from '../lib/search'
+import { PERK_PREVIEW_CHARS, sourceKindOf, type Perk } from '../lib/types'
 import {
-  PERK_PREVIEW_CHARS, perkCategoriesOf, perkKindsOf, sourceKindOf, type Perk,
-} from '../lib/types'
-import {
-  CheckIcon, CopyIcon, HashIcon, LinkIcon, OpenBookIcon, PencilIcon,
-  ClockIcon, PagesIcon, QuoteIcon,
+  CheckIcon, CopyIcon, DownloadIcon, HashIcon, LinkIcon, OpenBookIcon, PencilIcon,
+  ClockIcon, PagesIcon, PrinterIcon, QuoteIcon,
 } from './ui'
 
 interface Props {
@@ -41,6 +44,13 @@ interface Props {
   onEdit?: (perk: Perk) => void
   /** الضغطُ على وسمٍ أو عَلَمٍ يجمع ما تحته. ومن لم يمرّره فهي نصٌّ لا رابط */
   onPick?: (field: PickField, value: string) => void
+  /** ما بُحث به، فيُظلَّل حيث وقع من العنوان والنصّ والتعليق */
+  highlight?: string
+  /** التحديدُ للتعديل الجماعي: أمحدَّدةٌ هي؟ ومن لم يمرّر `onSelect` فلا تحديد */
+  selected?: boolean
+  onSelect?: (perk: Perk) => void
+  /** صفحةُ الفائدة: طباعتُها */
+  onPrint?: () => void
 }
 
 /** «قلتُ» في صدر التعليق، بتشكيلها أو بغيره، وما يليها من نقطتين أو فاصلة */
@@ -52,27 +62,34 @@ const SAID = /^\s*قلت[ً-ْ]*\s*[:：،,]?\s*/
  * ثم يبتدئ التعليقُ نفسُه بـ«قلتُ» فتتكرّر العلامةُ مرّتين بلفظين. فالشارةُ
  * سقطت، و«قلتُ» تُنزع من أوّل النصّ إن كُتبت فيه لأنها صارت صدرَه.
  */
-export function PerkComment({ text }: { text: string }) {
+export function PerkComment({ text, highlight }: { text: string; highlight?: RegExp | null }) {
   const body = text.replace(SAID, '')
   return (
     <aside className="kn-comment">
       <span className="kn-comment-said">قلتُ:</span>
-      <Prose text={body} />
+      {/* والتعليقُ يُظلَّل فيه ما بُحث به: يُعرض حينئذٍ فقرةً واحدةً مضبوطة،
+          إذ القسمةُ قطعًا لا تجري على فقرات `Prose` */}
+      {highlight ? <p className="prose"><Hl text={body} re={highlight} /></p> : <Prose text={body} />}
     </aside>
   )
 }
 
-export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Props) {
+export default function PerkCard(
+  { perk, hideSource, full, onEdit, onPick, highlight = '', selected, onSelect, onPrint }: Props,
+) {
   const {
-    perks, bookById, authorById, notebooks, perkKinds, perkCategories, settings,
+    perks, bookById, authorById, notebooks, perkKindList, perkCategoryList,
     canEdit, setError, run, reload,
   } = useLibrary()
   const [open, setOpen] = useState(false)
+  const re = useMemo(() => highlightPattern(highlight), [highlight])
 
   const book = perk.book_id ? bookById(perk.book_id) : undefined
   const author = book ? authorById(book.author_id) : null
-  const title = sourceTitle(perk, book)
-  const writer = sourceAuthor(perk, book)
+  // العنوانُ المضموم الذي منه الفائدة: يُعزى إليه، وكتابُه ضامُّه
+  const within = withinOf(perk, book)
+  const title = within ? within.title : sourceTitle(perk, book)
+  const writer = within ? within.author_name.trim() : sourceAuthor(perk, book)
   const place = perkLocation(perk)
   // جنسُ المصدر: كتابٌ من خارج الفهرس، أو سماعٌ، أو صفحةُ شبكة، أو منشور،
   // أو تسجيل. ولكلٍّ ألفاظُ حقوله وشارتُه. وما كان من الفهرس فكتابٌ ساكت.
@@ -82,14 +99,10 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const PlaceIcon = sourceKind.isBook ? PagesIcon : ClockIcon
 
   // والأيقونةُ تُطلب من المُحرَّر ومن المبدئيّ جميعًا: ما لم يُحرَّر بعدُ
-  // تُعرض أنواعُه وتصنيفاتُه المبدئيّة، فلو قُرئ من الجدول وحدَه لبقيت
-  // بطاقاتُ الفوائد بلا رموزٍ حتى يُفتح لوحُ الإعدادات ويُحفظ
-  const iconOfKind = (name: string) =>
-    perkKindsOf(perkKinds, perks, settings.perk_kinds_set)
-      .find((k) => k.name === name)?.icon ?? ''
-  const iconOfCat = (name: string) =>
-    perkCategoriesOf(perkCategories, settings.perk_categories_set)
-      .find((c) => c.name === name)?.icon ?? ''
+  // تُعرض أنواعُه وتصنيفاتُه المبدئيّة. والقائمتان محسوبتان في السياق مرّةً
+  // (`perkKindList`)، وكانت كلُّ بطاقةٍ تحسبهما لكلّ نوعٍ فيها فتمسح الفوائدَ كلَّها
+  const iconOfKind = (name: string) => perkKindList.find((k) => k.name === name)?.icon ?? ''
+  const iconOfCat = (name: string) => perkCategoryList.find((c) => c.name === name)?.icon ?? ''
   const inNotebooks = notebooks.filter((n) => perk.notebook_ids.includes(n.id))
 
   const long = perk.text.length > PERK_PREVIEW_CHARS
@@ -122,9 +135,23 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
   const hasCite = !hideSource && !!title
 
   return (
-    <article className={`kn-card${gem ? ' kn-card-gem' : ''}${full ? ' kn-card-full' : ''}`}>
+    <article
+      className={`kn-card${gem ? ' kn-card-gem' : ''}${full ? ' kn-card-full' : ''}${selected ? ' kn-card-selected' : ''}`}
+      data-perk-id={perk.id}
+      tabIndex={-1}
+    >
       {/* ------------------------------------------------------ الصدر */}
       <header className="kn-card-head">
+        {onSelect && (
+          <label className="kn-select" title="حدِّدها للتعديل الجماعي">
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onSelect(perk)}
+              aria-label={`تحديد الفائدة${perk.title ? ` «${perk.title}»` : ''}`}
+            />
+          </label>
+        )}
         <div className="kn-card-badges">
           {perk.kinds.map((kind) => (
             <span key={kind} className={`kn-kind kn-kind-${KIND_TONE[kind] ?? 'plain'}`}>
@@ -189,12 +216,19 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       {/* ------------------------------------------------------- المتن */}
       {perk.title && (
         <h3 className="kn-card-title">
-          {full ? perk.title : <a {...linkTo({ name: 'perk', id: perk.id })}>{perk.title}</a>}
+          {full
+            ? <Hl text={perk.title} re={re} />
+            : <a {...linkTo({ name: 'perk', id: perk.id })}><Hl text={perk.title} re={re} /></a>}
         </h3>
       )}
 
       <div className={folded ? 'kn-card-text kn-folded' : 'kn-card-text'}>
-        <RichText html={perk.text_html} text={perk.text} footnotes={perk.footnotes} />
+        <RichText
+          html={perk.text_html}
+          text={perk.text}
+          footnotes={perk.footnotes}
+          highlight={highlight}
+        />
       </div>
 
       {long && !full && (
@@ -211,7 +245,7 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
       {/* تعليقُ المُقيِّد مفصولٌ عن النصّ بشارةٍ وشريط: كلامُه لا يُخلَط
           بكلام صاحب الكتاب، وهذا أوَّلُ ما يُتحرَّى في النقل. وتنسيقُه ثابتٌ
           لا يتبع تنسيقَ النصّ، فيُعرف الكلامان بالنظر قبل القراءة. */}
-      {perk.comment && <PerkComment text={perk.comment} />}
+      {perk.comment && <PerkComment text={perk.comment} highlight={re} />}
 
       {/* ------------------------------------------------------- الذيل */}
       <footer className="kn-card-foot">
@@ -226,6 +260,8 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
                   ? <a {...linkTo({ name: 'book', id: book.id })}>{title}</a>
                   : title}
               </span>
+              {/* والعنوانُ المضموم يُذكر ضامُّه: منه يُطلب على الرفّ */}
+              {within && book && <span className="kn-cite-note">ضمن «{book.title}»</span>}
               {writer && (
                 <span className="kn-cite-author">
                   {writer}
@@ -306,24 +342,44 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
                 <OpenBookIcon size={15} />
               </a>
             )}
+            {/* وما يُنسخ يُحسب عند الضغط لا مع كل رسم: رابطُ الفائدة المختصر
+                يمرّ على الفوائد كلّها ليجد أقصرَ بادئة، وكان يُحسب في كل بطاقة */}
             <CopyTool
               icon={<CopyIcon size={15} />}
               label="نسخ النصّ"
-              value={perk.text}
+              value={() => perk.text}
               onFail={setError}
             />
             <CopyTool
               icon={<QuoteIcon size={15} />}
               label="نسخ العزو"
-              value={perkCitation(perk, book, author)}
+              value={() => perkCitation(perk, book, author)}
               onFail={setError}
             />
             <CopyTool
               icon={<LinkIcon size={15} />}
               label="نسخ الرابط"
-              value={perkLink(perk.id, perks.map((p) => p.id))}
+              value={() => perkLink(perk.id, perks.map((p) => p.id))}
               onFail={setError}
             />
+            {full && (
+              <ImageTool
+                perk={perk}
+                cite={() => perkCitation(perk, book, author, false)}
+                onFail={setError}
+              />
+            )}
+            {full && onPrint && (
+              <button
+                type="button"
+                className="kn-tool"
+                onClick={onPrint}
+                title="اطبعها — ومن نافذة الطباعة تُحفظ PDF"
+                aria-label="اطبع الفائدة"
+              >
+                <PrinterIcon size={15} />
+              </button>
+            )}
             {book && !hideSource && (
               <button
                 type="button"
@@ -348,17 +404,18 @@ export default function PerkCard({ perk, hideSource, full, onEdit, onPick }: Pro
  */
 function CopyTool(
   { icon, label, value, onFail }:
-  { icon: ReactNode; label: string; value: string; onFail: (m: string) => void },
+  { icon: ReactNode; label: string; value: () => string; onFail: (m: string) => void },
 ) {
   const [done, setDone] = useState(false)
   async function copy() {
     try {
-      await navigator.clipboard.writeText(value)
+      await navigator.clipboard.writeText(value())
       setDone(true)
       setTimeout(() => setDone(false), 1600)
     } catch {
-      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً
-      onFail('تعذّر النسخ إلى الحافظة، فانسخه بيدك: ' + value)
+      // بعض المتصفّحات تمنع الحافظة خارج الاتصال الآمن، فيُقال ذلك صراحةً.
+      // ولا يُلصق المنسوخُ في الرسالة: نصُّ فائدةٍ طويلةٍ يملأ شريطَ الخطأ كلَّه
+      onFail('تعذّر النسخ إلى الحافظة: المتصفّحُ منعه. حدِّد النصَّ وانسخه بيدك.')
     }
   }
   return (
@@ -370,6 +427,40 @@ function CopyTool(
       aria-label={label}
     >
       {done ? <CheckIcon size={15} /> : icon}
+    </button>
+  )
+}
+
+/**
+ * صورةُ الفائدة للمشاركة: تُرسم بطاقةً بخطّ المكتبة ولونها، ثم تُشارَك من
+ * الجوّال أو تُنزَّل. والرسمُ في ملفٍّ يُجلب عند الضغط، فلا يُحمَّل مع الصفحة.
+ */
+function ImageTool(
+  { perk, cite, onFail }: { perk: Perk; cite: () => string; onFail: (m: string) => void },
+) {
+  const [busy, setBusy] = useState(false)
+  async function make() {
+    setBusy(true)
+    try {
+      const { renderPerkImage, shareOrDownload } = await import('../lib/perkImage')
+      const blob = await renderPerkImage({ title: perk.title, text: perk.text, cite: cite() })
+      await shareOrDownload(blob, `فائدة-${perk.id.slice(0, 6)}.png`)
+    } catch (e) {
+      onFail('تعذّر صنعُ صورة الفائدة: ' + ((e as Error)?.message ?? String(e)))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      className="kn-tool"
+      onClick={() => void make()}
+      disabled={busy}
+      title="صورةٌ للمشاركة — بطاقةٌ بخطّ المكتبة تُرسَل في محادثة"
+      aria-label="صورة الفائدة للمشاركة"
+    >
+      <DownloadIcon size={15} />
     </button>
   )
 }

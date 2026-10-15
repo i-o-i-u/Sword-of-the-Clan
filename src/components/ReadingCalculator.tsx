@@ -369,40 +369,28 @@ function shortDaysPhrase(days: boolean[]): string {
   return `كلّ ${joinAr(onBound)}`
 }
 
-/** تمييزُ العدد: صفحةً واحدةً، صفحتَين، ٧ صفحاتٍ، ١٥ صفحةً */
-function pagesText(n: number): string {
-  if (n === 1) return 'صفحةً واحدةً'
-  if (n === 2) return 'صفحتَين'
-  if (n <= 10) return `${toArabicDigits(n)} صفحاتٍ`
-  return `${toArabicDigits(n)} صفحةً`
-}
+/**
+ * الأعدادُ في نتيجة الحاسبة بالصيغة المحايدة: «عدد الصفحات: ٧». وكانت تُصاغ
+ * مع معدودها — «صفحتَين»، «٧ صفحاتٍ»، «١٥ صفحةً» — على قواعد تُخطئ بعد المئة،
+ * فصارت كسائر أعداد الواجهة (`countLabel`) بطلب صاحب المكتبة.
+ */
+const num = (n: number) => toArabicDigits(n)
 
-function unitText(n: number, one: string, two: string, few: string, many: string): string {
-  if (n === 1) return one
-  if (n === 2) return two
-  if (n <= 10) return `${toArabicDigits(n)} ${few}`
-  return `${toArabicDigits(n)} ${many}`
-}
-
-/** «شهرٍ و١٠ أيام» */
+/** المدّةُ أجزاءً: «السنوات: ١، الأشهر: ٣، الأيام: ١٩» */
 function spanText(y: number, m: number, d: number): string {
   const parts: string[] = []
-  if (y) parts.push(unitText(y, 'سنةٍ', 'سنتَين', 'سنوات', 'سنةً'))
-  if (m) parts.push(unitText(m, 'شهرٍ', 'شهرَين', 'أشهر', 'شهرًا'))
-  if (d) parts.push(unitText(d, 'يومٍ', 'يومَين', 'أيام', 'يومًا'))
-  return joinAr(parts)
+  if (y) parts.push(`السنوات: ${num(y)}`)
+  if (m) parts.push(`الأشهر: ${num(m)}`)
+  if (d) parts.push(`الأيام: ${num(d)}`)
+  return parts.join('، ')
 }
 
-/** عددُ أيامٍ يُنطق مدّةً: «٢٥ يومًا»، «شهرٍ ويومَين»، «سنةٍ و٣ أشهر و١٩ يومًا» */
+/** عددُ أيامٍ يُقرأ مدّةً: «الأشهر: ١، الأيام: ٢» */
 function daysAsSpan(n: number): string {
   const y = Math.floor(n / 360)
   const m = Math.floor((n % 360) / 30)
   const d = n % 30
-  return spanText(y, m, d) || 'يومٍ واحد'
-}
-
-function daysText(n: number): string {
-  return unitText(n, 'يومٍ واحد', 'يومَين', 'أيام', 'يومًا')
+  return spanText(y, m, d) || `الأيام: ${num(1)}`
 }
 
 /** اسم الكتاب بين قوسَي الحكاية، فيصحّ إعرابه على حاله */
@@ -472,10 +460,10 @@ function compute(input: Input): Result {
   const book = bookPhrase(bookName)
   // ما يُقرأ: الكتاب كلُّه، أو ما بقي منه لمن شرع فيه
   const subject = started
-    ? `الصفحات الباقية من ${book} وعددها ${pagesText(remaining)}`
+    ? `الصفحات الباقية من ${book} (عددها: ${num(remaining)})`
     : `${book} كاملًا`
   const object = started
-    ? `الصفحات الباقية من ${book} (${pagesText(remaining)})`
+    ? `الصفحات الباقية من ${book} (عددها: ${num(remaining)})`
     : book
 
   const none = (hint: string): Result => ({ lines: [], hint })
@@ -494,19 +482,19 @@ function compute(input: Input): Result {
     if (remaining < reading) {
       const enough = calendarDaysFor(tomorrow(), remaining, days)
       return wrong(
-        `هذه مدّةٌ أوسع من الكتاب: ${pagesText(remaining)} على ${daysText(reading)} من القراءة`
-        + ' تقعُ دون صفحةٍ في اليوم، ولا يُقرأ أقلُّ من صفحة.',
-        `لو قرأتَ صفحةً واحدةً في كلّ يوم قراءة لختمتَه في ${daysText(remaining)} من القراءة`
-        + `، أي بعد ${daysAsSpan(enough + 1)} من الغد.`,
+        `هذه مدّةٌ أوسع من الكتاب: عدد الصفحات (${num(remaining)}) أقلُّ من عدد أيام القراءة`
+        + ` (${num(reading)})، فيقع على اليوم دون صفحة، ولا يُقرأ أقلُّ من صفحة.`,
+        `ولو قرأتَ صفحةً واحدةً في كلّ يوم قراءة لختمتَه — عدد أيام القراءة: ${num(remaining)}`
+        + `، والمدّةُ من الغد (${daysAsSpan(enough + 1)}).`,
       )
     }
     const per = Math.ceil(remaining / reading)
     if (per > MAX_DAILY) {
       const sane = Math.ceil(remaining / HEAVY_DAILY)
       return wrong(
-        `هذه مدّةٌ أضيق من الكتاب: تلزمك ${pagesText(per)} في اليوم الواحد، وهذا فوق ما يُقرأ في يوم.`,
-        `ولو قرأتَ ${pagesText(HEAVY_DAILY)} في اليوم — وهو وِرْدٌ ثقيل — لاحتجتَ ${daysText(sane)} من القراءة.`
-        + (span ? ` وأنت حدّدتَ المدّة في ${daysAsSpan(span)}.` : ''),
+        `هذه مدّةٌ أضيق من الكتاب: عدد الصفحات التي تلزمك في اليوم: ${num(per)}، وهذا فوق ما يُقرأ في يوم.`,
+        `ولو جعلتَ وِرْدَك في اليوم ${num(HEAVY_DAILY)} — وهو وِرْدٌ ثقيل — لكان عدد أيام القراءة: ${num(sane)}.`
+        + (span ? ` والمدّةُ التي حدّدتَها (${daysAsSpan(span)}).` : ''),
       )
     }
     return null
@@ -533,10 +521,10 @@ function compute(input: Input): Result {
     const per = Math.ceil(remaining / reading)
     const last = remaining - per * (reading - 1)
     const lines = [
-      `لقراءة ${subject} في ${spanText(y, m, d)}، تقرأ ${daysPhrase(days)}:`,
-      `فعليك أن تقرأ ${pagesText(per)}، في أيام القراءة.`,
+      `لقراءة ${subject} في مدّةٍ (${spanText(y, m, d)})، تقرأ ${daysPhrase(days)}:`,
+      `فعدد الصفحات في كلّ يوم قراءة: ${num(per)}.`,
     ]
-    if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ: ${pagesText(last)}.`)
+    if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ — عدد صفحاته: ${num(last)}.`)
     if (start) {
       lines.push(`تبدأ ${fullDayLabel(start)}، وتنتهي ${fullDayLabel(addDays(start, span))}.`)
     }
@@ -561,12 +549,13 @@ function compute(input: Input): Result {
     const per = Math.ceil(remaining / reading)
     const last = remaining - per * (reading - 1)
     const lines: string[] = []
-    if (started) lines.push(`الباقي من ${book}: ${pagesText(remaining)}.`)
+    if (started) lines.push(`عدد الصفحات الباقية من ${book}: ${num(remaining)}.`)
     lines.push(
-      `عليك من الغد، أن تقرأ ${shortDaysPhrase(days)} ${pagesText(per)}، حتى تختم في ${shortDayLabel(end)}.`,
-      `وذلك ${daysText(reading)} من القراءة، في ${daysText(span)} بالتقويم.`,
+      `عليك من الغد أن تقرأ ${shortDaysPhrase(days)} حتى تختم في ${shortDayLabel(end)}`
+      + ` — عدد الصفحات في اليوم: ${num(per)}.`,
+      `عدد أيام القراءة: ${num(reading)}، وعدد الأيام بالتقويم: ${num(span)}.`,
     )
-    if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ: ${pagesText(last)}.`)
+    if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ — عدد صفحاته: ${num(last)}.`)
     return { lines, hint: '' }
   }
 
@@ -575,9 +564,9 @@ function compute(input: Input): Result {
   if (per <= 0) return none('حدِّد ما تقرؤه في اليوم لتظهر النتيجة.')
   if (per > MAX_DAILY) {
     return wrong(
-      `${pagesText(per)} في اليوم فوق ما يُقرأ. وأثقلُ ما يُحتمل نحو ${pagesText(MAX_DAILY)}.`,
-      `ولو قرأتَ ${pagesText(HEAVY_DAILY)} في اليوم لختمتَ ${object} في `
-      + `${daysText(Math.ceil(remaining / HEAVY_DAILY))} من القراءة.`,
+      `الوِرْدُ الذي اخترتَه (${num(per)} في اليوم) فوق ما يُقرأ، وأثقلُ ما يُحتمل نحو ${num(MAX_DAILY)}.`,
+      `ولو جعلتَه ${num(HEAVY_DAILY)} في اليوم لختمتَ ${object}`
+      + ` — عدد أيام القراءة: ${num(Math.ceil(remaining / HEAVY_DAILY))}.`,
     )
   }
 
@@ -588,10 +577,10 @@ function compute(input: Input): Result {
   const last = remaining - per * (reading - 1)
 
   const lines = [
-    `إذا قرأتَ ${daysPhrase(days)} ${pagesText(per)} من ${object}، ختمتَه بعد ${daysAsSpan(walked + 1)}`
-    + `، وذلك ${daysText(reading)} من القراءة.`,
+    `إذا قرأتَ ${daysPhrase(days)} من ${object} — عدد الصفحات في اليوم: ${num(per)} —`
+    + ` ختمتَه بعد مدّةٍ (${daysAsSpan(walked + 1)})، وعدد أيام القراءة: ${num(reading)}.`,
     `وتختمه ${fullDayLabel(end)}.`,
   ]
-  if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ: ${pagesText(last)}.`)
+  if (last > 0 && last < per) lines.push(`ويكون آخرُ يومٍ أخفَّ — عدد صفحاته: ${num(last)}.`)
   return { lines, hint: '' }
 }

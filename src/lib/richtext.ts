@@ -19,6 +19,23 @@ const TAGS = new Set([
 /** وما يُحذف بجوفه: نصُّه ليس نصَّ الفائدة */
 const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META'])
 
+/**
+ * وسومٌ معناها معنى وسمٍ مأذونٍ فيه، فتُردّ إليه ولا تُفكّ. **وأوّلُها `STRIKE`**:
+ * زرُّ «مشطوب» في المُحرِّر يُخرجه كروم وفيرفكس بهذا الوسم القديم لا بـ`S`،
+ * فكان التشذيبُ يفكّه عند الحفظ فيُحفظ النصُّ بلا شطب.
+ */
+const ALIAS: Record<string, string> = { STRIKE: 's', DEL: 's', INS: 'u' }
+
+/**
+ * يقرأ HTML في جسد وثيقةٍ مستقلّة. **والجسدُ نفسُه هو الوعاء** لا عنصرٌ يُلفّ
+ * فيه النصّ: كان يُلفّ في `<div id="r">`، فإن كان في المحفوظ وسمُ إغلاقٍ زائد
+ * أغلق ذلك الوعاءَ قبل أوانه فسقط ما بعده كلُّه بلا خبر. ووسمُ الإغلاق الزائد
+ * في الجسد يُهمَل.
+ */
+function parseBody(html: string): HTMLElement {
+  return new DOMParser().parseFromString(`<!doctype html><body>${html}`, 'text/html').body
+}
+
 /** أصنافُ الشعر والهوامش والتظليل. وما سواها يسقط، فلا يُحمَّل النصُّ أنماطًا */
 const CLASSES = new Set([
   'poem-wrap', 'poem-wrap-rajaz', 'poetry-table', 'rajaz-table',
@@ -33,13 +50,19 @@ const CLASSES = new Set([
  */
 export function sanitizeHtml(html: string): string {
   if (!html) return ''
-  const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, 'text/html')
-  const root = doc.getElementById('r')
-  if (!root) return ''
+  const root = parseBody(html)
 
   const walk = (node: Element) => {
-    for (const child of [...node.children]) {
-      if (DROP.has(child.tagName)) { child.remove(); continue }
+    for (const original of [...node.children]) {
+      if (DROP.has(original.tagName)) { original.remove(); continue }
+      let child = original
+      const alias = ALIAS[child.tagName]
+      if (alias) {
+        const el = child.ownerDocument.createElement(alias)
+        el.append(...child.childNodes)
+        child.replaceWith(el)
+        child = el
+      }
       walk(child)
       if (!TAGS.has(child.tagName)) {
         // الوسمُ غيرُ مأذونٍ فيه: يُفكّ ويبقى ما في جوفه
@@ -76,9 +99,7 @@ export function htmlIsEmpty(html: string): boolean {
  */
 export function htmlToText(html: string): string {
   if (!html) return ''
-  const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, 'text/html')
-  const root = doc.getElementById('r')
-  if (!root) return ''
+  const root = parseBody(html)
   root.querySelectorAll('.bayt-no').forEach((el) => el.remove())
 
   let out = ''
@@ -137,9 +158,9 @@ export interface Footnote { id: string; text: string }
 
 /** مِسماكاتُ الهوامش كما وقعت في النصّ، على ترتيبها فيه */
 export function footnoteIds(html: string): string[] {
-  if (!html) return []
-  const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, 'text/html')
-  return [...(doc.getElementById('r')?.querySelectorAll('sup[data-fn]') ?? [])]
+  // يُنادى مع كل حرفٍ في المُحرِّر، فلا يُقرأ النصُّ شجرةً إن لم يكن فيه هامش
+  if (!html || !html.includes('data-fn')) return []
+  return [...parseBody(html).querySelectorAll('sup[data-fn]')]
     .map((el) => el.getAttribute('data-fn') ?? '')
     .filter(Boolean)
 }
@@ -411,8 +432,6 @@ export function layoutPoems(root: HTMLElement, skip: Node | null = null): boolea
 /** صفُّ الشعر في نصٍّ محفوظ: يُستعمل عند الحفظ وعند العرض */
 export function layoutPoemsHtml(html: string): string {
   if (!html || !html.includes('*')) return html
-  const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, 'text/html')
-  const root = doc.getElementById('r')
-  if (!root) return html
+  const root = parseBody(html)
   return layoutPoems(root) ? root.innerHTML : html
 }

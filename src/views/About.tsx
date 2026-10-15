@@ -11,7 +11,7 @@ import { bookCount } from '../lib/editions'
 import { countAuthors } from '../lib/people'
 import { navigate } from '../lib/router'
 import {
-  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, aboutTextOf, countLabel,
+  AUTHORS_COUNT, BOOKS_COUNT, LIBRARY_NAME, LIBRARY_PLACE, aboutTextOf, formatNumber,
 } from '../lib/types'
 import Footer from '../components/Footer'
 import SideDoors from '../components/SideDoors'
@@ -127,11 +127,11 @@ export default function About() {
           )}
         </article>
 
-        {/* العدد جملةٌ تامّة لا رقمٌ يليه اسم: «كتابٌ واحد» لا «١ كتابًا» */}
+        {/* الرقمُ بارزًا وتحته اسمُ معدوده: الصيغةُ المحايدة لا تُصرِّف شيئًا */}
         <div className="about-figures">
           {([
-            [countLabel(bookCount(books), BOOKS_COUNT), 'في الفهرس'],
-            [countLabel(authorCount, AUTHORS_COUNT), 'لهم فيه كتاب'],
+            [formatNumber(bookCount(books)), `${BOOKS_COUNT.noun} في الفهرس`],
+            [formatNumber(authorCount), `${AUTHORS_COUNT.noun} الذين لهم فيه كتاب`],
           ] as const).map(([value, caption]) => (
             <div key={caption} className="about-figure">
               <span className="about-figure-value">{value}</span>

@@ -20,9 +20,9 @@
 // المؤشِّرُ من تحت اليد. ولذلك يقع التصفيفُ بعد نزول السطر لا في أثنائه —
 // السطرُ الذي تُرك هو الذي يُصفّ، والمؤشِّرُ في الذي بعده.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SYMBOL_GROUPS, escapeHtml, layoutPoems, newFootnoteId, type Footnote,
+  SYMBOL_GROUPS, escapeHtml, layoutPoems, newFootnoteId, orderedFootnotes, type Footnote,
 } from '../lib/richtext'
 import {
   BoldIcon, ClearIcon, HighlightIcon, ItalicIcon, ListIcon, NoteIcon,
@@ -187,6 +187,14 @@ export default function RichEditor(
     }
   }
 
+  /**
+   * الهوامشُ على ترتيب مِسماكاتها في النصّ لا على ترتيب إضافتها. والرقمُ في
+   * النصّ عدٌّ على المواضع، فلو رُتّبت القائمةُ بالإضافة لكان الهامشُ المُقحَم
+   * في أوّل النصّ «١» هناك و«٣» ههنا — فيُكتب نصُّه في غير موضعه. وما مُحي
+   * مِسماكُه لا يُعرض: يسقط عند الحفظ، ويعود إن رُدّ المِسماكُ بالتراجع.
+   */
+  const notes = useMemo(() => orderedFootnotes(html, footnotes), [html, footnotes])
+
   return (
     <div className="rich">
       <div className="rich-bar">
@@ -296,17 +304,21 @@ export default function RichEditor(
         />
       </div>
 
-      {footnotes.length > 0 && (
+      {notes.length > 0 && (
         <div className="rich-notes">
           <span className="rich-notes-label">الهوامش</span>
           <ol>
-            {footnotes.map((note) => (
+            {notes.map((note) => (
               <li key={note.id}>
                 <input
                   value={note.text}
-                  onChange={(e) => onFootnotes(footnotes.map(
-                    (f) => (f.id === note.id ? { ...f, text: e.target.value } : f),
-                  ))}
+                  onChange={(e) => {
+                    const text = e.target.value
+                    // ومِسماكٌ لا هامشَ له بعدُ — لُصق أو رُدّ بالتراجع — يُنشأ هامشُه الآن
+                    onFootnotes(footnotes.some((f) => f.id === note.id)
+                      ? footnotes.map((f) => (f.id === note.id ? { ...f, text } : f))
+                      : [...footnotes, { id: note.id, text }])
+                  }}
                   placeholder="نصُّ الهامش"
                   aria-label="نصُّ الهامش"
                 />

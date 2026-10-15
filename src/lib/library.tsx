@@ -1,6 +1,9 @@
 // حالة المكتبة كلها في مكانٍ واحد: الدور (صاحب المكتبة أو زائر)، والبيانات،
 // والإعدادات. كل تعديل يُطبَّق محليًّا أولًا ليبقى العمل سلسًا، ثم يُحفظ في
 // قاعدة البيانات؛ فإن أخفق الحفظ ظهرت رسالة وأُعيد التحميل من المصدر.
+//
+// **والبياناتُ حيّة**: المكتبةُ تُرصد (`api.watchSnapshot`) فيصل كلُّ تبدُّلٍ
+// فيها وحده، والفوائدُ تُرصد على حِدَة متى طلبتها صفحة (`useNeedPerks`).
 
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
@@ -15,7 +18,9 @@ import {
   type Author, type Book, type BookWork, type Category, type LandingImage,
   type LandingQuote, type Loan, type Notebook, type Perk, type PerkCategory,
   type PerkFigure, type PerkKindDef, type Publisher, type Settings,
+  perkCategoriesOf, perkKindsOf,
 } from './types'
+import { perkIndex as buildPerkIndex, type PerkIndex } from './perks'
 
 const EMPTY_SETTINGS: Settings = {
   theme: 'warm', font: 'kitab', ui_scale: 100,
@@ -53,7 +58,20 @@ interface LibraryValue {
   books: Book[]
   authors: Author[]
   works: BookWork[]
+  /**
+   * فوائدُ الكنّاش. **لا تصل حتى تُطلب** (`useNeedPerks`): هي أثقلُ ما في
+   * المكتبة، ولا حاجة إليها لمن فتح صفحة الهبوط أو الفهرس.
+   */
   perks: Perk[]
+  /** أوصلت الفوائد؟ وقبله `perks` فارغةٌ لا لأنّ الكنّاش خالٍ، بل لأنها في الطريق */
+  perksReady: boolean
+  /** يطلب الفوائد: يبدأ رصدُها أوّلَ مرّة، ثم تبقى مرصودةً ما دام اللسانُ مفتوحًا */
+  wantPerks: () => void
+  /** نصوصُ الفوائد مُطبَّعةً للبحث، تُحسب مرّةً لكل تبدُّلٍ فيها */
+  perkIndex: PerkIndex
+  /** أنواعُ الفوائد وتصنيفاتُها كما حُرِّرت، وإلّا فالمبدئيّة — محسوبةً مرّةً */
+  perkKindList: PerkKindDef[]
+  perkCategoryList: PerkCategory[]
   /** أثاثُ قسم الفوائد: أنواعُه وتصنيفاتُه وأعلامُه وكرّاساتُه */
   perkKinds: PerkKindDef[]
   perkCategories: PerkCategory[]
@@ -82,6 +100,8 @@ interface LibraryValue {
   setViewerPref: (patch: ViewerPrefs) => void
   /** تعديلٌ يسري على الشاشة ولا يُرسَل — نافذة الإعدادات تعاين به قبل الحفظ */
   previewSettings: (patch: Partial<Settings>) => void
+  /** يُهمل المعاينةَ ويردّ الإعداداتِ إلى ما في القاعدة */
+  discardPreview: () => void
   /** يحفظ الإعدادات كما هي الآن. زرّ الحفظ في النافذة هو الذي يستدعيه. */
   saveSettings: (next: Settings) => Promise<void>
   /** ينفّذ حفظًا ويعرض خطأه. `true` إن وقع الحفظ. */
@@ -151,6 +171,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [authors, setAuthors] = useState<Author[]>([])
   const [works, setWorks] = useState<BookWork[]>([])
   const [perks, setPerks] = useState<Perk[]>([])
+  const [perksReady, setPerksReady] = useState(false)
+  const [perksWanted, setPerksWanted] = useState(false)
   const [perkKinds, setPerkKinds] = useState<PerkKindDef[]>([])
   const [perkCategories, setPerkCategories] = useState<PerkCategory[]>([])
   const [perkFigures, setPerkFigures] = useState<PerkFigure[]>([])
@@ -208,6 +230,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const isOwnerRef = useRef(isOwner)
   isOwnerRef.current = isOwner
   const serverSettings = useRef<Settings | null>(null)
+  /**
+   * ما يُعايَن في نافذة الإعدادات ولم يُحفظ. **يبقى فوق ما يصل من الخادم**:
+   * المكتبةُ حيّة، فكلُّ حفظٍ — ورفعُ صورة هبوطٍ من النافذة نفسها حفظ — يُرسل
+   * الإعداداتِ من جديد، فلو كُتبت كما هي لمحت ما يُعايَن في وسط العمل.
+   */
+  const preview = useRef<Partial<Settings> | null>(null)
 
   // التحميلات صارت تتسابق: أوّلُها يبدأ قبل المصادقة، ويليه تحميلُ صاحب
   // المكتبة إذا تبيّن دورُه. فلو تأخّر جوابُ الأوّل عن الثاني لكتب بياناتِ
@@ -217,60 +245,69 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   /** أَوَصَلت البياناتُ مرّةً؟ ما بعدها يُحمَّل في صمتٍ فلا تُمحى الشاشة */
   const loadedOnce = useRef(false)
 
+  /** يكتب ما وصل من المكتبة في الحال. يناديه الرصدُ ويناديه `reload` */
+  const applySnapshot = useCallback((snap: api.LibrarySnapshot) => {
+    setBooks(snap.books); setAuthors(snap.authors); setWorks(snap.works)
+    setLoans(snap.loans)
+    setPerkKinds(snap.perkKinds); setPerkCategories(snap.perkCategories)
+    setPerkFigures(snap.perkFigures); setNotebooks(snap.notebooks)
+    setPublishers(snap.publishers); setCategories(snap.categories)
+    setLandingImages(snap.landingImages); setLandingQuotes(snap.landingQuotes)
+    const st = snap.settings
+    // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
+    serverSettings.current = st
+    setSettings({ ...withViewerPrefs(st, isOwnerRef.current), ...(preview.current ?? {}) })
+    setError(null)
+    loadedOnce.current = true
+    setLoading(false)
+  }, [])
+
+  /**
+   * يقرأ المكتبةَ الآن. وما دام الرصدُ قائمًا فجوابُه من نسخة المتصفّح بلا
+   * جولةٍ على الشبكة — والحفظُ في Convex لا يُجاب حتى يصل أثرُه إليها — فمن
+   * ناداه بعد حفظٍ وجد ما حفظ. بقي لمواضع النداء كما كانت، ولا يضرّ.
+   */
   const reload = useCallback(async () => {
     const seq = ++loadSeq.current
     if (!loadedOnce.current) setLoading(true)
     try {
-      // المكتبةُ كلُّها في استعلامٍ واحد، يقرأ الخادمُ فيه جدولَ الكتب مرّةً
       const snap = await api.fetchSnapshot()
       if (seq !== loadSeq.current) return // سبقه تحميلٌ أحدث، فجوابُه أولى
-      setBooks(snap.books); setAuthors(snap.authors); setWorks(snap.works)
-      setPerks(snap.perks); setLoans(snap.loans)
-      setPerkKinds(snap.perkKinds); setPerkCategories(snap.perkCategories)
-      setPerkFigures(snap.perkFigures); setNotebooks(snap.notebooks)
-      setPublishers(snap.publishers); setCategories(snap.categories)
-      setLandingImages(snap.landingImages); setLandingQuotes(snap.landingQuotes)
-      const st = snap.settings
-      // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
-      serverSettings.current = st
-      setSettings(withViewerPrefs(st, isOwnerRef.current))
-      setError(null)
+      applySnapshot(snap)
     } catch (e) {
       if (seq !== loadSeq.current) return
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
-    } finally {
-      if (seq === loadSeq.current) {
-        loadedOnce.current = true
-        setLoading(false)
-      }
+      loadedOnce.current = true
+      setLoading(false)
     }
-  }, [])
+  }, [applySnapshot])
 
-  // التحميل يبدأ مع أوّل رسمٍ ولا ينتظر شيئًا — لا جلسةً ولا دورًا.
+  // الرصدُ يبدأ مع أوّل رسمٍ ولا ينتظر شيئًا — لا جلسةً ولا دورًا.
   //
-  // كان ينتظر `authLoading`، وفي ذلك الانتظارِ عِلّةُ بطءٍ محسوسة: من كان
-  // له رمزُ جلسةٍ في متصفّحه نادى @convex-dev/auth إجراءَ `auth:signIn`
-  // ليجدّده، فتمرّ جولةٌ كاملة على الشبكة وعملُ خادمٍ **قبل أن يُطلب أوّلُ
-  // حرفٍ من البيانات**. ولذلك كان دخولُ صاحب المكتبة أبطأ من تصفُّح الزائر،
-  // ويزداد بطئًا كلّما أُغلق المتصفّح وأُعيد فتحُه: الرمزُ العامل يموت بموت
-  // الصفحة، فتُعاد دورةُ التجديد من أوّلها.
-  //
-  // فالآن يسير الطلبان معًا: البياناتُ تُطلب بهويّة زائرٍ فورًا، والجلسةُ
-  // تستقرّ في أثناء ذلك. والخادمُ هو الذي يقرّر ما يُعيده بهويّة الطلب،
-  // ووسيطُ `owner` لا أثر له أصلًا.
-  useEffect(() => { void reload() }, [reload])
+  // كان التحميلُ ينتظر `authLoading`، وفي ذلك الانتظارِ عِلّةُ بطءٍ محسوسة: من
+  // كان له رمزُ جلسةٍ في متصفّحه نادى @convex-dev/auth إجراءَ `auth:signIn`
+  // ليجدّده، فتمرّ جولةٌ كاملة على الشبكة **قبل أن يُطلب أوّلُ حرفٍ من
+  // البيانات**. فالآن يُرصد الاستعلامُ بهويّة زائرٍ فورًا، **وConvex يُعيده
+  // بنفسه إذا استقرّت الجلسة** فيصل صاحبَ المكتبة ما يحقّ له — وكان ذلك
+  // تحميلًا ثانيًا يُطلق باليد متى تبيّن الدور.
+  useEffect(() => api.watchSnapshot(
+    applySnapshot,
+    (e) => {
+      setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
+      loadedOnce.current = true
+      setLoading(false)
+    },
+  ), [applySnapshot])
 
-  // الدورُ الذي حُمِّلت به البيانات آخرَ مرّة. أوّلُ تحميلٍ يسبق المصادقة
-  // فيعود بما يراه الزائر؛ فإن تبيّن أن الطالب صاحبُ المكتبة أُعيد بهويّته،
-  // وإن كان زائرًا فما بيده صحيحٌ فلا يُعاد له شيء. والخروجُ بعد ذلك يردّه
-  // زائرًا فيُعاد كذلك.
-  const loadedAsOwner = useRef(false)
+  // والفوائدُ تُرصد على حِدَة، أوّلَ مرّةٍ تطلبها صفحة، ثم تبقى
   useEffect(() => {
-    if (!roleReady) return
-    if (loadedAsOwner.current === isOwner) return
-    loadedAsOwner.current = isOwner
-    void reload()
-  }, [roleReady, isOwner, reload])
+    if (!perksWanted) return
+    return api.watchPerks(
+      (rows) => { setPerks(rows); setPerksReady(true) },
+      (e) => { setError('تعذّر تحميل الفوائد: ' + describe(e)); setPerksReady(true) },
+    )
+  }, [perksWanted])
+  const wantPerks = useCallback(() => setPerksWanted(true), [])
 
   // والإعدادات تُخلط بتفضيلات الزائر قبل أن يُعرف الدور، فإن تبيّن أنه صاحب
   // المكتبة رُدّت إليه إعداداته كما حفظها — من النسخة المحفوظة بلا طلبٍ جديد.
@@ -374,11 +411,22 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const previewSettings = useCallback((patch: Partial<Settings>) => {
+    preview.current = { ...(preview.current ?? {}), ...patch }
     setSettings((prev) => ({ ...prev, ...patch }))
   }, [])
 
+  const discardPreview = useCallback(() => {
+    preview.current = null
+    if (serverSettings.current) {
+      setSettings(withViewerPrefs(serverSettings.current, isOwnerRef.current))
+    }
+  }, [])
+
   const saveSettings = useCallback(async (next: Settings) => {
-    await run(() => api.updateSettings(next as unknown as Record<string, unknown>))
+    // ما حُفظ لم يعد معاينةً: يصل من الخادم بعد الحفظ كما حُفظ
+    if (await run(() => api.updateSettings(next as unknown as Record<string, unknown>))) {
+      preview.current = null
+    }
   }, [run])
 
   const cycleTheme = useCallback(() => {
@@ -409,6 +457,19 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     (id: string | null) => (id ? authorMap.get(id) ?? null : null), [authorMap],
   )
   const bookById = useCallback((id: string) => bookMap.get(id), [bookMap])
+
+  // يُحسب مرّةً لكل تبدُّلٍ في الفوائد لا في كل بطاقة: كانت كلُّ بطاقة فائدةٍ
+  // تنادي `perkKindsOf` لكل نوعٍ فيها، فتمسح الفوائدَ كلَّها مرّةً لكل نوع
+  const perkKindList = useMemo(
+    () => perkKindsOf(perkKinds, perks, settings.perk_kinds_set),
+    [perkKinds, perks, settings.perk_kinds_set],
+  )
+  const perkCategoryList = useMemo(
+    () => perkCategoriesOf(perkCategories, settings.perk_categories_set),
+    [perkCategories, settings.perk_categories_set],
+  )
+  // ونصوصُ البحث كذلك، يشترك فيها الكنّاشُ ولوحةُ البحث السريع
+  const perkIndex = useMemo(() => buildPerkIndex(perks, bookById), [perks, bookById])
   const toggleBrowseOnly = useCallback(() => setBrowseOnly((v) => !v), [])
 
   // القيمةُ تُبنى مرّةً لكل تبدُّلٍ فيها لا مع كل رسم: كانت كائنًا جديدًا في
@@ -421,22 +482,34 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     toggleBrowseOnly,
     signOut, refreshRole, roleReady,
     books, authors, works, perks, loans, publishers, categories, mainCategories,
+    perksReady, wantPerks, perkIndex, perkKindList, perkCategoryList,
     perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings,
     authorById, bookById,
     reload, patchBook, patchAuthor, patchPublisher, patchSettings, cycleTheme,
-    setViewerPref, previewSettings, saveSettings, run,
+    setViewerPref, previewSettings, discardPreview, saveSettings, run,
   }), [
     loading, error, isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     toggleBrowseOnly, signOut, refreshRole, roleReady,
     books, authors, works, perks, loans, publishers, categories, mainCategories,
+    perksReady, wantPerks, perkIndex, perkKindList, perkCategoryList,
     perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings, authorById, bookById,
     reload, patchBook, patchAuthor, patchPublisher, patchSettings, cycleTheme,
-    setViewerPref, previewSettings, saveSettings, run,
+    setViewerPref, previewSettings, discardPreview, saveSettings, run,
   ])
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>
+}
+
+/**
+ * تطلب الصفحةُ الفوائدَ بهذا: يبدأ رصدُها إن لم يكن بدأ. ولكلّ موضعٍ يقرؤها —
+ * الكنّاشُ، وصفحةُ الكتاب، ولوحةُ البحث — أن يناديه.
+ */
+export function useNeedPerks(): boolean {
+  const { wantPerks, perksReady } = useLibrary()
+  useEffect(() => { wantPerks() }, [wantPerks])
+  return perksReady
 }
 
 function describe(e: unknown): string {

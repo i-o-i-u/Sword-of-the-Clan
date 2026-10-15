@@ -19,12 +19,12 @@ import { useMemo, useRef, useEffect, useState } from 'react'
 import { useLibrary } from '../lib/library'
 import { navigate } from '../lib/router'
 import {
-  ALL_SEARCH_KEYS, QUICK_OPTS, bookRank, matchBook, matchPerk, matchWithin,
+  ALL_SEARCH_KEYS, QUICK_OPTS, bookRank, matchBook, matchWithin,
 } from '../lib/search'
 import { presetViewState } from '../lib/viewState'
 import { withinTitlesOf } from '../lib/editions'
-import { sourceAuthor, sourceTitle } from '../lib/perks'
-import { BOOKS_COUNT, PERKS_COUNT, countLabel, formatNumber } from '../lib/types'
+import { perkName, searchPerks, sourceTitle } from '../lib/perks'
+import { BOOKS_COUNT, PERKS_COUNT, RESULTS_COUNT, countLabel, formatNumber } from '../lib/types'
 import ImageSlot from './ImageSlot'
 import {
   ClearIcon, CloseButton, Overlay, PerkIcon, SearchIcon,
@@ -37,7 +37,7 @@ const MAX_PERKS = 12
 export default function SearchOverlay(
   { onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string },
 ) {
-  const { books, perks, bookById, settings, isOwner } = useLibrary()
+  const { books, perks, bookById, settings, isOwner, perkIndex, wantPerks } = useLibrary()
   // ما كُتب في حقل الرأس يصل هنا فتبدأ اللوحة بنتائجه، لا فارغةً
   const [query, setQuery] = useState(initialQuery)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -46,6 +46,8 @@ export default function SearchOverlay(
 
   const trimmed = query.trim()
   const canSeePerks = isOwner || settings.visibility.perks
+  // والفوائدُ لا تصل حتى تُطلب: اللوحةُ تبحث فيها، فتطلبها متى فُتحت
+  useEffect(() => { if (canSeePerks) wantPerks() }, [canSeePerks, wantPerks])
 
   // والعنوانُ المضموم يُصاب كما يُصاب صاحبُ السجلّ: هو كتابٌ في المكتبة،
   // فمن بحث عن «الأربعون النووية» وهي في «مهمّات العلم» وجب أن يجدها —
@@ -73,14 +75,14 @@ export default function SearchOverlay(
     navigate({ name: 'browse' })
   }
 
-  const perkHits = useMemo(() => {
-    if (!trimmed || !canSeePerks) return []
-    return perks.filter((p) => {
-      const book = p.book_id ? bookById(p.book_id) : undefined
-      const source = `${sourceTitle(p, book)} ${sourceAuthor(p, book)}`
-      return matchPerk(p, trimmed, QUICK_OPTS, source)
-    })
-  }, [perks, trimmed, canSeePerks, bookById])
+  // والفائدةُ تُطابَق بما تُطابَق به في الكنّاش نفسه — نصُّها وهوامشُها
+  // ومجلسُ سماعها ومصدرُها — ومن نصوصٍ مُطبَّعةٍ سلفًا (`perkIndex`). وكانت
+  // دالّةً ثانيةً تُطبِّع نصَّ كلِّ فائدةٍ مع كل حرفٍ وتغفل عن الهوامش، فيجد
+  // القارئُ في الكنّاش ما لا يجده ههنا.
+  const perkHits = useMemo(
+    () => (trimmed && canSeePerks ? searchPerks(perks, trimmed, bookById, perkIndex) : []),
+    [perks, trimmed, canSeePerks, bookById, perkIndex],
+  )
 
   const total = bookHits.length + perkHits.length
 
@@ -131,12 +133,11 @@ export default function SearchOverlay(
           ) : (
             <>
               <div className="search-total">
-                {countLabel(total, RESULTS_COUNT)}
-                {' في '}
                 {[
+                  countLabel(total, RESULTS_COUNT),
                   bookHits.length > 0 && countLabel(bookHits.length, BOOKS_COUNT),
                   perkHits.length > 0 && countLabel(perkHits.length, PERKS_COUNT),
-                ].filter(Boolean).join(' و')}
+                ].filter(Boolean).join(' — ')}
               </div>
 
               {bookHits.length > 0 && (
@@ -190,7 +191,7 @@ export default function SearchOverlay(
                         <span className="search-mark"><PerkIcon size={16} /></span>
                         <span className="search-row-body">
                           <span className="search-row-title">
-                            {perk.title || perk.text.slice(0, 60) + '…'}
+                            {perkName(perk, 60)}
                           </span>
                           <span className="search-row-sub">
                             {[perk.kinds.join('، '), sourceTitle(perk, book)].filter(Boolean).join(' · ')}
@@ -223,8 +224,3 @@ function Head({ label, count, shown }: { label: string; count: number; shown: nu
   )
 }
 
-/** صيغُ عدّ النتائج: «نتيجةٌ واحدة»، «نتيجتان»، «٣ نتائجَ»، «١١ نتيجةً» */
-const RESULTS_COUNT = {
-  none: 'لا نتيجة', one: 'نتيجةٌ واحدة', two: 'نتيجتان',
-  few: 'نتائجَ', many: 'نتيجةً',
-}

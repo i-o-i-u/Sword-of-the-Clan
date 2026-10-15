@@ -59,8 +59,8 @@ export default function IsbnField({ value, onChange, style }: Props) {
 
         {info.state === 'ناقص' && info.digits.length > 0 && (
           <span className="isbn-flag">
-            بقيت {13 - info.digits.length > 3 ? `${13 - info.digits.length} خانات` : 'خاناتٌ'} —
-            الردمك ١٣ خانةً أو ١٠
+            عدد الخانات الباقية: {13 - info.digits.length} —
+            والردمك ثلاثَ عشرةَ خانةً أو عشر
           </span>
         )}
 

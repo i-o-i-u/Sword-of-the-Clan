@@ -19,6 +19,11 @@
   --on-accent: oklch(0.98 0.01 75);
   --star: oklch(0.55 0.13 70);
   --danger: oklch(0.5 0.15 28);
+  /* ألوانُ الحال: تمّ (مقروءٌ، أُرجع، ظاهر)، وجارٍ (قيد القراءة، قيد الإعارة).
+     **والشارةُ أرضُها من لونها ممزوجًا بأرض اللوح** (`tone()` في `ui.tsx`) لا
+     لونٌ فاتحٌ ثابت: ذاك كان يبقى بقعةً ساطعةً في المظهر الداكن. */
+  --ok: oklch(0.42 0.1 150);
+  --warn: oklch(0.47 0.11 68);
   --cover-bg: oklch(0.9 0.02 65);
 
   /* ------------------------------------------------ ألوان الأيقونات
@@ -3146,6 +3151,8 @@ body::after {
   --on-accent: oklch(0.18 0.015 45);
   --star: oklch(0.78 0.13 78);
   --danger: oklch(0.68 0.15 28);
+  --ok: oklch(0.76 0.11 152);
+  --warn: oklch(0.8 0.11 78);
   --cover-bg: oklch(0.33 0.02 50);
 
   /* والأرضُ الداكنة تبتلع اللونَ المكسور، فتُرفع إشراقُه ويُخفَّف قتامُه */
@@ -3858,9 +3865,10 @@ a { transition: color 0.15s; }
   pointer-events: none;
 }
 
+/* ولا يُقاس بـ`vh`: هو في نافذة، و`vh` لا تتبع تكبيرَ الخطّ على `#root` */
 .rich-area {
   min-height: 168px;
-  max-height: 46vh;
+  max-height: 420px;
   overflow-y: auto;
   padding: 13px 16px;
   font-size: 14.5px;
@@ -6235,4 +6243,319 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-set-count { margin-inline-start: 52px; }
   .kn-set-drop { margin-inline-start: auto; }
   .kn-set-kids { margin-inline-end: 0; }
+}
+
+/* ════════════════════════════════════ الكنّاش: ما زِيد بعد الفحص الشامل */
+/*
+ * التظليلُ والتحديدُ والتنقّلُ بالمفاتيح، وذواتُ الصلة وموضعُ القارئ من
+ * قائمته، والكرّاسةُ مرتَّبةً بفصولها ومصدَّرة، والتعديلُ الجماعيّ. على رموز
+ * القسم نفسها (`kn-`) لا ألوانٍ ثابتة، فتتبع المظاهرَ الثلاثة.
+ */
+
+/* ما طابق البحث: أرضٌ من لون النجم خفيفة، لا صفرةُ المتصفّح الصارخة */
+mark.kn-hit {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--star) 32%, transparent);
+  color: inherit;
+}
+
+/* الفائدةُ المُضاءة بالمفاتيح: حدٌّ بلون المكتبة يُرى ولا يصرخ */
+.kn-card:focus-visible,
+.kn-reading section:focus-visible,
+.kn-index a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.kn-card:focus { outline: none; }
+.kn-card:focus-visible { box-shadow: var(--shadow-2); }
+
+.kn-keys {
+  margin: 18px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+  line-height: 2.2;
+  color: var(--muted);
+}
+.kn-keys kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg);
+  font: 600 11px/1.6 ui-monospace, monospace;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------- التحديد */
+.kn-select { display: inline-flex; align-items: center; margin-inline-end: 4px; cursor: pointer; }
+.kn-select input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.kn-card-selected {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 5%, var(--surface));
+}
+.kn-index li:has(.kn-index-check) { display: flex; align-items: center; padding-inline-start: 14px; }
+.kn-index li:has(.kn-index-check) a { flex: 1; min-width: 0; }
+.kn-index li.picked { background: color-mix(in oklch, var(--accent) 6%, transparent); }
+.kn-index-check { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+
+/* شريطُ التعديل الجماعي: يلصق بأسفل الشاشة ما دام التحديدُ قائمًا */
+.kn-bulk {
+  position: sticky;
+  bottom: 14px;
+  z-index: 30;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, var(--border));
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+.kn-bulk-count { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; }
+.kn-bulk-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kn-bulk-form select, .kn-bulk-form input { width: auto; min-width: 130px; padding-block: 7px; }
+
+/* ------------------------------------------------- صفحةُ الفائدة الواحدة */
+.kn-pager-where {
+  margin: 14px 0 -6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.kn-related {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kn-related a {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.kn-related a:hover {
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+  color: var(--text);
+}
+.kn-related-title { font-size: 14px; line-height: 1.8; }
+.kn-related-why { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.kn-related-why span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--accent) 9%, transparent);
+  color: var(--accent-soft);
+  font-size: 11px;
+}
+
+/* الهامشُ رابطٌ إلى نصّه، ونصُّه يردّ إلى موضعه */
+.rich-view sup.fn { cursor: pointer; }
+.rich-view sup.fn:hover { background: color-mix(in oklch, var(--accent) 28%, transparent); }
+.rich-view sup.fn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rich-view-note > span { flex: 1; }
+.rich-note-back {
+  flex: none;
+  align-self: flex-start;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.rich-note-back:hover, .rich-note-back:focus-visible { opacity: 1; }
+.rich-view-note:focus { outline: none; }
+/* ما وُصل إليه يُضاء لحظةً، فيُرى أين وقع */
+.rich-flash { animation: rich-flash 1.4s var(--ease); border-radius: 5px; }
+@keyframes rich-flash {
+  0%, 30% { background: color-mix(in oklch, var(--star) 34%, transparent); }
+  100% { background: transparent; }
+}
+
+/* تنبيهُ النصّ المكرَّر في نموذج الفائدة: خبرٌ لا منع */
+.kn-field-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 2px 0 0;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--warn) 12%, var(--surface));
+  color: var(--warn);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.kn-field-warn svg { flex: none; margin-top: 4px; }
+.kn-field-warn a { color: inherit; font-weight: 700; }
+
+.kn-loading p { margin: 10px 0 0; color: var(--muted); }
+
+/* ---------------------------------------------------- الكرّاسةُ بفصولها */
+.kn-export { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.kn-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.kn-toc button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.kn-toc button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* عنوانُ الفصل بين الفوائد: ربعُ الحزب في طرفه، وخطُّ العناوين */
+.kn-chapter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 2px;
+  font-size: 21px;
+  color: var(--accent-dark);
+  scroll-margin-top: calc(var(--header-h) + 20px);
+}
+.kn-chapter::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex: none;
+  background: var(--accent);
+  -webkit-mask: var(--ornament) center / contain no-repeat;
+  mask: var(--ornament) center / contain no-repeat;
+}
+.kn-chapter::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to left, var(--border), transparent);
+}
+.kn-list > .kn-chapter:first-child { margin-top: 0; }
+
+.kn-arrange-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.kn-arrange-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: grab;
+  transition: border-color 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.kn-arrange-list li.is-heading {
+  background: color-mix(in oklch, var(--accent) 7%, var(--surface));
+  border-color: color-mix(in oklch, var(--accent) 35%, var(--border));
+}
+.kn-arrange-list li.dragging { opacity: 0.45; }
+.kn-arrange-list li.over { border-color: var(--accent); box-shadow: 0 -3px 0 var(--accent); }
+.kn-arrange-grip { color: var(--muted); letter-spacing: -2px; user-select: none; }
+.kn-arrange-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.kn-arrange-list li input { flex: 1; min-width: 0; font-weight: 700; }
+.kn-arrange-tools { display: flex; flex: none; gap: 4px; }
+.kn-arrange-tools button {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.kn-arrange-tools button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.kn-arrange-tools button:disabled { opacity: 0.35; cursor: default; }
+.kn-arrange-foot {
+  position: sticky;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+@media (max-width: 640px) {
+  .kn-bulk { bottom: 8px; padding: 10px 12px; }
+  .kn-bulk-form select, .kn-bulk-form input { flex: 1 1 120px; min-width: 0; }
+  .kn-arrange-list li { flex-wrap: wrap; }
+  .kn-arrange-tools { width: 100%; justify-content: flex-end; }
+  .kn-export .kn-btn span { display: none; }
+}
+
+/* ورقةُ الفوائد والكرّاسة في الطباعة: النصُّ كما هو في الكتاب، والعزوُ تحته */
+@media print {
+  .kn-print .print-title { margin-bottom: 8px; }
+  .kn-print-note { margin: 0 0 14px; font-size: 12.5px; line-height: 1.9; color: #57524a; }
+  .kn-print-heading {
+    margin: 20px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #d7cfc2;
+    font-family: var(--heading-font);
+    font-size: 17px;
+    color: #8a5a3b;
+    break-after: avoid;
+  }
+  .kn-print-perk { margin: 0 0 16px; break-inside: avoid-page; }
+  .kn-print-perk h3 { margin: 0 0 4px; font-family: var(--heading-font); font-size: 15px; }
+  .kn-print-perk .rich-view,
+  .kn-print-perk .prose { font-size: 13px; line-height: 2; text-align: justify; }
+  .kn-print-cite { margin: 6px 0 0; font-size: 11px; color: #6b655c; }
+  .kn-print .kn-comment { margin-top: 6px; }
+  .kn-print .rich-note-back { display: none; }
+  mark.kn-hit { background: none; }
+  .kn-bulk, .kn-keys, .kn-export, .kn-toc, .kn-related, .kn-pager-where { display: none !important; }
 }

@@ -8,7 +8,6 @@ import Header from './components/Header'
 import OwnerTools from './components/OwnerTools'
 import SearchOverlay from './components/SearchOverlay'
 import Landing from './views/Landing'
-import Browse from './views/Browse'
 
 /** علامةُ إعادةِ تحميلٍ جرت، تمنع الدوران عليها */
 const RELOAD_MARK = 'chunk-reloaded'
@@ -49,9 +48,17 @@ function page<T extends ComponentType<any>>(load: () => Promise<{ default: T }>)
   })
 }
 
-// المسار الذي يسلكه كل زائر — الهبوط ثم التصفّح — يبقى في الحزمة الأولى، وما
-// سواه يُجلب عند طلبه: صفحاتٌ لا تُفتح في كل زيارة، ونوافذُ لصاحب المكتبة
-// وحده. هذا يقصّ من الحزمة التي تُنتظر قبل أول رسم.
+// صفحةُ الهبوط وحدها في الحزمة الأولى، وما سواها يُجلب عند طلبه: صفحاتٌ لا
+// تُفتح في كل زيارة، ونوافذُ لصاحب المكتبة وحده. هذا يقصّ من الحزمة التي
+// تُنتظر قبل أول رسم.
+//
+// **و«تصفُّح المكتبة» يُجلب بعد أوّل رسمٍ بلا طلب** (`loadBrowse` في فراغ
+// المتصفّح): هو طريقُ كل زائرٍ بعد الهبوط، فيكون حاضرًا حين يُضغط زرُّه —
+// ولا يُثقل الهبوطَ وهو أوّلُ ما يُرسم. وكان في الحزمة الأولى نفسها، فينتظره
+// من لم يفتح إلا صفحة الهبوط. ومن جاء رأسًا إلى `#/browse` يُجلب له والبياناتُ
+// في الطريق، والصفحةُ تنتظرها على كل حال.
+const loadBrowse = () => import('./views/Browse')
+const Browse = page(loadBrowse)
 const About = page(() => import('./views/About'))
 const BookDetail = page(() => import('./views/BookDetail'))
 const AddBook = page(() => import('./views/AddBook'))
@@ -101,6 +108,15 @@ export default function App() {
   // بلغت الصفحةُ الرسمَ سالمةً، فتُرفع علامةُ إعادة التحميل: إخفاقٌ آخرُ
   // بعد اليوم يستحقّ إعادةً أخرى، وإنما مُنعت لئلّا يدور على نفسه.
   useEffect(() => { sessionStorage.removeItem(RELOAD_MARK) }, [])
+
+  // التصفُّحُ يُجلب في أوّل فراغٍ للمتصفّح بعد الرسم (انظر `loadBrowse`)
+  useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback
+    const fetchIt = () => { void loadBrowse().catch(() => { /* يُجلب عند طلبه */ }) }
+    if (idle) idle(fetchIt)
+    else setTimeout(fetchIt, 1200)
+  }, [])
 
   // الانتقال يُغلق ما كان مفتوحًا من الطبقات
   useEffect(() => {

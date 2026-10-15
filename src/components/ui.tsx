@@ -206,15 +206,27 @@ export function Stars({ rating }: { rating: number }) {
   )
 }
 
+/**
+ * لونُ شارة الحال: الخطُّ من رمزه، والأرضُ منه ممزوجًا بأرض اللوح — فتتبع
+ * المظاهرَ الثلاثة. وكانت ألوانًا فاتحةً ثابتة في نمطٍ سطريّ، فتبقى في المظهر
+ * الداكن بقعًا ساطعة.
+ */
+export function tone(name: 'ok' | 'warn' | 'danger'): CSSProperties {
+  return {
+    color: `var(--${name})`,
+    background: `color-mix(in oklch, var(--${name}) 14%, var(--surface))`,
+  }
+}
+
 /** شارة حالة القراءة في الجدول */
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, CSSProperties> = {
-    'مقروء': { color: 'oklch(0.36 0.09 150)', background: 'oklch(0.93 0.04 150)' },
-    'قيد القراءة': { color: 'oklch(0.42 0.11 70)', background: 'oklch(0.94 0.05 78)' },
+    'مقروء': tone('ok'),
+    'قيد القراءة': tone('warn'),
   }
-  const tone = map[status] ?? { color: 'var(--muted)', background: 'var(--header)' }
+  const look = map[status] ?? { color: 'var(--muted)', background: 'var(--header)' }
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap', ...tone }}>
+    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap', ...look }}>
       {status || '—'}
     </span>
   )
@@ -1001,6 +1013,15 @@ export function MoreSentinel(
 const overlayStack: number[] = []
 let overlaySeq = 0
 
+/**
+ * أفي الصفحة نافذةٌ مفتوحة؟ مفاتيحُ الصفحة المختصرة — «/» للبحث، وj وk
+ * للتنقُّل — لا تعمل من تحت نافذة: كان «/» يُضغط في نموذج الفائدة فيقفز
+ * التركيزُ إلى حقل البحث الذي خلفه.
+ */
+export function overlayOpen(): boolean {
+  return overlayStack.length > 0
+}
+
 export function Overlay(
   { onClose, children, align = 'center', zIndex = 90, paddingTop, label }:
   {
@@ -1210,7 +1231,10 @@ export function DebouncedTextarea({ value, onCommit, delay = 700, ...rest }: Tex
  * ولا تفريقٍ بين الهمزات — ويُبقي الكتابة الحرّة على حالها.
  */
 export function Combobox(
-  { value, onChange, options, placeholder, disabled, style, emptyHint }: {
+  {
+    value, onChange, options, placeholder, disabled, style, emptyHint,
+    autoHighlight = true, onPick,
+  }: {
     value: string
     onChange: (value: string) => void
     options: string[]
@@ -1219,10 +1243,24 @@ export function Combobox(
     style?: CSSProperties
     /** ما يُقال حين لا مطابق: «اسمٌ جديد، سيُنشأ له سجلّ» ونحوه */
     emptyHint?: string
+    /**
+     * أيُضاء أوّلُ الاقتراحات وحده فيأخذه Enter؟ هو الأصل حيث يُختار من
+     * قائمةٍ قائمة. **ويُطفأ حيث يُكتب اسمٌ جديد** — حقلُ الأعلام والوسوم —
+     * وإلّا أخذ Enter «ابن تيمية الجدّ» ممّن كتب «ابن تيمية» وأراده هو.
+     */
+    autoHighlight?: boolean
+    /**
+     * يُنادى إذا اختير اقتراحٌ بعينه — بالنقر أو بالأسهم ثم Enter — لا إذا
+     * كُتب المكتوبُ حرفًا حرفًا. فيُفرَّق بين من اختار وبين من يكتب: كان حقلُ
+     * الأعلام يُضيف «علي» قبل أن يتمّ «علي بن المديني»، إذ طابق المكتوبُ
+     * اسمًا مسجَّلًا في منتصف الكتابة.
+     */
+    onPick?: (option: string) => void
   },
 ) {
+  const first = autoHighlight ? 0 : -1
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
+  const [active, setActive] = useState(first)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => { if (blurTimer.current) clearTimeout(blurTimer.current) }, [])
@@ -1246,8 +1284,10 @@ export function Combobox(
   const showList = open && matches.length > 0
 
   function pick(option: string) {
-    onChange(option)
+    if (onPick) onPick(option)
+    else onChange(option)
     setOpen(false)
+    setActive(first)
   }
 
   return (
@@ -1259,7 +1299,7 @@ export function Combobox(
         role="combobox"
         aria-expanded={showList}
         aria-autocomplete="list"
-        onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0) }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(first) }}
         onFocus={() => setOpen(true)}
         // الإغلاق يتأخّر لحظةً كي يسبقه نقرُ الخيار، فالنقر يُفقِد التركيز أولًا
         onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 130) }}
@@ -1269,9 +1309,12 @@ export function Combobox(
           if (e.key === 'ArrowDown') {
             e.preventDefault(); setActive((i) => (i + 1) % matches.length)
           } else if (e.key === 'ArrowUp') {
-            e.preventDefault(); setActive((i) => (i - 1 + matches.length) % matches.length)
-          } else if (e.key === 'Enter') {
-            e.preventDefault(); pick(matches[active] ?? value)
+            e.preventDefault()
+            setActive((i) => (i <= 0 ? matches.length - 1 : i - 1))
+          } else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+            // لا مُضاءَ في القائمة: Enter لمن يكتب لا للقائمة، فيمضي إلى أهله
+            if (active < 0 || !matches[active]) { setOpen(false); return }
+            e.preventDefault(); pick(matches[active])
           }
         }}
         style={{ ...inputStyle, ...style }}

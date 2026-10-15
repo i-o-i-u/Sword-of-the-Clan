@@ -388,6 +388,13 @@ export default defineSchema({
     comment: v.optional(v.string()),
     /** مصدرُه إن لم يكن في المكتبة */
     source: v.optional(perkSource),
+    /**
+     * العنوانُ المضموم الذي منه الفائدة، إن كان كتابُها مجموعًا أو مطبوعًا معه
+     * غيرُه: «الأربعون النووية» في «متون طالب العلم». يُحفظ عنوانُه نصًّا كما
+     * في `within_titles`، إذ لا معرّفَ للعنوان المضموم — هو خبرٌ في ضامِّه لا
+     * سجلٌّ برأسه. وما لم يطابق عنوانًا في الكتاب يُعزى إلى الكتاب نفسه.
+     */
+    within_title: v.optional(v.string()),
   }).index('by_book', ['book_id']),
 
   /**
@@ -441,6 +448,17 @@ export default defineSchema({
     name: v.string(),
     note: v.optional(v.string()),
     icon: v.optional(v.string()),
+    /**
+     * ترتيبُ الكرّاسة: فوائدُها على ما رتّبها صاحبُها، وبينها عناوينُ فصول.
+     * **والعضويّةُ ليست ههنا** — هي في `perks.notebook_ids` كما كانت — وإنما
+     * هذا ترتيبُ ما فيها: فائدةٌ في الكرّاسة ليست في الترتيب تُلحق بآخره،
+     * وصفٌّ في الترتيب لفائدةٍ خرجت منها يسقط عند القراءة. فلا يفترق
+     * الموضعان ولا يُفسد أحدُهما الآخر.
+     */
+    layout: v.optional(v.array(v.object({
+      perk_id: v.optional(v.string()),
+      heading: v.optional(v.string()),
+    }))),
   }).index('by_name', ['name']),
 
   loans: defineTable({

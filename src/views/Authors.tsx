@@ -59,7 +59,7 @@ export function AuthorsIndex() {
       { icon: <HourglassIcon size={12} />, text: lifeLabel(author) },
       {
         icon: <OpenBookIcon size={12} />,
-        text: `${countLabel(count, BOOKS_COUNT)} في المكتبة`,
+        text: countLabel(count, BOOKS_COUNT, 'في المكتبة'),
         tone: 'accent' as const,
       },
     ],
@@ -290,7 +290,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
       {authorBooks.length > 0 && (
         <PersonShelf
           icon={<QuillIcon size={18} />}
-          title={`${roleWorksLabel(AUTHOR_ROLE)} في المكتبة (${countLabel(authorBooks.length, BOOKS_COUNT)})`}
+          title={`${roleWorksLabel(AUTHOR_ROLE)} في المكتبة (${formatNumber(authorBooks.length)})`}
           books={authorBooks}
           caption={(b) => b.category}
         />
@@ -300,7 +300,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
         <PersonShelf
           key={role}
           icon={<VerifyIcon size={18} />}
-          title={`${roleWorksLabel(role)} في المكتبة (${countLabel(list.length, BOOKS_COUNT)})`}
+          title={`${roleWorksLabel(role)} في المكتبة (${formatNumber(list.length)})`}
           books={list}
           caption={(b) => b.author_name}
         />
@@ -313,7 +313,7 @@ export function AuthorPage({ authorId }: { authorId: string }) {
             fontFamily: 'var(--heading-font)', fontSize: 20, fontWeight: 700, marginBottom: 12,
           }}>
             <WithinIcon size={18} />
-            {`ما طُبع له ضمن غيره (${countLabel(withinWorks.length, BOOKS_COUNT)})`}
+            {`ما طُبع له ضمن غيره (${formatNumber(withinWorks.length)})`}
           </div>
 
           <ol className="within-list">

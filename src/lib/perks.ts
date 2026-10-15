@@ -10,7 +10,7 @@ import { QUICK_OPTS, normalizeText } from './search'
 import { HIJRI_MONTHS, hijriParts, toArabicDigits } from './hijri'
 import { FIGURE_ICON, sourceKindOf } from './types'
 import type {
-  Book, Notebook, Perk, PerkCategory, PerkFigure, PerkKind,
+  Book, Notebook, Perk, PerkCategory, PerkFigure, PerkKind, WithinTitle,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -197,6 +197,35 @@ export function sourceTitle(perk: Perk, book: Book | undefined): string {
   return perk.source?.author.trim() || perk.source?.venue.trim() || ''
 }
 
+/**
+ * العنوانُ المضموم الذي منه الفائدة في كتابها، إن نُسبت إليه ولا يزال فيه.
+ * وما لم يطابق عنوانًا في الكتاب — حُذف منه أو تبدّل اسمُه — فالفائدةُ من
+ * الكتاب نفسه، ولا يُعزى إلى عنوانٍ لا وجود له.
+ */
+export function withinOf(perk: Perk, book: Book | undefined): WithinTitle | undefined {
+  const name = (perk.within_title ?? '').trim()
+  if (!book || !name) return undefined
+  return (book.within_titles ?? []).find((t) => t.title.trim() === name)
+}
+
+/**
+ * مقتطَفٌ من النصّ بطولٍ أقصى، **وعلامةُ الحذف «…» لمن قُطع منه شيءٌ وحده**:
+ * كانت تُلحق بكلّ مقتطَفٍ ولو كان النصُّ كلُّه أقصرَ من الحدّ، فيُظنّ أنّ
+ * وراءه بقيّة. ويُقطع على حدّ كلمةٍ إن أمكن، فلا تُبتر كلمةٌ من وسطها.
+ */
+export function excerpt(text: string, max: number): string {
+  const t = text.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  const cut = t.slice(0, max)
+  const space = cut.lastIndexOf(' ')
+  return (space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd() + '…'
+}
+
+/** ما تُسمّى به الفائدةُ في قائمة: عنوانُها، وإلّا فمطلعُ نصّها */
+export function perkName(perk: Perk, max = 80): string {
+  return perk.title.trim() || excerpt(perk.text, max)
+}
+
 /** ومؤلِّفُه كذلك — أو من سُمع منه، أو صاحبُ المنشور */
 export function sourceAuthor(perk: Perk, book: Book | undefined): string {
   const writer = book?.author_name.trim() || perk.source?.author.trim() || ''
@@ -358,6 +387,13 @@ export function facetCounts(
 export function randomPerk(perks: Perk[], current?: string): Perk | undefined {
   const pool = perks.length > 1 ? perks.filter((p) => p.id !== current) : perks
   return pool[Math.floor(Math.random() * pool.length)]
+}
+
+/** البحثُ وحده بلا ترشيح: لوحةُ البحث السريع تطلب به الفوائدَ كما يطلبها الكنّاش */
+export function searchPerks(
+  perks: Perk[], query: string, bookById: (id: string) => Book | undefined, index?: PerkIndex,
+): Perk[] {
+  return filterPerks(perks, { ...EMPTY_FILTER, query }, bookById, index)
 }
 
 export function filterPerks(
