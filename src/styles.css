@@ -3710,16 +3710,14 @@ a { transition: color 0.15s; }
  */
 .text-blocks { display: flex; flex-direction: column; gap: 4px; }
 
+/*
+ * **والشعرُ بلا إطار**، بطلب صاحب المكتبة: كان كلُّ لوحٍ صندوقًا بحدٍّ وأرضٍ
+ * ملوَّنة، فتُرى الأبياتُ مستطيلاتٍ في وسط النصّ لا شعرًا مصفوفًا. فهو الآن
+ * صفٌّ في سياق النصّ كما يُصفّ في المطبوع، يفصله عمّا حوله فراغُه وحده.
+ */
 .poem-wrap {
-  margin: 16px auto;
-  padding: 12px clamp(10px, 2.5vw, 22px);
-  border: 1px solid color-mix(in oklch, var(--accent) 26%, var(--border));
-  border-radius: 13px;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklch, var(--accent) 6%, var(--surface)),
-    var(--surface) 70%
-  );
+  margin: 14px auto;
+  padding: 0;
   overflow: hidden;
 }
 /* والرجزُ عمودٌ واحد، فلا يُمدّ لوحُه على عرض الصفحة */
@@ -3745,11 +3743,12 @@ a { transition: color 0.15s; }
   overflow: hidden;
 }
 
-.shatr { width: 50%; }
+/* والعمودان يقتسمان ما بقي بعد عمود الرقم، فلا يُعطى الشطرُ نصفًا ثابتًا */
+.shatr { width: auto; }
 /* خيطٌ بين الصدر والعَجُز، كما يُفصل بينهما في المطبوع */
 .shatr-first { border-left: 1.5px solid color-mix(in oklch, var(--accent) 32%, transparent); }
 
-.rajaz-shatr { width: 100%; }
+.rajaz-shatr { width: auto; }
 
 /*
  * على الجوّال لا يسع السطرُ شطرين، فيُصفّان طوليًّا: الصدرُ سطرًا والعَجُزُ
@@ -3961,10 +3960,12 @@ a { transition: color 0.15s; }
 .rich-view p:last-child { margin-bottom: 0; }
 
 /* لوحُ الشعر داخل النصّ المنسَّق: العمودُ الثالث رقمُ البيت، وهو عدٌّ لا نصّ */
-.rich-area .poetry-table,
-.rich-view .poetry-table { counter-reset: bayt; }
-.rich-area .poetry-table tr,
-.rich-view .poetry-table tr { counter-increment: bayt; }
+/* والترقيمُ في كل موضعٍ يُصفّ فيه الشعر — النصُّ المنسَّق والمجرَّد — وللرجز
+   كما للقصيد: لكلّ شطرٍ منه رقمُه */
+.poetry-table,
+.rajaz-table { counter-reset: bayt; }
+.poetry-table tr,
+.rajaz-table tr { counter-increment: bayt; }
 
 .bayt-no {
   width: 30px;
@@ -3977,11 +3978,12 @@ a { transition: color 0.15s; }
 }
 .bayt-no::before { content: counter(bayt); }
 /* والبيتُ الواحد لا يُرقَّم: عدٌّ لواحدٍ ليس عدًّا */
-.poetry-table tbody tr:only-child .bayt-no::before { content: ''; }
+.poetry-table tbody tr:only-child .bayt-no::before,
+.rajaz-table tbody tr:only-child .bayt-no::before { content: ''; }
+.poetry-table tbody tr:only-child .bayt-no,
+.rajaz-table tbody tr:only-child .bayt-no { width: 0; padding: 0; }
 
-/* والعمودُ المُقدَّر يقتسم ما بقي بين الشطرين، فلا يفيض الجدولُ عن لوحه */
-.rich-area .shatr,
-.rich-view .shatr { width: auto; }
+
 
 .rich-view-notes {
   counter-reset: fnv;

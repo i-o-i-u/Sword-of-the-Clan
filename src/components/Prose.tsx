@@ -106,6 +106,9 @@ function Poem({ kind, lines }: { kind: 'verse' | 'rajaz'; lines: PoemLine[] }) {
                   <Cell className="shatr shatr-last" k={`${i}:1`} text={line.second} shown={stretched[`${i}:1`]} />
                 </>
               )}
+              {/* ورقمُه عدٌّ في ملف الأنماط كما في النصّ المنسَّق، ولا عمودَ له
+                  في البيت الواحد */}
+              {lines.length > 1 && <td className="bayt-no" />}
             </tr>
           ))}
         </tbody>

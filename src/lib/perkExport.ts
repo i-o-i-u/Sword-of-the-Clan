@@ -72,13 +72,26 @@ function perkHtml(perk: Perk): string {
     ? layoutPoemsHtml(sanitizeHtml(perk.text_html))
     : perk.text.split('\n').map((l) => `<p>${escapeHtml(l)}</p>`).join('')
   const notes = orderedFootnotes(body, perk.footnotes)
-  // المِسماكُ في المستند رقمٌ مكتوب: «وورد» لا يعرف عدَّ ملف الأنماط
+  // المِسماكُ ورقمُ البيت في المستند رقمٌ مكتوب: «وورد» لا يعرف عدَّ ملف الأنماط
   let n = 0
-  const numbered = body.replace(/<sup[^>]*class="fn"[^>]*><\/sup>/g, () => `<sup>${++n}</sup>`)
+  const numbered = numberVerses(body)
+    .replace(/<sup[^>]*class="fn"[^>]*><\/sup>/g, () => `<sup>${++n}</sup>`)
   const list = notes.length
     ? `<ol class="notes">${notes.map((f) => `<li>${escapeHtml(f.text)}</li>`).join('')}</ol>`
     : ''
   return numbered + list
+}
+
+/** يكتب رقمَ كل بيتٍ في خليّته، ويرفع الخليّةَ من البيت الواحد */
+function numberVerses(html: string): string {
+  if (!html.includes('bayt-no')) return html
+  const body = new DOMParser().parseFromString(`<!doctype html><body>${html}`, 'text/html').body
+  body.querySelectorAll('table').forEach((table) => {
+    const cells = [...table.querySelectorAll('td.bayt-no')]
+    if (cells.length < 2) cells.forEach((c) => c.remove())
+    else cells.forEach((c, i) => { c.textContent = String(i + 1) })
+  })
+  return body.innerHTML
 }
 
 /**

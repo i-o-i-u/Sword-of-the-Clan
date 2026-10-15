@@ -405,6 +405,27 @@ export function layoutPoems(root: HTMLElement, skip: Node | null = null): boolea
     }
   }
 
+  /**
+   * لوحُ الشعر الذي قبل الكتلة من جنسها، **وإن فصل بينهما سطرٌ فارغ**: من كتب
+   * بيتًا ثم نزل سطرين ثم كتب الثاني — أو لصق قصيدةً بين أبياتها أسطرٌ فارغة،
+   * وهو الأكثر — كان كلُّ بيتٍ يقوم في لوحٍ وحده، فلا يُرقَّم شيءٌ منها: البيتُ
+   * الواحد لا يُرقَّم. والفاصلُ الفارغ يُرفع حين يُضمّ ما بعده، إلّا أن يكون
+   * فيه المؤشِّر — رفعُه يُسقط المؤشِّرَ من تحت اليد — فيبقى حدًّا بين لوحين.
+   */
+  const poemBefore = (block: Element, kind: PoemKind) => {
+    const gaps: Element[] = []
+    let prev = block.previousElementSibling
+    while (prev && isBlank(prev)) {
+      if (skip && prev.contains(skip)) return null
+      gaps.push(prev)
+      prev = prev.previousElementSibling
+    }
+    const table = prev?.classList.contains('poem-wrap')
+      ? prev.querySelector<HTMLTableElement>(`table.${poemTableClass(kind)}`)
+      : null
+    return table ? { table, gaps } : null
+  }
+
   // ٣. كلُّ سطرٍ هو بيتٌ أو شطرٌ يُصفّ، ويُضمّ إلى لوحٍ من جنسه قبله
   for (const block of [...root.children] as HTMLElement[]) {
     if (block.tagName !== 'P' && block.tagName !== 'DIV') continue
@@ -414,24 +435,47 @@ export function layoutPoems(root: HTMLElement, skip: Node | null = null): boolea
     if (!hit) continue
 
     const row = poemRow(doc, hit.kind, hit.parts)
-    const prev = block.previousElementSibling
-    const table = prev?.classList.contains('poem-wrap')
-      ? prev.querySelector<HTMLTableElement>(`table.${poemTableClass(hit.kind)}`)
-      : null
-    if (table) {
-      (table.tBodies[0] ?? table).appendChild(row)
+    const before = poemBefore(block, hit.kind)
+    if (before) {
+      (before.table.tBodies[0] ?? before.table).appendChild(row)
+      before.gaps.forEach((g) => g.remove())
       block.remove()
     } else {
       block.replaceWith(poemWrapOf(doc, hit.kind, row))
     }
     changed = true
   }
+
+  // ٤. واللوحان المتواليان من جنسٍ واحد يُضمّان: ما حُفظ قبل هذا الإصلاح
+  //    محفوظٌ لوحًا لكلّ بيت، فيُضمّ عند العرض بلا إعادة تحرير
+  for (const wrap of [...root.children] as HTMLElement[]) {
+    if (!wrap.classList.contains('poem-wrap') || !wrap.isConnected) continue
+    const own = wrap.querySelector<HTMLTableElement>('table.poetry-table, table.rajaz-table')
+    if (!own) continue
+    const kind: PoemKind = own.classList.contains('rajaz-table') ? 'rajaz' : 'verse'
+    const before = poemBefore(wrap, kind)
+    if (!before) continue
+    const body = before.table.tBodies[0] ?? before.table
+    for (const tr of [...own.querySelectorAll('tr')]) body.appendChild(tr)
+    before.gaps.forEach((g) => g.remove())
+    wrap.remove()
+    changed = true
+  }
   return changed
+}
+
+/** كتلةٌ لا شيءَ فيها يُقرأ: فقرةٌ فارغة، أو سطرٌ فيه `<br>` وحده */
+function isBlank(el: Element): boolean {
+  return (el.tagName === 'P' || el.tagName === 'DIV')
+    && !el.classList.contains('poem-wrap')
+    && !(el.textContent ?? '').trim()
+    && !el.querySelector('sup, img, table')
 }
 
 /** صفُّ الشعر في نصٍّ محفوظ: يُستعمل عند الحفظ وعند العرض */
 export function layoutPoemsHtml(html: string): string {
-  if (!html || !html.includes('*')) return html
+  // والمحفوظُ مصفوفًا لا نجمةَ فيه، وقد تكون أبياتُه ألواحًا متفرّقةً تُضمّ
+  if (!html || (!html.includes('*') && !html.includes('poem-wrap'))) return html
   const root = parseBody(html)
   return layoutPoems(root) ? root.innerHTML : html
 }
