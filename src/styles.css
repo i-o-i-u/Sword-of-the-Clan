@@ -3720,6 +3720,12 @@ a { transition: color 0.15s; }
   padding: 0;
   overflow: hidden;
 }
+/*
+ * **وللقصيد حدٌّ في عرضه** بطلب صاحب المكتبة: كان لوحُه يأخذ عرضَ النصّ كلَّه،
+ * فيُمدّ الشطرُ بالتطويل حتى تصير الكلمةُ حروفًا متباعدةً بينها خيوط. والمدُّ
+ * زينةٌ تُسوّي الأطراف لا تملأ الفراغ، فالحدُّ قدرُ ما يسع شطرين على مهل.
+ */
+.poem-wrap:not(.poem-wrap-rajaz) { max-width: 660px; }
 /* والرجزُ عمودٌ واحد، فلا يُمدّ لوحُه على عرض الصفحة */
 .poem-wrap-rajaz { max-width: 420px; }
 
@@ -5436,6 +5442,9 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   font-weight: 600;
 }
 
+/* صفحةُ الفائدة الواحدة للقراءة لا للمسح: عرضُها قدرُ ما يُقرأ فيه السطرُ بلا
+   أن تتبعه العينُ من طرف الشاشة إلى طرفها */
+.kn-single { max-width: 900px; }
 .kn-single .kn-card { padding: 30px 34px 18px; border-radius: 20px; }
 .kn-single .kn-card-title { font-size: 27px; }
 .kn-single .kn-card-text { font-size: 17px; line-height: 2.15; }
