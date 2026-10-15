@@ -9,6 +9,7 @@
 // والشعرُ يُرسم شعرًا: البيتُ صدرُه في اليمين وعَجُزُه في اليسار، والرجزُ
 // شطرٌ في الوسط — كما يُصفّ في البطاقة.
 
+import { stretchShatr } from './tatweel'
 import { LIBRARY_NAME } from './types'
 
 const W = 1080
@@ -74,48 +75,103 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number): strin
 
 interface Laid { draw: (y: number) => void; height: number }
 
-/** يصفّ الأسطرَ بحجم خطٍّ معلوم، ويُخبر بارتفاعها كلّها */
+/** فُرجةُ ما بين الصدر والعَجُز */
+const GUTTER = 56
+
+/**
+ * يرسم سطرَ نثرٍ مضبوطَ الطرفين، كما يُضبط النصُّ في الصفحة (`.prose`): الفضلُ
+ * يُقسم على ما بين الكلمات. والسطرُ الأخير من الفقرة يُترك على يمينه.
+ */
+function drawJustified(
+  ctx: CanvasRenderingContext2D, words: string[], right: number, width: number, justify: boolean,
+  y: number,
+) {
+  const widths = words.map((w) => ctx.measureText(w).width)
+  const space = ctx.measureText(' ').width
+  const natural = widths.reduce((a, b) => a + b, 0) + space * (words.length - 1)
+  const extra = width - natural
+  // ولا يُضبط سطرٌ يتباعد فيه الكلامُ تباعدًا فاحشًا: تُرك على يمينه أهون
+  const gap = justify && words.length > 1 && extra > 0 && extra / (words.length - 1) < space * 4
+    ? space + extra / (words.length - 1)
+    : space
+  ctx.textAlign = 'right'
+  let x = right
+  words.forEach((w, i) => {
+    ctx.fillText(w, x, y)
+    x -= widths[i] + gap
+  })
+}
+
+/**
+ * يصفّ الأسطرَ بحجم خطٍّ معلوم، ويُخبر بارتفاعها كلّها.
+ *
+ * والشعرُ يُصفّ كما يُصفّ في البطاقة: لوحٌ في الوسط **عرضُ عموده أطولُ شطرٍ
+ * فيه**، وسائرُ الأشطار تُمدّ بالتطويل إليه (`stretchShatr`) فتستوي أطرافُها.
+ * فلا يُمدّ شطرٌ إلى نصف البطاقة فتتباعد حروفُه، ولا يقف الصدرُ في طرفٍ
+ * والعَجُزُ في طرفٍ وبينهما فراغٌ لا يُدرى أهو بيتٌ أم سطران.
+ */
 function layout(
   ctx: CanvasRenderingContext2D, lines: Line[], size: number, family: string, color: string,
 ): Laid[] {
   const lh = size * 1.95
   const inner = W - PAD * 2
-  ctx.font = `${size}px ${family}`
+  const font = `${size}px ${family}`
+  ctx.font = font
+  const measure = (t: string) => ctx.measureText(t).width
+
+  const half = (inner - GUTTER) / 2
+  const verseCol = Math.min(half, Math.max(0, ...lines.flatMap((l) =>
+    l.kind === 'verse' ? [measure(l.a), measure(l.b)] : [])))
+  const rajazCol = Math.min(inner, Math.max(0, ...lines.flatMap((l) =>
+    l.kind === 'rajaz' ? [measure(l.text)] : [])))
+
   const out: Laid[] = []
+  let prev: Line['kind'] | null = null
   for (const line of lines) {
+    // فُرجةٌ يسيرة بين النثر والشعر، كما يُفصل بينهما في الصفحة
+    if (prev && (prev === 'prose') !== (line.kind === 'prose')) {
+      out.push({ height: lh * 0.3, draw: () => {} })
+    }
+    prev = line.kind
     if (line.kind === 'prose') {
-      for (const row of wrap(ctx, line.text, inner)) {
+      const rows = wrap(ctx, line.text, inner)
+      rows.forEach((row, i) => {
+        const last = i === rows.length - 1
         out.push({
           height: lh,
           draw: (y) => {
-            ctx.font = `${size}px ${family}`
+            ctx.font = font
             ctx.fillStyle = color
-            ctx.textAlign = 'right'
-            ctx.fillText(row, W - PAD, y)
+            drawJustified(ctx, row.split(' '), W - PAD, inner, !last, y)
           },
         })
-      }
+      })
     } else if (line.kind === 'rajaz') {
+      const text = stretchShatr(line.text, rajazCol, font)
       out.push({
         height: lh,
         draw: (y) => {
-          ctx.font = `${size}px ${family}`
+          ctx.font = font
           ctx.fillStyle = color
-          ctx.textAlign = 'center'
-          ctx.fillText(line.text, W / 2, y)
+          ctx.textAlign = 'right'
+          ctx.fillText(text, W / 2 + rajazCol / 2, y, rajazCol)
         },
       })
     } else {
-      // البيتُ: صدرُه إلى اليمين وعَجُزُه إلى اليسار، بينهما فُرجة
+      // البيتُ: صدرُه في العمود الأيمن وعَجُزُه في الأيسر، ممدودَين إلى عرضهما
+      const a = stretchShatr(line.a, verseCol, font)
+      const b = stretchShatr(line.b, verseCol, font)
+      const right = W / 2 + GUTTER / 2 + verseCol
+      const left = W / 2 - GUTTER / 2 - verseCol
       out.push({
         height: lh,
         draw: (y) => {
-          ctx.font = `${size}px ${family}`
+          ctx.font = font
           ctx.fillStyle = color
           ctx.textAlign = 'right'
-          ctx.fillText(line.a, W - PAD, y, inner / 2 - 24)
+          ctx.fillText(a, right, y, verseCol)
           ctx.textAlign = 'left'
-          ctx.fillText(line.b, PAD, y, inner / 2 - 24)
+          ctx.fillText(b, left, y, verseCol)
         },
       })
     }
@@ -164,24 +220,20 @@ export async function renderPerkImage(input: PerkImageInput): Promise<Blob> {
 
   const top = 150
   const bottom = H - 300
-  let y = top
 
-  if (input.title.trim()) {
-    ctx.font = `bold 46px ${family}`
-    ctx.fillStyle = c.accent
-    ctx.textAlign = 'right'
-    for (const row of wrap(ctx, input.title.trim(), W - PAD * 2).slice(0, 2)) {
-      ctx.fillText(row, W - PAD, y)
-      y += 68
-    }
-    y += 18
-  }
+  // العنوانُ والنصُّ كتلةٌ واحدة تُوسَّط في موضعها: كان النصُّ القصير وحده
+  // يُوسَّط فيبقى العنوانُ في الأعلى وبينهما فراغٌ لا معنى له
+  ctx.font = `bold 46px ${family}`
+  const titleRows = input.title.trim()
+    ? wrap(ctx, input.title.trim(), W - PAD * 2).slice(0, 2)
+    : []
+  const titleH = titleRows.length ? titleRows.length * 68 + 18 : 0
 
   // النصُّ: أكبرُ خطٍّ يتّسع له، من ٤٤ إلى ٢٦
   const lines = readLines(input.text)
   let size = 44
   let laid = layout(ctx, lines, size, family, c.text)
-  const room = bottom - y
+  const room = bottom - top - titleH
   while (size > 26 && laid.reduce((h, l) => h + l.height, 0) > room) {
     size -= 2
     laid = layout(ctx, lines, size, family, c.text)
@@ -194,8 +246,18 @@ export async function renderPerkImage(input: PerkImageInput): Promise<Blob> {
     fit.push(l)
     used += l.height
   }
-  // والنصُّ القصير يُوسَّط في موضعه ولا يلتصق بأعلاه
-  let ty = y + Math.max(0, (room - used) / 2) + size
+
+  let y = top + Math.max(0, (room - used) / 2)
+  ctx.font = `bold 46px ${family}`
+  ctx.fillStyle = c.accent
+  ctx.textAlign = 'right'
+  for (const row of titleRows) {
+    ctx.fillText(row, W - PAD, y)
+    y += 68
+  }
+  if (titleRows.length) y += 18
+
+  let ty = y + size
   for (const l of fit) { l.draw(ty); ty += l.height }
   if (cut) {
     ctx.font = `${Math.round(size * 0.8)}px ${family}`
