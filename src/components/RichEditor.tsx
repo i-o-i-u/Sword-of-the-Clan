@@ -22,7 +22,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SYMBOL_GROUPS, escapeHtml, layoutPoems, newFootnoteId, orderedFootnotes, type Footnote,
+  SYMBOL_GROUPS, dropEmptyPoems, escapeHtml, layoutPoems, newFootnoteId, orderedFootnotes,
+  type Footnote,
 } from '../lib/richtext'
 import {
   BoldIcon, ClearIcon, HighlightIcon, ItalicIcon, ListIcon, NoteIcon,
@@ -60,12 +61,64 @@ export default function RichEditor(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /** يُخبر الأعلى بما في اللوح الآن */
+  /**
+   * يُخبر الأعلى بما في اللوح الآن.
+   *
+   * **وأصلُ الشطر يتبع ما كُتب فيه** (`data-original`): الشطرُ يُعرض بعد الحفظ
+   * ممدودًا من أصله لا من نصّه، فمن صحّح كلمةً في خليّة البيت هنا ولم يتبعها
+   * الأصلُ عُرض البيتُ بعد الحفظ كما كان قبل التصحيح، وبُحث فيه كذلك. واللوحُ
+   * لا يُمدّ فيه شطر، فنصُّ الخليّة هنا هو الأصلُ نفسُه.
+   *
+   * **والبيتُ الذي مُحي نصُّه يُرفع** إلا ما فيه المؤشِّر (`dropEmptyPoems`).
+   */
   function emit() {
     const el = ref.current
     if (!el) return
+    el.querySelectorAll<HTMLElement>('td[data-original]').forEach((td) => {
+      const text = (td.textContent ?? '').trim()
+      if (td.dataset.original !== text) td.dataset.original = text
+    })
+    dropEmptyPoems(el, window.getSelection()?.anchorNode ?? null)
     setEmpty(!el.textContent?.trim())
     onChange(el.innerHTML)
+  }
+
+  /**
+   * Backspace أو Delete في بيتٍ لم يبقَ فيه نصّ: يُرفع البيتُ ويقف المؤشِّرُ في
+   * آخر ما قبله. وكان المؤشِّرُ يدور في الخليّتين الفارغتين ولا يخرج، فلا سبيلَ
+   * إلى رفع البيت إلّا بتحديد ما حوله ومحوه.
+   */
+  function dropEmptyRow(e: React.KeyboardEvent) {
+    if (e.key !== 'Backspace' && e.key !== 'Delete') return false
+    const anchor = window.getSelection()?.anchorNode ?? null
+    const el = ref.current
+    if (!anchor || !el) return false
+    const row = (anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement)
+      ?.closest('.poem-wrap tr')
+    if (!row || !el.contains(row)) return false
+    const cells = [...row.querySelectorAll('td')].filter((td) => !td.classList.contains('bayt-no'))
+    if (cells.some((td) => (td.textContent ?? '').trim())) return false
+
+    e.preventDefault()
+    const wrap = row.closest('.poem-wrap')!
+    const prevRow = row.previousElementSibling
+    const nextRow = row.nextElementSibling
+    row.remove()
+    // المؤشِّرُ إلى البيت الذي قبله إن كان، وإلّا فإلى ما قبل اللوح
+    const target = prevRow?.querySelector('td:not(.bayt-no):last-of-type')
+      ?? nextRow?.querySelector('td')
+      ?? null
+    if (!wrap.querySelector('tr')) {
+      const before = wrap.previousElementSibling
+      const p = document.createElement('p')
+      p.appendChild(document.createElement('br'))
+      wrap.replaceWith(p)
+      placeCaretAtEnd(before && !before.classList.contains('poem-wrap') ? before : p)
+    } else if (target) {
+      placeCaretAtEnd(target)
+    }
+    emit()
+    return true
   }
 
   /** ينفّذ أمرًا من أوامر التنسيق ثم يخبر الأعلى */
@@ -280,6 +333,7 @@ export default function RichEditor(
           onInput={() => { if (maybeFootnoteFromStars()) { emit(); return } emit() }}
           onBlur={() => layoutPoetry(true)}
           onKeyDown={(e) => {
+            if (dropEmptyRow(e)) return
             if (e.key !== 'Enter' || e.shiftKey) return
             // التصفيفُ بعد نزول السطر: السطرُ المتروك هو الذي يُصفّ
             requestAnimationFrame(() => layoutPoetry())
@@ -391,6 +445,17 @@ function insertNode(node: Node) {
   range.deleteContents()
   range.insertNode(node)
   placeCaretAfter(node)
+}
+
+/** يضع المؤشِّرَ في آخر العنصر */
+function placeCaretAtEnd(node: Node) {
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.createRange()
+  range.selectNodeContents(node)
+  range.collapse(false)
+  sel.removeAllRanges()
+  sel.addRange(range)
 }
 
 function placeCaretAfter(node: Node) {

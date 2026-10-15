@@ -461,6 +461,36 @@ export function layoutPoems(root: HTMLElement, skip: Node | null = null): boolea
     wrap.remove()
     changed = true
   }
+
+  // ٥. والبيتُ الذي مُحي نصُّه يُرفع، واللوحُ الذي لم يبقَ فيه بيت
+  if (dropEmptyPoems(root, skip)) changed = true
+  return changed
+}
+
+/**
+ * يرفع من الشعر ما لا نصَّ فيه: البيتَ الذي مُحي صدرُه وعَجُزُه، ثم اللوحَ الذي
+ * لم يبقَ فيه بيت.
+ *
+ * وكان يبقى: من حدّد أبياتًا ومحاها بقي جدولُها بخلايا فارغة، لا يُرى منه إلا
+ * الخيطُ الذي بين الشطرين، **ولا يُكتب فيه ولا يُحذف** — فيرفوكس لا يضع المؤشِّرَ
+ * في خليّةٍ فارغةٍ تمامًا. **والبيتُ الذي فيه المؤشِّرُ يُترك**: صاحبُه محا نصَّه
+ * ليكتب غيرَه، فلا يُسحب من تحت يده.
+ */
+export function dropEmptyPoems(root: HTMLElement, skip: Node | null = null): boolean {
+  let changed = false
+  for (const row of [...root.querySelectorAll('.poem-wrap tr')]) {
+    if (skip && row.contains(skip)) continue
+    const cells = [...row.querySelectorAll('td')].filter((td) => !td.classList.contains('bayt-no'))
+    if (cells.some((td) => (td.textContent ?? '').replace(/\u0640/g, '').trim())) continue
+    row.remove()
+    changed = true
+  }
+  for (const wrap of [...root.querySelectorAll('.poem-wrap')]) {
+    if (wrap.querySelector('tr')) continue
+    if (skip && wrap.contains(skip)) continue
+    wrap.remove()
+    changed = true
+  }
   return changed
 }
 
