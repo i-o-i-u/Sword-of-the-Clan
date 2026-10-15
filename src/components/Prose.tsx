@@ -98,6 +98,9 @@ function Poem({ kind, lines }: { kind: 'verse' | 'rajaz'; lines: PoemLine[] }) {
         <tbody>
           {lines.map((line, i) => (
             <tr key={i}>
+              {/* ورقمُه أوّلُ خلاياه فيقع في يمين البيت، وهو عدٌّ في ملف الأنماط
+                  كما في النصّ المنسَّق، ولا عمودَ له في البيت الواحد */}
+              {lines.length > 1 && <td className="bayt-no" />}
               {rajaz ? (
                 <Cell className="rajaz-shatr" k={`${i}:0`} text={line.first} shown={stretched[`${i}:0`]} />
               ) : (
@@ -106,9 +109,6 @@ function Poem({ kind, lines }: { kind: 'verse' | 'rajaz'; lines: PoemLine[] }) {
                   <Cell className="shatr shatr-last" k={`${i}:1`} text={line.second} shown={stretched[`${i}:1`]} />
                 </>
               )}
-              {/* ورقمُه عدٌّ في ملف الأنماط كما في النصّ المنسَّق، ولا عمودَ له
-                  في البيت الواحد */}
-              {lines.length > 1 && <td className="bayt-no" />}
             </tr>
           ))}
         </tbody>

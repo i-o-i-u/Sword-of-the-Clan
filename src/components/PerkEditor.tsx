@@ -36,7 +36,8 @@ import { hashFor } from '../lib/router'
 import { QUICK_OPTS, normalizeText } from '../lib/search'
 import { Icon } from '../lib/icons'
 import {
-  htmlIsEmpty, htmlToText, layoutPoemsHtml, orderedFootnotes, sanitizeHtml, textToHtml, type Footnote,
+  htmlIsEmpty, htmlToText, layoutPoemsHtml, orderedFootnotes, sanitizeHtml, textToHtml,
+  trimBlankEdges, type Footnote,
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
@@ -265,7 +266,8 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     setSaving(true)
     // ويُصفّ الشعرُ قبل الحفظ: الحفظُ بـCtrl+Enter والمؤشِّرُ في البيت الأخير
     // لا يتركه، فلا يصفّه المُحرِّر
-    const html = layoutPoemsHtml(sanitizeHtml(d.html))
+    // والسطرُ الفارغ الذي يُبقيه المُحرِّرُ حول الشعر لا يُحفظ فراغًا في طرفَي الفائدة
+    const html = trimBlankEdges(layoutPoemsHtml(sanitizeHtml(d.html)))
     const input: api.PerkInput = {
       book_id: d.fromLibrary ? (chosen?.id ?? null) : null,
       // والعنوانُ المضموم لا يبقى إلّا إذا كان في الكتاب المختار: من بدّل الكتابَ

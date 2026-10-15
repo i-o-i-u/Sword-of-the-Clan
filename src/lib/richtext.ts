@@ -284,8 +284,15 @@ function poemLine(line: string): { kind: PoemKind; parts: string[] } | null {
 
 const poemTableClass = (kind: PoemKind) => (kind === 'rajaz' ? 'rajaz-table' : 'poetry-table')
 
+/**
+ * صفُّ البيت. **ورقمُه أوّلُ خلاياه**، والجدولُ من اليمين، فيقع الرقمُ في
+ * يمين البيت كما يُرقَّم الشعرُ العربيّ — وكان آخرَها فوقع في يساره.
+ */
 function poemRow(doc: Document, kind: PoemKind, parts: string[]): HTMLTableRowElement {
   const row = doc.createElement('tr')
+  const no = doc.createElement('td')
+  no.className = 'bayt-no'
+  row.appendChild(no)
   const classes = kind === 'rajaz' ? ['rajaz-shatr'] : ['shatr shatr-first', 'shatr shatr-last']
   parts.forEach((text, i) => {
     const td = doc.createElement('td')
@@ -295,10 +302,79 @@ function poemRow(doc: Document, kind: PoemKind, parts: string[]): HTMLTableRowEl
     td.textContent = text
     row.appendChild(td)
   })
-  const no = doc.createElement('td')
-  no.className = 'bayt-no'
-  row.appendChild(no)
   return row
+}
+
+/** خلايا الأشطار في لوح الشعر، دون خليّة الرقم */
+export const CELL_SELECTOR = 'td.shatr, td.rajaz-shatr'
+
+/** البيتُ سطرًا على علامته: `صدرٌ * عَجُز`، أو `* شطر` في الرجز */
+export function rowLine(row: Element): string {
+  const cells = [...row.querySelectorAll<HTMLElement>(CELL_SELECTOR)]
+    .map((td) => (td.textContent ?? '').replace(/\u0640/g, '').trim())
+  if (row.closest('table')?.classList.contains('rajaz-table')) return `* ${cells[0] ?? ''}`
+  return cells.filter(Boolean).join(' * ')
+}
+
+/**
+ * يفصل ما بعد البيت إلى لوحٍ جديدٍ يلي لوحَه، ويُعيده إن كان بعده شيء. به
+ * يُقحَم بين بيتين سطرٌ أو بيتٌ جديد: يُكتب بين اللوحين، ثم يُضمّ الثلاثةُ لوحًا
+ * واحدًا متى نزل الكاتبُ عنه (`layoutPoems`، الخطوتان ٣ و٤).
+ */
+export function splitPoemAfter(row: Element): HTMLElement | null {
+  const wrap = row.closest('.poem-wrap')
+  const table = row.closest('table')
+  if (!wrap || !table) return null
+  const rest: Element[] = []
+  for (let r = row.nextElementSibling; r; r = r.nextElementSibling) rest.push(r)
+  if (!rest.length) return null
+  const doc = row.ownerDocument
+  const wrap2 = wrap.cloneNode(false) as HTMLElement
+  const table2 = table.cloneNode(false) as HTMLElement
+  const body = doc.createElement('tbody')
+  rest.forEach((r) => body.appendChild(r))
+  table2.appendChild(body)
+  wrap2.appendChild(table2)
+  wrap.after(wrap2)
+  return wrap2
+}
+
+/**
+ * أسطرُ ما في خليّة الشطر كما يراها الكاتب: `<br>` سطر، وكلُّ كتلةٍ (`div`،
+ * `p`) سطرٌ وحدها — كروم يكتب ما بعد Enter في الخليّة كتلةً — والجدولُ المُقحَم
+ * فيها أبياتُه أسطرٌ على علامتها.
+ */
+function cellLines(cell: Element): string[] {
+  const lines: string[] = ['']
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) { lines[lines.length - 1] += node.nodeValue ?? ''; return }
+    if (node.nodeType !== Node.ELEMENT_NODE) return
+    const el = node as Element
+    if (el.tagName === 'BR') { lines.push(''); return }
+    if (el.tagName === 'TABLE') {
+      el.querySelectorAll('tr').forEach((tr) => lines.push(rowLine(tr)))
+      lines.push('')
+      return
+    }
+    const block = el.tagName === 'DIV' || el.tagName === 'P'
+    if (block) lines.push('')
+    el.childNodes.forEach(visit)
+    if (block) lines.push('')
+  }
+  cell.childNodes.forEach(visit)
+  return lines
+}
+
+/**
+ * يرفع الفقراتِ الفارغة من أوّل النصّ ومن آخره. المُحرِّرُ يُبقي بعد الشعر سطرًا
+ * فارغًا يُنزل إليه، فلا يُحفظ ذلك السطرُ فراغًا في آخر الفائدة.
+ */
+export function trimBlankEdges(html: string): string {
+  if (!html) return html
+  const root = parseBody(html)
+  while (root.firstElementChild && isBlank(root.firstElementChild)) root.firstElementChild.remove()
+  while (root.lastElementChild && isBlank(root.lastElementChild)) root.lastElementChild.remove()
+  return root.innerHTML
 }
 
 function poemWrapOf(doc: Document, kind: PoemKind, row: HTMLTableRowElement): HTMLElement {
@@ -424,6 +500,44 @@ export function layoutPoems(root: HTMLElement, skip: Node | null = null): boolea
       ? prev.querySelector<HTMLTableElement>(`table.${poemTableClass(kind)}`)
       : null
     return table ? { table, gaps } : null
+  }
+
+  // ٢-ب. خليّةُ الشطر سطرٌ واحد. وكان Enter في آخر بيتٍ يُنزل سطرًا **في جوف
+  //      خليّته** لا بعد القصيدة، فيُكتب البيتُ التالي في خليّة الذي قبله — ثم
+  //      يُعرض الشطرُ من أصله فيغيب ما كُتب. فما في الخليّة بعد سطرها الأوّل
+  //      يُخرَج فقراتٍ بعد لوحها، فتُصفّ في الخطوة التالية وتُضمّ إليه.
+  for (const cell of [...root.querySelectorAll<HTMLElement>(CELL_SELECTOR)]) {
+    if (skip && cell.contains(skip)) continue
+    if (!cell.querySelector('br, div, p, table')) continue
+    const lines = cellLines(cell).map((l) => l.trim()).filter(Boolean)
+    const first = lines.shift() ?? ''
+    cell.textContent = first
+    cell.setAttribute('data-original', first)
+    const row = cell.closest('tr')
+    const wrap = cell.closest('.poem-wrap')
+    if (lines.length && row && wrap) {
+      splitPoemAfter(row)
+      let at: Element = wrap
+      for (const line of lines) {
+        const p = doc.createElement('p')
+        p.textContent = line
+        at.after(p)
+        at = p
+      }
+    }
+    changed = true
+  }
+
+  // ٢-ج. ورقمُ البيت أوّلُ صفّه في كل لوح: ما حُفظ والرقمُ آخرُه يُردّ
+  for (const row of [...root.querySelectorAll('.poem-wrap tr')]) {
+    const no = row.querySelector(':scope > td.bayt-no')
+    if (no && row.firstElementChild !== no) { row.prepend(no); changed = true }
+    if (!no) {
+      const td = doc.createElement('td')
+      td.className = 'bayt-no'
+      row.prepend(td)
+      changed = true
+    }
   }
 
   // ٣. كلُّ سطرٍ هو بيتٌ أو شطرٌ يُصفّ، ويُضمّ إلى لوحٍ من جنسه قبله

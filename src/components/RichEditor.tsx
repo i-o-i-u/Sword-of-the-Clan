@@ -22,8 +22,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SYMBOL_GROUPS, dropEmptyPoems, escapeHtml, layoutPoems, newFootnoteId, orderedFootnotes,
-  type Footnote,
+  CELL_SELECTOR, SYMBOL_GROUPS, dropEmptyPoems, escapeHtml, layoutPoems, newFootnoteId,
+  orderedFootnotes, rowLine, splitPoemAfter, type Footnote,
 } from '../lib/richtext'
 import {
   BoldIcon, ClearIcon, HighlightIcon, ItalicIcon, ListIcon, NoteIcon,
@@ -54,6 +54,7 @@ export default function RichEditor(
     if (!el) return
     el.innerHTML = html || '<p><br></p>'
     hardenMarks(el)
+    roomAround(el)
     setEmpty(!el.textContent?.trim())
     try { document.execCommand('defaultParagraphSeparator', false, 'p') } catch { /* لا يضرّ */ }
     // مرّةً واحدة عند فتح النموذج: الفائدةُ المُعدَّلة تُفتح بنموذجٍ جديد
@@ -83,6 +84,76 @@ export default function RichEditor(
     onChange(el.innerHTML)
   }
 
+  /** خليّةُ الشطر التي فيها المؤشِّر، إن كان في بيت */
+  function caretCell(): HTMLElement | null {
+    const anchor = window.getSelection()?.anchorNode ?? null
+    const el = ref.current
+    if (!anchor || !el) return null
+    const cell = (anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement)
+      ?.closest<HTMLElement>(CELL_SELECTOR)
+    return cell && el.contains(cell) ? cell : null
+  }
+
+  /**
+   * **Enter في البيت يُنزل إلى سطرٍ جديدٍ بعده**، لا في جوف خليّته: يُفتح بعد
+   * البيت سطرٌ فارغ يُكتب فيه البيتُ التالي على علامته — `صدرٌ * عَجُز` — فيُضمّ
+   * إلى القصيدة متى نزل عنه الكاتب، أو يبقى سطرَ نثرٍ بعدها. وإن كان البيتُ في
+   * وسط القصيدة انفصل ما بعده لوحًا يلي السطرَ الجديد، فيُقحَم البيتُ في موضعه.
+   *
+   * وكان Enter يكسر الخليّةَ نفسَها، فيُكتب البيتُ التالي في خليّة الذي قبله ولا
+   * يُنزل إلى ما بعد القصيدة أبدًا.
+   */
+  function newLineAfterVerse(e: React.KeyboardEvent) {
+    // وCtrl+Enter حفظٌ لا سطر: يمضي إلى النموذج
+    if (e.key !== 'Enter' || e.ctrlKey || e.metaKey) return false
+    const cell = caretCell()
+    const row = cell?.closest('tr')
+    const wrap = cell?.closest('.poem-wrap')
+    if (!cell || !row || !wrap) return false
+    e.preventDefault()
+    splitPoemAfter(row)
+    const p = document.createElement('p')
+    p.appendChild(document.createElement('br'))
+    wrap.after(p)
+    placeCaretAtStart(p)
+    emit()
+    return true
+  }
+
+  /**
+   * **Backspace في أوّل البيت يردّه سطرًا يُحرَّر**: `صدرٌ * عَجُز` على علامته،
+   * في موضعه من القصيدة. فيُصحَّح فيه ما شاء الكاتب — يُنقل لفظٌ من الصدر إلى
+   * العَجُز، أو يُمحى البيتُ كلُّه — ثم يُصفّ ويُضمّ متى نزل عنه. وكان البيتُ
+   * المصفوف لا يُردّ نصًّا، ولا يُحذف إلا بتحديد ما حوله.
+   */
+  function verseToLine(e: React.KeyboardEvent) {
+    if (e.key !== 'Backspace') return false
+    const sel = window.getSelection()
+    const cell = caretCell()
+    const row = cell?.closest('tr')
+    const wrap = cell?.closest('.poem-wrap')
+    if (!sel || !sel.isCollapsed || !cell || !row || !wrap) return false
+    // في أوّل خليّةٍ من البيت، وفي أوّلها لا في وسطها
+    if (row.querySelector(CELL_SELECTOR) !== cell) return false
+    const before = document.createRange()
+    before.selectNodeContents(cell)
+    before.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset)
+    if (before.toString().length > 0) return false
+    const line = rowLine(row)
+    if (!line.replace(/\*/g, '').trim()) return false // البيتُ الفارغ يُرفع في `dropEmptyRow`
+
+    e.preventDefault()
+    splitPoemAfter(row)
+    row.remove()
+    const p = document.createElement('p')
+    p.textContent = line
+    if (wrap.querySelector('tr')) wrap.after(p)
+    else wrap.replaceWith(p)
+    placeCaretAtStart(p)
+    emit()
+    return true
+  }
+
   /**
    * Backspace أو Delete في بيتٍ لم يبقَ فيه نصّ: يُرفع البيتُ ويقف المؤشِّرُ في
    * آخر ما قبله. وكان المؤشِّرُ يدور في الخليّتين الفارغتين ولا يخرج، فلا سبيلَ
@@ -105,8 +176,8 @@ export default function RichEditor(
     const nextRow = row.nextElementSibling
     row.remove()
     // المؤشِّرُ إلى البيت الذي قبله إن كان، وإلّا فإلى ما قبل اللوح
-    const target = prevRow?.querySelector('td:not(.bayt-no):last-of-type')
-      ?? nextRow?.querySelector('td')
+    const target = [...(prevRow?.querySelectorAll(CELL_SELECTOR) ?? [])].pop()
+      ?? nextRow?.querySelector(CELL_SELECTOR)
       ?? null
     if (!wrap.querySelector('tr')) {
       const before = wrap.previousElementSibling
@@ -236,6 +307,7 @@ export default function RichEditor(
     // لا بفقرة كان يبقى منثورًا
     if (layoutPoems(el, anchor)) {
       hardenMarks(el)
+      roomAround(el)
       emit()
     }
   }
@@ -334,6 +406,8 @@ export default function RichEditor(
           onBlur={() => layoutPoetry(true)}
           onKeyDown={(e) => {
             if (dropEmptyRow(e)) return
+            if (verseToLine(e)) return
+            if (newLineAfterVerse(e)) return
             if (e.key !== 'Enter' || e.shiftKey) return
             // التصفيفُ بعد نزول السطر: السطرُ المتروك هو الذي يُصفّ
             requestAnimationFrame(() => layoutPoetry())
@@ -342,6 +416,12 @@ export default function RichEditor(
           onPaste={(e) => {
             e.preventDefault()
             const text = e.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n')
+            // والشطرُ سطرٌ واحد: ما يُلصق في خليّته يُلصق سطرًا، وأسطرُه فراغات
+            if (caretCell()) {
+              document.execCommand('insertText', false, text.replace(/\s*\n\s*/g, ' '))
+              emit()
+              return
+            }
             // ونصٌّ ذو أسطرٍ يُدرَج فقراتٍ لا نصًّا واحدًا: `insertText` يُبقي في
             // فيرفكس حرفَ السطر في عقدةٍ واحدة، فلا يرى الصفُّ في الأبيات أسطرًا
             if (text.includes('\n')) {
@@ -445,6 +525,32 @@ function insertNode(node: Node) {
   range.deleteContents()
   range.insertNode(node)
   placeCaretAfter(node)
+}
+
+/** يضع المؤشِّرَ في أوّل العنصر */
+function placeCaretAtStart(node: Node) {
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.createRange()
+  range.setStart(node, 0)
+  range.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
+/**
+ * سطرٌ فارغٌ قبل الشعر وبعده إن كان في طرف اللوح: المؤشِّرُ لا يخرج من جدولٍ
+ * لا شيءَ بعده، فلا يُنزل إلى ما بعد القصيدة ولا يُصعد إلى ما قبلها. ويُرفع
+ * الفارغُ من الطرفين عند الحفظ (`trimBlankEdges`)، فلا يُحفظ فراغًا.
+ */
+function roomAround(root: HTMLElement) {
+  const blank = () => {
+    const p = document.createElement('p')
+    p.appendChild(document.createElement('br'))
+    return p
+  }
+  if (root.lastElementChild?.classList.contains('poem-wrap')) root.appendChild(blank())
+  if (root.firstElementChild?.classList.contains('poem-wrap')) root.prepend(blank())
 }
 
 /** يضع المؤشِّرَ في آخر العنصر */
