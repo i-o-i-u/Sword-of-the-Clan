@@ -170,8 +170,14 @@ export function perkCitation(
     : (perk.source ? sourceCitation(perk.source) : '')
 
   const place = perkLocation(perk)
-  const tail = place ? `${source.replace(/\.$/, '')}، ${place}.` : source
+  const located = place ? `${source.replace(/\.$/, '')}، ${place}.` : source
+  // وما لم يُنقل بحروفه يُحال عليه بـ«يُنظر» كما في الكتب: الخلاصةُ والصياغةُ
+  // ليستا كلامَ صاحب المصدر، فلا تُنسبان إليه نسبةَ المنقول
+  const verbatim = !perk.text_kind
+  const tail = located && !verbatim ? `يُنظر: ${located}` : located
 
   if (!withText) return tail
-  return `«${perk.text.trim()}»\n${tail}`
+  // والمنقولُ بحروفه بين قوسين، وما سواه بلا قوسين: ليس نصَّ أحدٍ يُحكى
+  const body = verbatim ? `«${perk.text.trim()}»` : perk.text.trim()
+  return tail ? `${body}\n${tail}` : body
 }

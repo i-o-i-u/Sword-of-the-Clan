@@ -4926,72 +4926,112 @@ button.kn-chip:hover { border-color: var(--accent); color: var(--accent-soft); }
   border-top: 1px dashed var(--border);
 }
 
-/* شريطُ العزو */
-.kn-cite { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 10px; }
-.kn-cite-icon {
+/* لوحُ المصدر: جنسُه فوق عنوانه، ثم موضعُ الفائدة منه رقاعًا بنعوتها، ثم
+   أخبارُه في جدولٍ صغير لكلّ خبرٍ نعتُه. وكان شريطًا تتلاصق فيه الأسماءُ بنقاط. */
+.kn-src {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--header) 55%, var(--surface));
+}
+.kn-src-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--header);
-  color: var(--accent-soft);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
-.kn-cite-body {
-  flex: 1 1 260px;
-  min-width: 0;
+.kn-src-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.kn-src-kind {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+}
+.kn-src-head {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.kn-src-title {
+  font-family: var(--heading-font);
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.kn-src-title a { color: var(--text); text-decoration: none; }
+.kn-src-title a:hover { color: var(--accent-soft); }
+.kn-src-spots { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.kn-src-spot {
+  display: inline-flex;
   align-items: baseline;
-  gap: 2px 10px;
-  padding-top: 4px;
-  font-size: 13.5px;
-}
-.kn-cite-title { font-family: var(--heading-font); font-size: 15px; font-weight: 700; }
-.kn-cite-title a { color: var(--text); text-decoration: none; }
-.kn-cite-title a:hover { color: var(--accent-soft); }
-.kn-cite-author, .kn-cite-note { color: var(--muted); }
-.kn-cite-author::before, .kn-cite-note::before { content: '·'; margin-inline-end: 8px; opacity: 0.6; }
-.kn-cite-edition { flex-basis: 100%; font-size: 12px; color: var(--muted); }
-.kn-cite-tail {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-inline-start: auto;
-  padding-top: 3px;
-}
-.kn-cite-bare { padding: 0; }
-.kn-place {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 9px;
-  border-radius: 7px;
-  background: var(--header);
-  font-size: 12px;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
   white-space: nowrap;
 }
-.kn-place svg { color: var(--accent-soft); flex: none; }
-.kn-cite-url {
+.kn-src-spot small { font-size: 11px; color: var(--muted); }
+.kn-src-spot b { font-weight: 700; color: var(--accent-soft); }
+.kn-src-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 14px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.kn-src-facts > div { display: contents; }
+.kn-src-facts dt { color: var(--muted); font-size: 12px; }
+.kn-src-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.kn-src-facts dd a { color: var(--accent-soft); text-decoration: none; }
+.kn-src-facts dd a:hover { text-decoration: underline; }
+.kn-src-url {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
 }
-.kn-outside {
+/* في صفحة الكتاب: الموضعُ وحده بلا لوح */
+.kn-src-bare {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.kn-src-within { font-size: 13px; color: var(--muted); }
+
+/* صفةُ النصّ والمسوّدةُ في صدر البطاقة */
+.kn-textkind, .kn-draft-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 9px;
-  border: 1px dashed var(--border);
+  gap: var(--icon-gap);
+  padding: 2px 10px;
   border-radius: 999px;
-  color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
+  border: 1px dashed var(--accent-soft);
+  color: var(--accent-soft);
+}
+.kn-draft-badge {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--warn) 50%, transparent);
+  color: var(--warn);
+  background: color-mix(in oklch, var(--warn) 10%, var(--surface));
 }
 
 .kn-foot-row {
@@ -5676,7 +5716,9 @@ button.kn-person:hover { border-color: var(--ic-purple); }
   .kn-card-title { font-size: 18px; }
   .kn-card-meta { width: 100%; margin-inline-start: 0; }
   .kn-card-gem .kn-card-meta { margin-inline-end: 0; }
-  .kn-cite-tail { margin-inline-start: 0; }
+  .kn-src { padding: 10px 11px; gap: 9px; }
+  .kn-src-facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .kn-src-facts dd { margin-bottom: 4px; }
   .kn-tools { width: 100%; justify-content: flex-end; }
   .kn-single .kn-card { padding: 20px 18px 14px; }
   .kn-single .kn-card-title { font-size: 21px; }

@@ -71,6 +71,12 @@ interface LibraryValue {
    * المكتبة، ولا حاجة إليها لمن فتح صفحة الهبوط أو الفهرس.
    */
   perks: Perk[]
+  /**
+   * مسوّداتُ صاحب المكتبة: فوائدُ لم تُنشر. **خارج `perks` عمدًا**، فلا تُعدّ في
+   * شيءٍ ولا تُعرض في بابٍ ولا في بحثٍ ولا في بطاقة كتاب — إلا في بابها. والزائرُ
+   * لا تصله أصلًا: الخادمُ يحجبها.
+   */
+  perkDrafts: Perk[]
   /** أوصلت الفوائد؟ وقبله `perks` فارغةٌ لا لأنّ الكنّاش خالٍ، بل لأنها في الطريق */
   perksReady: boolean
   /** يطلب الفوائد: يبدأ رصدُها أوّلَ مرّة، ثم تبقى مرصودةً ما دام اللسانُ مفتوحًا */
@@ -193,6 +199,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [authors, setAuthors] = useState<Author[]>([])
   const [works, setWorks] = useState<BookWork[]>([])
   const [perks, setPerks] = useState<Perk[]>([])
+  const [perkDrafts, setPerkDrafts] = useState<Perk[]>([])
   const [perksReady, setPerksReady] = useState(false)
   const [perksWanted, setPerksWanted] = useState(false)
   const [perkKinds, setPerkKinds] = useState<PerkKindDef[]>([])
@@ -336,7 +343,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!perksWanted) return
     return api.watchPerks(
-      (rows) => { setPerks(rows); setPerksReady(true) },
+      (rows) => {
+        setPerks(rows.filter((p) => !p.draft))
+        setPerkDrafts(rows.filter((p) => p.draft))
+        setPerksReady(true)
+      },
       (e) => { setError('تعذّر تحميل الفوائد: ' + describe(e)); setPerksReady(true) },
     )
   }, [perksWanted])
@@ -515,7 +526,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly,
     signOut, refreshRole, roleReady,
-    books, authors, works, perks, loans, publishers, categories, mainCategories,
+    books, authors, works, perks, perkDrafts, loans, publishers, categories, mainCategories,
     perksReady, wantPerks, perkIndex, perkKindList, perkCategoryList,
     perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings,
@@ -525,7 +536,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   }), [
     loading, error, ownerData, offline, isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     toggleBrowseOnly, signOut, refreshRole, roleReady,
-    books, authors, works, perks, loans, publishers, categories, mainCategories,
+    books, authors, works, perks, perkDrafts, loans, publishers, categories, mainCategories,
     perksReady, wantPerks, perkIndex, perkKindList, perkCategoryList,
     perkKinds, perkCategories, perkFigures, notebooks,
     landingImages, landingQuotes, settings, authorById, bookById,

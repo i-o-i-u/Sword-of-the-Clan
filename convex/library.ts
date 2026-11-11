@@ -104,12 +104,14 @@ function perksOf(base: ReadBase, rows: Doc<'perks'>[]) {
   const all = rows.slice().sort((a, b) => a._creationTime - b._creationTime)
   if (owner) return all.map(toClient)
   if (!s.visibility.perks) return []
+  // والمسوّدةُ لم تُنشر بعدُ، فلا تصل الزائرَ أصلًا — لا تُخفى في المتصفّح
   // الفائدةُ من كتابٍ ليس في المكتبة لا كتابَ لها يُخفى، فحكمُها حكمُ
   // الباب كلِّه: إن عُرضت الفوائدُ عُرضت معها، وإن حُجبت حُجبت.
   // وعنوانُها المضموم يسقط عن الزائر إذا حُجب من كتابه ما طُبع فيه: لو بقي
   // لدلّ على المحجوب
   const books = new Map(base.shown.map((b) => [b._id as string, b]))
   return all
+    .filter((p) => !p.draft)
     .filter((p) => p.book_id === null || visibleIds.has(p.book_id))
     .map((p) => {
       const book = p.book_id ? books.get(p.book_id) : undefined

@@ -41,8 +41,8 @@ import {
 } from '../lib/richtext'
 import RichEditor from './RichEditor'
 import {
-  PERK_SOURCE_KINDS, SAVED_COUNT, SOURCE_BOOK, countLabel, perkCategoriesOf, perkKindsOf,
-  sourceKindOf, type Book, type Perk,
+  PERK_SOURCE_KINDS, PERK_TEXT_KINDS, SAVED_COUNT, SOURCE_BOOK, TEXT_MEANING, TEXT_OWN,
+  countLabel, perkCategoriesOf, perkKindsOf, sourceKindOf, textKindOf, type Book, type Perk,
 } from '../lib/types'
 import { ClearIcon, CloseButton, Combobox, Overlay, inputStyle } from './ui'
 
@@ -61,6 +61,10 @@ interface Draft {
   html: string
   footnotes: Footnote[]
   comment: string
+  /** صفةُ النصّ: فراغُه منقولٌ بحروفه، و«معنى»، و«صياغة» */
+  textKind: string
+  /** لا مصدرَ لها: للصياغة وحدها، فما نُقل أو لُخِّص لا بدّ له من مصدر */
+  noSource: boolean
   fromLibrary: boolean
   /** ما في حقل الكتاب مكتوبًا: عنوانُه، وما يميّزه إن شاركه في العنوان غيرُه */
   bookName: string
@@ -99,7 +103,10 @@ function readDraft(): Draft | null {
     const d = JSON.parse(raw) as Draft
     if (!d || typeof d.html !== 'string' || htmlIsEmpty(d.html)) return null
     // ومسوّدةٌ حُفظت قبل أن يُعرف الكتابُ بمعرّفه لا تحمله، فيُعرف من اسمه
-    return { ...d, bookId: d.bookId ?? '', withinTitle: d.withinTitle ?? '' }
+    return {
+      ...d, bookId: d.bookId ?? '', withinTitle: d.withinTitle ?? '',
+      textKind: d.textKind ?? '', noSource: d.noSource ?? false,
+    }
   } catch { return null }
 }
 
@@ -145,8 +152,11 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     html: perk ? (perk.text_html || textToHtml(perk.text)) : '',
     footnotes: perk?.footnotes ?? [],
     comment: perk?.comment ?? '',
+    textKind: perk?.text_kind ?? '',
+    // ما حُفظ صياغةً بلا كتابٍ ولا مصدرٍ مكتوب فهو بلا مصدر
+    noSource: !!perk && perk.text_kind === TEXT_OWN && !perk.book_id && !perk.source,
     // الجديدةُ من الفهرس افتراضًا: أكثرُ ما يُقيَّد إنما يُقيَّد من كتب البيت
-    fromLibrary: perk ? perk.book_id !== null : true,
+    fromLibrary: perk ? (perk.book_id !== null || (!perk.source && perk.text_kind !== TEXT_OWN)) : true,
     bookName: startBook ? (bookChoices.labelOf.get(startBook.id) ?? startBook.title) : '',
     bookId: startBook?.id ?? '',
     withinTitle: perk?.within_title ?? '',
@@ -252,27 +262,55 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
   // النصُّ وحده هو اللازم مع مصدره: عنوانُ الفائدة قد لا يخطر لصاحبها ساعةَ
   // يقيّدها. والعنوانُ لا يلزم في كل جنسٍ من المصادر: ما سُمع في مجلسٍ قد لا
   // عنوانَ له وإنما يُعرف بمن سُمع منه — فيكفي أحدُهما
-  const hasSource = d.fromLibrary
+  // والصياغةُ وحدها يجوز أن تكون بلا مصدر: ما نُقل بحروفه أو لُخِّص فله أصلٌ
+  // يُعزى إليه لا محالة
+  const sourceless = d.noSource && d.textKind === TEXT_OWN
+  const hasSource = sourceless || (d.fromLibrary
     ? !!chosen
-    : !!(d.sourceTitle.trim() || d.sourceAuthor.trim())
+    : !!(d.sourceTitle.trim() || d.sourceAuthor.trim()))
   const ready = !!text.trim() && hasSource
   const missing = !text.trim() ? 'اكتب نصَّ الفائدة' : !hasSource
     ? (d.fromLibrary ? 'اختر كتابها من الفهرس' : `اكتب ${sk.titleLabel} أو ${sk.whoLabel}`)
     : ''
+  /**
+   * **والمسوّدةُ لا تُطالَب بشيء**: تُحفظ بما كُتب منها ولو سطرًا أو عنوانًا،
+   * ولا يُسأل عن مصدرها ولا عن صفتها حتى تُنشر. ولا يراها الزائر.
+   */
+  const draftReady = !!(text.trim() || d.title.trim())
 
-  /** يحفظ. و`again`: يبقى النموذجُ مفتوحًا لفائدةٍ تالية من المصدر نفسه. */
-  async function save(again = false) {
-    if (!ready || saving) return
+  /** ما يُقال فوق لوح الكتابة وفي جوفه، بحسب صفة النصّ ومصدره */
+  const tk = textKindOf(d.textKind)
+  const asIs = d.fromLibrary || sourceless ? 'كما هو في الكتاب' : sk.asIs
+  const textLabel = d.textKind === TEXT_MEANING
+    ? 'معناها بعبارتك'
+    : d.textKind === TEXT_OWN ? 'صياغتُك' : `نصُّها ${asIs}`
+  const textPlaceholder = d.textKind === TEXT_MEANING
+    ? 'اكتب خلاصةَ ما في المصدر بعبارتك، لا بعبارة صاحبه'
+    : d.textKind === TEXT_OWN
+      ? 'اكتب الفائدة بقلمك — تحريرًا لمسألة، أو جمعًا لمتفرِّق، أو استنباطًا'
+      : `انقل النصَّ بحروفه ${asIs}`
+
+  /**
+   * يحفظ. و`again`: يبقى النموذجُ مفتوحًا لفائدةٍ تالية من المصدر نفسه.
+   * و`asDraft`: تُحفظ مسوّدةً لا تُنشر — ولا يُشترط لها مصدرٌ ولا نصٌّ تامّ.
+   * والحفظُ بلا `asDraft` ينشرها، مسوّدةً كانت أو جديدة.
+   */
+  async function save(again = false, asDraft = false) {
+    if (saving) return
+    if (asDraft ? !draftReady : !ready) return
     setSaving(true)
     // ويُصفّ الشعرُ قبل الحفظ: الحفظُ بـCtrl+Enter والمؤشِّرُ في البيت الأخير
     // لا يتركه، فلا يصفّه المُحرِّر
     // والسطرُ الفارغ الذي يُبقيه المُحرِّرُ حول الشعر لا يُحفظ فراغًا في طرفَي الفائدة
     const html = trimBlankEdges(layoutPoemsHtml(sanitizeHtml(d.html)))
+    const bare = sourceless
     const input: api.PerkInput = {
-      book_id: d.fromLibrary ? (chosen?.id ?? null) : null,
+      text_kind: d.textKind,
+      draft: asDraft,
+      book_id: !bare && d.fromLibrary ? (chosen?.id ?? null) : null,
       // والعنوانُ المضموم لا يبقى إلّا إذا كان في الكتاب المختار: من بدّل الكتابَ
       // بعد اختياره لا تُنسب فائدتُه إلى عنوانٍ ليس فيه
-      within_title: d.fromLibrary && withinChoices.includes(d.withinTitle.trim())
+      within_title: !bare && d.fromLibrary && withinChoices.includes(d.withinTitle.trim())
         ? d.withinTitle.trim()
         : '',
       kinds: d.kinds,
@@ -283,9 +321,9 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       // موضعَ له. وأمّا الهامشُ الذي لم يُكتب نصُّه بعدُ فيبقى.
       footnotes: orderedFootnotes(html, d.footnotes),
       comment: d.comment.trim(),
-      page: d.page.trim(),
+      page: bare ? '' : d.page.trim(),
       // والمجلَّدُ للكتاب وحدَه: ما سُمع في مجلسٍ لا مجلَّدَ له
-      volume: (d.fromLibrary || sk.isBook) ? d.volume.trim() : '',
+      volume: !bare && (d.fromLibrary || sk.isBook) ? d.volume.trim() : '',
       categories: d.categories,
       // فرعٌ رُفع رئيسُه بعد اختياره لا يبقى: الفرعُ لا يقوم بغير رئيسه
       sub_categories: d.subCategories.filter(
@@ -295,7 +333,9 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
       tags: d.tags,
       // وما لا يُسأل عنه في هذا الجنس لا يُحفظ: طبعةٌ لمنشورٍ في التواصل
       // خبرٌ لا معنى له، ولو بقيت من جنسٍ سابقٍ لعُرضت في البطاقة
-      source: d.fromLibrary
+      // وما لم يُكتب من المصدر المكتوب شيءٌ — مسوّدةٌ لم يُسأل عن مصدرها — لا
+      // يُحفظ مصدرًا فارغًا
+      source: bare || d.fromLibrary || !(d.sourceTitle.trim() || d.sourceAuthor.trim())
         ? null
         : {
           kind: sk.name,
@@ -309,6 +349,8 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
         },
     }
 
+    // المسوّدةُ لا تُنسب إلى كتابٍ لم يُختر بعدُ ولا إلى عنوانٍ فيه
+    if (asDraft && input.book_id === null && d.fromLibrary) input.within_title = ''
     const ok = await run(async () => {
       // العَلَمُ الذي كُتب ولم يكن في السجلّ يُسجَّل، فيُختار من القائمة بعدُ
       for (const name of d.people) {
@@ -322,7 +364,9 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
     writeDraft(null)
     await reload()
-    if (again) {
+    if (asDraft && !again) {
+      onClose()
+    } else if (again) {
       // يبقى المصدرُ والتصنيفُ والنوع، ويُفرَّغ ما يخصّ الفائدةَ وحدها
       const next: Draft = {
         ...d, title: '', html: '', footnotes: [], comment: '', page: '', people: [], tags: [],
@@ -392,7 +436,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             <Icon name={perk ? 'draft' : 'quill'} size={20} plain />
           </span>
           <div>
-            <h2>{perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
+            <h2>{perk?.draft ? 'مسوّدةُ فائدة' : perk ? 'تعديل الفائدة' : 'فائدةٌ جديدة'}</h2>
             {savedCount > 0 && (
               <p className="kn-editor-sub">
                 {countLabel(savedCount, SAVED_COUNT)}
@@ -426,15 +470,42 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
               />
             </label>
 
+            {/* صفةُ النصّ: ليس كلُّ ما يُقيَّد منقولًا بحروفه — منه الخلاصةُ ومنه
+                الصياغة. وكان اللوحُ يقول «النصُّ كما هو في الكتاب» وحده */}
             <div className="kn-field">
-              <span className="kn-field-label">نصُّها</span>
+              <span className="kn-field-label">صفةُ نصِّها</span>
+              <div className="kn-seg kn-seg-wide" role="group" aria-label="صفةُ نصِّها">
+                {PERK_TEXT_KINDS.map((k) => (
+                  <button
+                    key={k.key || 'verbatim'}
+                    type="button"
+                    className={d.textKind === k.key ? 'on' : ''}
+                    aria-pressed={d.textKind === k.key}
+                    title={k.hint}
+                    onClick={() => setD((prev) => ({
+                      ...prev,
+                      textKind: k.key,
+                      // «بلا مصدر» للصياغة وحدها، فمن عدل عنها رجع المصدرُ مطلوبًا
+                      noSource: k.key === TEXT_OWN ? prev.noSource : false,
+                    }))}
+                  >
+                    <Icon name={k.icon} size={14} plain={d.textKind === k.key} />
+                    {k.name}
+                  </button>
+                ))}
+              </div>
+              <p className="kn-field-hint">{tk.hint}.</p>
+            </div>
+
+            <div className="kn-field">
+              <span className="kn-field-label">{textLabel}</span>
               <RichEditor
                 key={editorKey}
                 html={d.html}
                 onChange={(v) => set('html', v)}
                 footnotes={d.footnotes}
                 onFootnotes={(v) => set('footnotes', v)}
-                placeholder="النصُّ كما هو في الكتاب"
+                placeholder={textPlaceholder}
               />
               {twin && (
                 <p className="kn-field-warn" role="status">
@@ -483,15 +554,30 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 </button>
                 <button
                   type="button"
-                  className={!d.fromLibrary ? 'on' : ''}
-                  onClick={() => set('fromLibrary', false)}
+                  className={!d.fromLibrary && !sourceless ? 'on' : ''}
+                  onClick={() => setD((prev) => ({ ...prev, fromLibrary: false, noSource: false }))}
                 >
-                  <Icon name="link-ref" size={14} plain={!d.fromLibrary} />
+                  <Icon name="link-ref" size={14} plain={!d.fromLibrary && !sourceless} />
                   من غيرها
                 </button>
+                {/* والصياغةُ من عند المُقيِّد قد لا تقوم على مصدرٍ بعينه */}
+                {d.textKind === TEXT_OWN && (
+                  <button
+                    type="button"
+                    className={sourceless ? 'on' : ''}
+                    onClick={() => set('noSource', true)}
+                  >
+                    <Icon name="quill" size={14} plain={sourceless} />
+                    بلا مصدر
+                  </button>
+                )}
               </div>
 
-              {d.fromLibrary ? (
+              {sourceless ? (
+                <p className="kn-field-hint">
+                  صياغةٌ من عندك لا تُعزى إلى مصدر. وتُعرض في البطاقة موسومةً «بقلم المُقيِّد».
+                </p>
+              ) : d.fromLibrary ? (
                 <label className="kn-field">
                   <span className="kn-field-label">الكتاب</span>
                   <Combobox
@@ -521,7 +607,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
               {/* والكتابُ المجموعُ تُنسب الفائدةُ إلى ما طُبع فيه منه: «الأربعون
                   النووية» في «متون طالب العلم» — فيُعزى إليها لا إلى المجموع */}
-              {d.fromLibrary && withinChoices.length > 0 ? (
+              {!sourceless && d.fromLibrary && withinChoices.length > 0 ? (
                 <label className="kn-field">
                   <span className="kn-field-label">
                     من أيِّ عنوانٍ فيه؟ <em>اختياريّ</em>
@@ -537,7 +623,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                 </label>
               ) : null}
 
-              {d.fromLibrary ? null : (
+              {d.fromLibrary || sourceless ? null : (
                 <>
                   {/* جنسُ المصدر: به تُعرف حقولُه وألفاظُها */}
                   <div className="kn-pills" role="group" aria-label="جنسُ المصدر">
@@ -615,11 +701,11 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
 
               {/* والموضعُ يتبع جنسَ المصدر: الكتابُ مجلَّدٌ وصفحة، والتسجيلُ
                   دقيقةٌ تُكتب كما هي، وما سواهما لا موضعَ له يُسأل عنه */}
-              {(d.fromLibrary || sk.isBook || sk.spotLabel) && (
+              {!sourceless && (d.fromLibrary || sk.isBook || sk.spotLabel) && (
                 <div className="kn-field-pair">
                   {(d.fromLibrary || sk.isBook) && (
                     <Field
-                      label="المجلَّد"
+                      label="الجزء"
                       value={d.volume}
                       onChange={(v) => set('volume', v)}
                       placeholder="٤"
@@ -728,6 +814,20 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
           <button type="button" onClick={requestClose} className="kn-btn kn-btn-ghost">
             إلغاء
           </button>
+          {/* المسوّدةُ تُحفظ في المكتبة لا في هذا المتصفّح وحده: تُكمَل من أيّ جهاز،
+              ولا يراها الزائر حتى تُنشر. والمنشورةُ لا تُردّ مسوّدةً من هنا */}
+          {(!perk || perk.draft) && (
+            <button
+              type="button"
+              disabled={!draftReady || saving}
+              onClick={() => void save(false, true)}
+              className="kn-btn kn-btn-ghost"
+              title="تُحفظ في باب «المسوّدات» لا تُنشر، فتُكمَل بعدُ — ولا يراها الزائر"
+            >
+              <Icon name="draft" size={14} plain />
+              احفظها مسوّدة
+            </button>
+          )}
           {!perk && (
             <button
               type="button"
@@ -745,7 +845,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
             onClick={() => void save()}
             className="kn-btn kn-btn-primary"
           >
-            {saving ? 'تُحفَظ…' : perk ? 'حفظ التعديل' : 'قيِّدها'}
+            {saving ? 'تُحفَظ…' : perk?.draft ? 'انشرها' : perk ? 'حفظ التعديل' : 'قيِّدها'}
           </button>
         </footer>
       </div>

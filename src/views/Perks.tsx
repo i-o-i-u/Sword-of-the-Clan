@@ -84,12 +84,14 @@ const rememberTrail = (ids: string[], label: string) => presetViewState(TRAIL_KE
 
 /** أبوابُ الكنّاش. المفتاحُ موضعُه من الرابط، والصدرُ بلا مفتاح. */
 const TABS = [
-  { key: '', label: 'الفوائد', icon: ScrollIcon },
-  { key: 'topics', label: 'التصنيفات', icon: GridIcon },
-  { key: 'people', label: 'الأعلام', icon: OwnerIcon },
-  { key: 'notebooks', label: 'الكرّاسات', icon: OpenBookIcon },
-  { key: 'sources', label: 'المصادر', icon: QuoteIcon },
-  { key: 'gems', label: 'النفائس', icon: VerifyIcon },
+  { key: '', label: 'الفوائد', icon: ScrollIcon, owner: false },
+  { key: 'topics', label: 'التصنيفات', icon: GridIcon, owner: false },
+  { key: 'people', label: 'الأعلام', icon: OwnerIcon, owner: false },
+  { key: 'notebooks', label: 'الكرّاسات', icon: OpenBookIcon, owner: false },
+  { key: 'sources', label: 'المصادر', icon: QuoteIcon, owner: false },
+  { key: 'gems', label: 'النفائس', icon: VerifyIcon, owner: false },
+  // المسوّداتُ لصاحب المكتبة وحده: فوائدُ لم تُنشر، تُكمَل ثم تُنشر
+  { key: 'drafts', label: 'المسوّدات', icon: PencilIcon, owner: true },
 ] as const
 
 /** طرائقُ قراءتها: بطاقاتٌ مفصَّلة، أو فهرسٌ يُمسح بالعين، أو نصٌّ متّصل */
@@ -108,7 +110,7 @@ export default function Perks(
   { tab = '', pick: picked }: { tab?: string; pick?: { field: string; value: string } },
 ) {
   const {
-    perks, notebooks, perkKindList, perkCategoryList, perkFigures, bookById, settings,
+    perks, perkDrafts, notebooks, perkKindList, perkCategoryList, perkFigures, bookById, settings,
     isOwner, canEdit, perkIndex: index,
   } = useLibrary()
   const ready = useNeedPerks()
@@ -232,6 +234,7 @@ export default function Perks(
     notebooks: books.length,
     sources: sources.length,
     gems: gems.length,
+    drafts: perkDrafts.length,
   }
 
   return (
@@ -316,7 +319,7 @@ export default function Perks(
 
       {canSee && (
         <nav className="kn-tabs thin-scroll" aria-label="أبواب الكنّاش">
-          {TABS.map(({ key, label, icon: Icons }) => (
+          {TABS.filter((t) => !t.owner || canEdit).map(({ key, label, icon: Icons }) => (
             <a
               key={key || 'feed'}
               {...linkTo(key ? { name: 'perks', tab: key } : { name: 'perks' })}
@@ -337,6 +340,8 @@ export default function Perks(
       ) : !ready ? (
         // والفوائدُ في الطريق: لا يُقال «لم تُقيَّد فائدةٌ بعد» قبل أن تصل
         <KnLoading />
+      ) : tab === 'drafts' ? (
+        canEdit ? <Drafts rows={perkDrafts} onEdit={setEditing} /> : <KnEmpty title="لا يُعرض هذا الباب" />
       ) : perks.length === 0 && (tab === '' || tab === 'gems' || tab === 'sources') ? (
         <KnEmpty
           title="لم تُقيَّد فائدةٌ بعد"
@@ -453,6 +458,33 @@ function KnLoading() {
 
 // ------------------------------------------------------- الصفحةُ الخالية
 /** موضعٌ خالٍ بزخرفته: يقول ما الخبر، ويدلّ على ما يُصنع إن كان شيءٌ يُصنع */
+/**
+ * بابُ المسوّدات: ما حُفظ ولم يُنشر، أحدثُه أوّلًا. تُفتح المسوّدةُ في نموذجها
+ * فتُكمَل، ثم تُنشر بزرّه — أو تُحذف منه.
+ */
+function Drafts({ rows, onEdit }: { rows: Perk[]; onEdit: (p: Perk) => void }) {
+  const list = [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  if (list.length === 0) {
+    return (
+      <KnEmpty
+        title="لا مسوّداتٍ بعد"
+        hint="في نموذج الفائدة زرُّ «احفظها مسوّدة»: تُحفظ بما كُتب منها ولو سطرًا، ولا يراها أحدٌ حتى تنشرها."
+      />
+    )
+  }
+  return (
+    <section className="kn-drafts">
+      <p className="kn-hint">
+        ما حُفظ ولم يُنشر. لا يراه الزائر، ولا يُعدّ في شيءٍ من أعداد الكنّاش. افتح
+        المسوّدةَ بالقلم فأكملها، ثم اضغط «انشرها».
+      </p>
+      <div className="kn-list">
+        {list.map((p) => <PerkCard key={p.id} perk={p} onEdit={onEdit} />)}
+      </div>
+    </section>
+  )
+}
+
 function KnEmpty(
   { title, hint, action }: {
     title: string

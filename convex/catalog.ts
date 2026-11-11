@@ -364,6 +364,10 @@ const perkFields = {
   comment: v.optional(v.string()),
   source: v.optional(perkSource),
   within_title: v.optional(v.string()),
+  /** صفةُ النصّ: فراغُه بحروفه، و«معنى»، و«صياغة» */
+  text_kind: v.optional(v.string()),
+  /** مسوّدةٌ لم تُنشر */
+  draft: v.optional(v.boolean()),
 }
 
 export const insertPerk = mutation({
@@ -390,7 +394,9 @@ export const updatePerk = mutation({
     // المكتوب أوّلُ ذلك** — فائدةٌ حُوِّلت من سماعٍ إلى كتابٍ من الفهرس لا يبقى
     // عليها مجلسُ السماع وتاريخُه. والحقلُ الغائب لا يمسّه `patch`، فيُكتب
     // غيابُه صراحةً ليُرفع.
-    await ctx.db.patch(id, { ...patch, source: patch.source })
+    await ctx.db.patch(id, {
+      ...patch, source: patch.source, draft: patch.draft ?? false,
+    })
   },
 })
 

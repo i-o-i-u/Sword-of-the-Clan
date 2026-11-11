@@ -7,10 +7,11 @@
 // التصفُّح والسلاسلُ من الكتب.
 
 import { QUICK_OPTS, normalizeText } from './search'
-import { HIJRI_MONTHS, hijriParts, toArabicDigits } from './hijri'
-import { FIGURE_ICON, sourceKindOf } from './types'
+import { HIJRI_MONTHS, deathLabel, hijriParts, toArabicDigits, yearLabel } from './hijri'
+import { pressesLine } from './editions'
+import { FIGURE_ICON, contributorLabel, sourceKindOf } from './types'
 import type {
-  Book, Notebook, Perk, PerkCategory, PerkFigure, PerkKind, WithinTitle,
+  Author, Book, Contributor, Notebook, Perk, PerkCategory, PerkFigure, PerkKind, WithinTitle,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -219,6 +220,142 @@ export function excerpt(text: string, max: number): string {
   const cut = t.slice(0, max)
   const space = cut.lastIndexOf(' ')
   return (space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd() + '…'
+}
+
+// ---------------------------------------------------------------------------
+// المصدرُ كما يُعرض في البطاقة
+// ---------------------------------------------------------------------------
+
+/** خبرٌ من أخبار المصدر: نعتُه وقيمتُه، ورابطُه إن كان بابًا إلى صفحة */
+export interface SourceFact {
+  label: string
+  value: string
+  /** مسارُ صفحةٍ في الموقع (كتابٌ يضمّ العنوان)، أو رابطٌ خارجيّ */
+  bookId?: string
+  href?: string
+}
+
+/**
+ * المصدرُ مرتَّبًا للعرض: جنسُه، فعنوانُه، فموضعُ الفائدة منه، فأخبارُه.
+ *
+ * وكان شريطًا واحدًا تتلاصق فيه الأسماءُ بنقاطٍ — العنوانُ ثم اسمٌ لا يُدرى
+ * أمؤلِّفٌ هو أم محقِّق، والموضعُ رقعةٌ في الطرف الآخر، والجنسُ رقعةٌ ثالثة.
+ * فصار لكلّ خبرٍ نعتُه: «المؤلِّف»، «سُمع من»، «الطبعة»، «الجزء»، «الصفحات».
+ */
+export interface SourceView {
+  /** أيقونةُ جنسه */
+  icon: string
+  /** اسمُ جنسه فوق العنوان: «كتابٌ ليس في المكتبة»، «سماعٌ» */
+  kind: string
+  title: string
+  /** الكتابُ من الفهرس إن كان منه، فيكون العنوانُ بابًا إليه */
+  book?: Book
+  /** موضعُ الفائدة منه: الجزءُ والصفحة، أو الدقيقةُ من التسجيل */
+  place: SourceFact[]
+  /** سائرُ أخباره بنعوتها */
+  facts: SourceFact[]
+  /** رابطُه الخارجيّ، لِما كان على الشبكة */
+  url: string
+}
+
+const ar = (s: string) => toArabicDigits(s.trim())
+
+/** الصفحةُ أو الصفحات: «الصفحات ٩٠–٩٢» لِما كان مَدًى، و«الصفحة ٨٥» لِما سواه */
+function pageFact(page: string): SourceFact | null {
+  const p = page.trim()
+  if (!p) return null
+  const range = /[-–—،,]/.test(p)
+  return { label: range ? 'الصفحات' : 'الصفحة', value: ar(p.replace(/\s*[-–—]\s*/g, '–')) }
+}
+
+/** ذوو الصفات مجموعين بصفاتهم: «المحقِّقان: فلانٌ وفلان» */
+function roleFacts(rows: Contributor[]): SourceFact[] {
+  const byRole = new Map<string, { name: string; scope: string }[]>()
+  for (const c of rows) {
+    const name = c.name.trim()
+    if (name) byRole.set(c.role, [...(byRole.get(c.role) ?? []), { name, scope: (c.scope ?? '').trim() }])
+  }
+  return [...byRole.entries()].map(([role, list]) => ({
+    label: contributorLabel(role, list.length),
+    value: list.some((r) => r.scope)
+      ? list.map((r) => (r.scope ? `${r.name} (${ar(r.scope)})` : r.name)).join('، ')
+      : list.map((r) => r.name).join(' و'),
+  }))
+}
+
+/** طبعةُ الكتاب من الفهرس سطرًا: عددُها، فدُورُها، فسنتُها */
+function editionLine(book: Book): string {
+  const edition = book.edition.trim()
+    ? `الطبعة ${book.edition_worded ? book.edition.trim() : ar(book.edition)}`
+    : ''
+  const year = book.year_approx
+    ? book.year_text.trim()
+    : (book.year != null ? ar(yearLabel(book.year, book.year_era)) : '')
+  return [edition, pressesLine(book), year].filter(Boolean).join('، ')
+}
+
+export function sourceView(
+  perk: Perk,
+  book: Book | undefined,
+  authorById: (id: string | null) => Author | null,
+): SourceView {
+  const kind = sourceKindOf(book ? undefined : perk.source?.kind)
+  const isBookLike = !!book || kind.isBook
+  const place: SourceFact[] = []
+  if (isBookLike) {
+    if ((perk.volume ?? '').trim()) place.push({ label: 'الجزء', value: ar(perk.volume) })
+    const page = pageFact(perk.page)
+    if (page) place.push(page)
+  } else if (kind.spotLabel && perk.page.trim()) {
+    place.push({ label: 'الموضع', value: ar(perk.page) })
+  }
+
+  // ---------------------------------------------------- كتابٌ من الفهرس
+  if (book) {
+    const within = withinOf(perk, book)
+    const facts: SourceFact[] = []
+    const who = within
+      ? within.author_name.trim()
+      : [book.author_name, ...(book.co_authors ?? []).map((c) => c.name)]
+        .map((n) => n.trim()).filter(Boolean).join(' و')
+    if (who) {
+      const death = deathLabel(authorById(within ? within.author_id ?? null : book.author_id))
+      facts.push({ label: 'المؤلِّف', value: death ? `${who} (${ar(death)})` : who })
+    }
+    facts.push(...roleFacts(within ? within.contributors ?? [] : book.contributors ?? []))
+    // والعنوانُ المضموم يُذكر ضامُّه: منه يُطلب على الرفّ
+    if (within) facts.push({ label: book.is_collection ? 'مطبوعٌ في' : 'مطبوعٌ مع', value: book.title, bookId: book.id })
+    const edition = editionLine(book)
+    if (edition) facts.push({ label: 'الطبعة', value: edition })
+    const shelf = [book.cabinet_no.trim() && `دولاب ${book.cabinet_no.trim()}`,
+      book.shelf_no.trim() && `رفّ ${book.shelf_no.trim()}`].filter(Boolean).join('، ')
+    if (shelf) facts.push({ label: 'موضعه في المكتبة', value: shelf })
+    return {
+      icon: 'open-book',
+      kind: within ? 'عنوانٌ في كتابٍ من المكتبة' : 'كتابٌ من المكتبة',
+      title: within ? within.title : book.title,
+      book,
+      place,
+      facts,
+      url: '',
+    }
+  }
+
+  // ---------------------------------------------------- مصدرٌ مكتوب
+  const src = perk.source
+  const facts: SourceFact[] = []
+  const title = sourceTitle(perk, undefined)
+  const who = (src?.author ?? '').trim()
+  if (who && who !== title) {
+    const death = kind.isBook ? (src?.death ?? '').trim() : ''
+    facts.push({ label: kind.whoTag, value: death ? `${who} (${death})` : who })
+  }
+  const venue = (src?.venue ?? '').trim()
+  if (kind.whereTag && venue && venue !== title) facts.push({ label: kind.whereTag, value: venue })
+  if (kind.isBook && (src?.edition ?? '').trim()) facts.push({ label: 'الطبعة', value: src!.edition.trim() })
+  if (kind.dateTag && (src?.date ?? '').trim()) facts.push({ label: kind.dateTag, value: src!.date.trim() })
+  const url = kind.hasUrl && /^https?:\/\//i.test((src?.url ?? '').trim()) ? src!.url.trim() : ''
+  return { icon: kind.icon, kind: kind.label, title, place, facts, url }
 }
 
 /** ما تُسمّى به الفائدةُ في قائمة: عنوانُها، وإلّا فمطلعُ نصّها */

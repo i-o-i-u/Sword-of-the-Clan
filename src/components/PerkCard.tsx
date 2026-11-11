@@ -24,15 +24,15 @@ import * as api from '../lib/api'
 import Prose from './Prose'
 import RichText from './RichText'
 import { Icon } from '../lib/icons'
-import { perkCitation, perkLocation } from '../lib/citation'
-import { perkDate, perkLink, sourceAuthor, sourceTitle, withinOf } from '../lib/perks'
-import type { PickField } from '../lib/perks'
+import { perkCitation } from '../lib/citation'
+import { perkDate, perkLink, sourceView, withinOf } from '../lib/perks'
+import type { PickField, SourceFact, SourceView } from '../lib/perks'
 import { Hl } from '../lib/highlight'
 import { highlightPattern } from '../lib/search'
-import { PERK_PREVIEW_CHARS, sourceKindOf, type Perk } from '../lib/types'
+import { PERK_PREVIEW_CHARS, textKindOf, type Perk } from '../lib/types'
 import {
   CheckIcon, CopyIcon, DownloadIcon, HashIcon, LinkIcon, OpenBookIcon, PencilIcon,
-  ClockIcon, PagesIcon, PrinterIcon, QuoteIcon,
+  PrinterIcon, QuoteIcon,
 } from './ui'
 
 interface Props {
@@ -88,18 +88,12 @@ export default function PerkCard(
   const author = book ? authorById(book.author_id) : null
   // العنوانُ المضموم الذي منه الفائدة: يُعزى إليه، وكتابُه ضامُّه
   const within = withinOf(perk, book)
-  const title = within ? within.title : sourceTitle(perk, book)
-  const writer = within ? within.author_name.trim() : sourceAuthor(perk, book)
-  const place = perkLocation(perk)
-  // جنسُ المصدر: كتابٌ من خارج الفهرس، أو سماعٌ، أو صفحةُ شبكة، أو منشور،
-  // أو تسجيل. ولكلٍّ ألفاظُ حقوله وشارتُه. وما كان من الفهرس فكتابٌ ساكت.
-  // والمصدرُ المكتوب لا يُعرض لفائدةٍ مصدرُها كتابٌ من الفهرس: قد يبقى عليها من
-  // جنسٍ سابق، فيُعرض مجلسُ سماعٍ وتاريخُه بجانب كتابٍ على الرفّ
-  const src = book ? null : perk.source
-  const sourceKind = sourceKindOf(src?.kind)
-  // موضعُ الفائدة صفحةٌ في الكتاب ودقيقةٌ في التسجيل، فأيقونتُه أيقونتُهما لا
-  // دبّوسُ الخريطة: ذاك «موضعٌ» في الأرض، وكان يُقرأ «ص٣٩٨» كأنّه عنوانُ مكان
-  const PlaceIcon = sourceKind.isBook ? PagesIcon : ClockIcon
+  // المصدرُ مرتَّبًا للعرض: جنسُه وعنوانُه وموضعُ الفائدة منه وأخبارُه بنعوتها
+  // (`sourceView`). والمصدرُ المكتوب لا يُقرأ لفائدةٍ لها كتابٌ من الفهرس
+  const view = useMemo(() => sourceView(perk, book, authorById), [perk, book, authorById])
+  const title = view.title
+  // صفةُ النصّ: المنقولُ بحروفه هو الأصل فلا يُعلَّم، وما سواه شارةٌ في الصدر
+  const textKind = textKindOf(perk.text_kind)
 
   // والأيقونةُ تُطلب من المُحرَّر ومن المبدئيّ جميعًا: ما لم يُحرَّر بعدُ
   // تُعرض أنواعُه وتصنيفاتُه المبدئيّة. والقائمتان محسوبتان في السياق مرّةً
@@ -156,6 +150,18 @@ export default function PerkCard(
           </label>
         )}
         <div className="kn-card-badges">
+          {perk.draft && (
+            <span className="kn-draft-badge" title="مسوّدةٌ لم تُنشر، لا يراها الزائر">
+              <Icon name="draft" size={12} plain />
+              مسوّدة
+            </span>
+          )}
+          {textKind.badge && (
+            <span className="kn-textkind" title={textKind.hint}>
+              <Icon name={textKind.icon} size={12} plain />
+              {textKind.badge}
+            </span>
+          )}
           {perk.kinds.map((kind) => (
             <span key={kind} className={`kn-kind kn-kind-${KIND_TONE[kind] ?? 'plain'}`}>
               {/* والشارةُ المصمتة أرضُها لونُ المكتبة، فلا يُقاتَل لونٌ بلون */}
@@ -219,7 +225,7 @@ export default function PerkCard(
       {/* ------------------------------------------------------- المتن */}
       {perk.title && (
         <h3 className="kn-card-title">
-          {full
+          {full || perk.draft
             ? <Hl text={perk.title} re={re} />
             : <a {...linkTo({ name: 'perk', id: perk.id })}><Hl text={perk.title} re={re} /></a>}
         </h3>
@@ -252,71 +258,17 @@ export default function PerkCard(
 
       {/* ------------------------------------------------------- الذيل */}
       <footer className="kn-card-foot">
-        {hasCite && (
-          <div className="kn-cite">
-            <span className="kn-cite-icon" aria-hidden="true">
-              <Icon name={book ? 'open-book' : sourceKind.icon} size={15} />
-            </span>
-            <span className="kn-cite-body">
-              <span className="kn-cite-title">
-                {book
-                  ? <a {...linkTo({ name: 'book', id: book.id })}>{title}</a>
-                  : title}
-              </span>
-              {/* والعنوانُ المضموم يُذكر ضامُّه: منه يُطلب على الرفّ */}
-              {within && book && <span className="kn-cite-note">ضمن «{book.title}»</span>}
-              {writer && (
-                <span className="kn-cite-author">
-                  {writer}
-                  {/* والوفاةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
-                  {sourceKind.isBook && src?.death ? ` (${src.death})` : ''}
-                </span>
-              )}
-              {/* موضعُه وتاريخُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، ومتى */}
-              {src?.venue && <span className="kn-cite-note">{src.venue}</span>}
-              {src?.date && <span className="kn-cite-note">{src.date}</span>}
-              {src?.edition && (
-                <span className="kn-cite-edition">{src.edition}</span>
-              )}
-            </span>
-            <span className="kn-cite-tail">
-              {place && (
-                <span className="kn-place">
-                  <PlaceIcon size={11} />
-                  {place}
-                </span>
-              )}
-              {sourceKind.hasUrl && src?.url && /^https?:\/\//i.test(src.url) && (
-                <a
-                  className="kn-cite-url"
-                  href={src.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  <LinkIcon size={11} />
-                  افتح المصدر
-                </a>
-              )}
-              {/* جنسُ المصدر خبرٌ يهمّ القارئ: أيطلبه من الرفّ أم من غيره.
-                  ولا يُقال «في المكتبة» — ذاك هو الأصل ههنا. */}
-              {!book && (
-                <span className="kn-outside">
-                  <Icon name={sourceKind.icon} size={11} />
-                  {sourceKind.badge}
-                </span>
-              )}
-            </span>
-          </div>
-        )}
+        {/* المصدرُ لوحٌ مرتَّب: جنسُه، فعنوانُه، فموضعُ الفائدة منه — الجزءُ
+            والصفحة — فأخبارُه بنعوتها. وكان شريطًا تتلاصق فيه الأسماءُ بنقاط،
+            فلا يُدرى أمؤلِّفٌ الاسمُ الذي يلي العنوانَ أم محقِّق. */}
+        {hasCite && <SourcePanel view={view} />}
 
-        {/* والموضعُ يُذكر ولو أُخفي المصدر: صفحةُ الكتاب تعرف كتابَها ولا
-            تعرف صفحتَه من الفائدة */}
-        {hideSource && place && (
-          <div className="kn-cite kn-cite-bare">
-            <span className="kn-place">
-              <PlaceIcon size={11} />
-              {place}
-            </span>
+        {/* وفي صفحة الكتاب لا يُعاد ذكرُه، ويبقى موضعُ الفائدة منه — وعنوانُها
+            المضموم إن كانت منه — فصفحةُ الكتاب تعرف كتابَها ولا تعرف صفحتَه */}
+        {hideSource && (view.place.length > 0 || within) && (
+          <div className="kn-src kn-src-bare">
+            {within && <span className="kn-src-within">من «{within.title}»</span>}
+            <Spots place={view.place} />
           </div>
         )}
 
@@ -335,7 +287,7 @@ export default function PerkCard(
           )}
 
           <div className="kn-tools">
-            {!full && (
+            {!full && !perk.draft && (
               <a
                 className="kn-tool"
                 {...linkTo({ name: 'perk', id: perk.id })}
@@ -359,12 +311,14 @@ export default function PerkCard(
               value={() => perkCitation(perk, book, author)}
               onFail={setError}
             />
-            <CopyTool
-              icon={<LinkIcon size={15} />}
-              label="نسخ الرابط"
-              value={() => perkLink(perk.id, perks.map((p) => p.id))}
-              onFail={setError}
-            />
+            {!perk.draft && (
+              <CopyTool
+                icon={<LinkIcon size={15} />}
+                label="نسخ الرابط"
+                value={() => perkLink(perk.id, perks.map((p) => p.id))}
+                onFail={setError}
+              />
+            )}
             {full && (
               <ImageTool
                 perk={perk}
@@ -478,4 +432,64 @@ const KIND_TONE: Record<string, string> = {
   'فائدة': 'solid',
   'نقل': 'quote',
   'تعقُّب': 'warn',
+}
+
+/** موضعُ الفائدة من مصدرها رقاعًا بنعوتها: «الجزء ١»، «الصفحات ٩٠–٩٢» */
+function Spots({ place }: { place: SourceFact[] }) {
+  if (place.length === 0) return null
+  return (
+    <span className="kn-src-spots">
+      {place.map((p) => (
+        <span key={p.label} className="kn-src-spot">
+          <small>{p.label}</small>
+          <b>{p.value}</b>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/**
+ * لوحُ المصدر: جنسُه فوق عنوانه، ثم موضعُ الفائدة منه، ثم أخبارُه في جدولٍ
+ * صغيرٍ لكلّ خبرٍ نعتُه — فيُقرأ كما تُقرأ بطاقةُ الفهرس لا سطرًا متلاصقًا.
+ */
+function SourcePanel({ view }: { view: SourceView }) {
+  return (
+    <section className="kn-src" aria-label="مصدرُ الفائدة">
+      <span className="kn-src-icon" aria-hidden="true">
+        <Icon name={view.icon} size={17} />
+      </span>
+      <div className="kn-src-main">
+        <span className="kn-src-kind">{view.kind}</span>
+        <div className="kn-src-head">
+          <span className="kn-src-title">
+            {view.book
+              ? <a {...linkTo({ name: 'book', id: view.book.id })}>{view.title}</a>
+              : view.title}
+          </span>
+          <Spots place={view.place} />
+        </div>
+        {view.facts.length > 0 && (
+          <dl className="kn-src-facts">
+            {view.facts.map((f) => (
+              <div key={f.label}>
+                <dt>{f.label}</dt>
+                <dd>
+                  {f.bookId
+                    ? <a {...linkTo({ name: 'book', id: f.bookId })}>{f.value}</a>
+                    : f.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {view.url && (
+          <a className="kn-src-url" href={view.url} target="_blank" rel="noreferrer noopener" dir="auto">
+            <LinkIcon size={12} />
+            افتح المصدر
+          </a>
+        )}
+      </div>
+    </section>
+  )
 }

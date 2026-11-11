@@ -99,6 +99,8 @@ function toPerk(row: Record<string, unknown>): Perk {
     notebook_ids: (row.notebook_ids as string[]) ?? [],
     comment: (row.comment as string) ?? '',
     within_title: (row.within_title as string) ?? '',
+    text_kind: (row.text_kind as string) ?? '',
+    draft: (row.draft as boolean) ?? false,
     // ومصدرُ ما ليس في المكتبة صار أجناسًا — كتابٌ وسماعٌ وشبكةٌ وتواصلٌ
     // وتسجيل — فما قُيِّد قبلها لا `kind` له، وهو كتابٌ بالضرورة: ذاك كلُّ
     // ما كان يُقبل يومئذٍ. ويُسدّ ههنا مرّةً واحدة فلا تحرسه الواجهةُ في كل

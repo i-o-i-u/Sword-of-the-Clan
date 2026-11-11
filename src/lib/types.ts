@@ -630,6 +630,14 @@ export interface PerkSourceKindDef {
   hasUrl: boolean
   /** الكتابُ وحدَه له وفاةُ مؤلِّفٍ وطبعةٌ ومجلَّدٌ وصفحة */
   isBook: boolean
+  /** اسمُ جنسه فوق عنوانه في البطاقة: «سماعٌ»، «صفحةٌ على الشبكة» */
+  label: string
+  /** نعوتُ الحقول في البطاقة، بلا ضميرٍ يعود على غائب: «المؤلِّف» لا «مؤلِّفه» */
+  whoTag: string
+  whereTag: string
+  dateTag: string
+  /** ما يُنقل بحروفه منه كيف يُقال: «كما هو في الكتاب»، «كما سُمع» */
+  asIs: string
 }
 
 export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
@@ -645,6 +653,11 @@ export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
     spotLabel: '',
     hasUrl: false,
     isBook: true,
+    label: 'كتابٌ ليس في المكتبة',
+    whoTag: 'المؤلِّف',
+    whereTag: '',
+    dateTag: '',
+    asIs: 'كما هو في الكتاب',
   },
   {
     name: 'سماع',
@@ -658,6 +671,11 @@ export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
     spotLabel: '',
     hasUrl: false,
     isBook: false,
+    label: 'سماعٌ',
+    whoTag: 'سُمع من',
+    whereTag: 'المجلس',
+    dateTag: 'تاريخ السماع',
+    asIs: 'كما سُمع',
   },
   {
     name: 'شبكة',
@@ -671,6 +689,11 @@ export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
     spotLabel: '',
     hasUrl: true,
     isBook: false,
+    label: 'صفحةٌ على الشبكة',
+    whoTag: 'الكاتب',
+    whereTag: 'الموقع',
+    dateTag: 'تاريخ الاطّلاع',
+    asIs: 'كما نُشر',
   },
   {
     name: 'تواصل',
@@ -684,6 +707,11 @@ export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
     spotLabel: '',
     hasUrl: true,
     isBook: false,
+    label: 'منشورٌ في مواقع التواصل',
+    whoTag: 'صاحب الحساب',
+    whereTag: 'الموقع',
+    dateTag: 'تاريخ النشر',
+    asIs: 'كما نُشر',
   },
   {
     name: 'تسجيل',
@@ -697,6 +725,11 @@ export const PERK_SOURCE_KINDS: PerkSourceKindDef[] = [
     spotLabel: 'موضعُه منه',
     hasUrl: true,
     isBook: false,
+    label: 'تسجيلٌ',
+    whoTag: 'المُلقي',
+    whereTag: 'السلسلة',
+    dateTag: 'التاريخ',
+    asIs: 'كما قيل فيه',
   },
 ]
 
@@ -759,7 +792,56 @@ export interface Perk {
   source: PerkSource | null
   /** العنوانُ المضموم الذي منه الفائدة في كتابها، وفراغُه: الكتابُ نفسُه */
   within_title: string
+  /** صفةُ النصّ من `PERK_TEXT_KINDS`: فراغُه منقولٌ بحروفه */
+  text_kind: string
+  /** مسوّدةٌ لم تُنشر، لصاحب المكتبة وحده */
+  draft: boolean
   created_at: string
+}
+
+/**
+ * صفةُ نصّ الفائدة. **وليس كلُّ ما يُقيَّد منقولًا بحروفه**: منه خلاصةُ ما في
+ * المصدر بعبارة المُقيِّد، ومنه تحريرُ مسألةٍ أو جمعُ متفرِّقٍ من عنده. وكان
+ * النموذجُ يسأل عن «النصّ كما هو في الكتاب» وحده، فلا موضعَ لما سواه.
+ *
+ * وبها يُصاغ العزو كما يُصاغ في الكتب: المنقولُ بحروفه بين قوسين ثم مصدرُه،
+ * وما سواه يُقال فيه «يُنظر». **والصياغةُ وحدها يجوز أن تكون بلا مصدر.**
+ */
+export interface PerkTextKindDef {
+  /** المحفوظ في `text_kind`. وفراغُه الأصل: منقولٌ بحروفه */
+  key: string
+  /** اسمُه في النموذج */
+  name: string
+  hint: string
+  /** شارتُه في البطاقة. وفراغُها: الأصلُ لا يُعلَّم */
+  badge: string
+  icon: string
+}
+
+export const TEXT_VERBATIM = ''
+export const TEXT_MEANING = 'معنى'
+export const TEXT_OWN = 'صياغة'
+
+export const PERK_TEXT_KINDS: PerkTextKindDef[] = [
+  {
+    key: TEXT_VERBATIM, name: 'بنصِّه', icon: 'quote-marks',
+    hint: 'منقولٌ بحروفه من مصدره، لا يُغيَّر فيه حرف',
+    badge: '',
+  },
+  {
+    key: TEXT_MEANING, name: 'بمعناه', icon: 'pen',
+    hint: 'خلاصةُ ما في المصدر أو اختصارُه، بعبارتك لا بعبارة صاحبه',
+    badge: 'بمعناه',
+  },
+  {
+    key: TEXT_OWN, name: 'بقلمي', icon: 'quill',
+    hint: 'صياغةٌ من عندك: تحريرُ مسألة، أو جمعُ متفرِّق، أو استنباط — ويجوز أن تكون بلا مصدر',
+    badge: 'بقلم المُقيِّد',
+  },
+]
+
+export function textKindOf(key: string | undefined | null): PerkTextKindDef {
+  return PERK_TEXT_KINDS.find((k) => k.key === (key ?? '')) ?? PERK_TEXT_KINDS[0]
 }
 
 export interface Loan {
