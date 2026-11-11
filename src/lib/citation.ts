@@ -137,6 +137,8 @@ function sourceCitation(source: PerkSource): string {
     : [
       title,
       kind.isBook ? named : who,
+      // والمحقِّقُ بعد المؤلِّف بالمصدر لا بالوصف، كما في كتب الفهرس
+      kind.isBook && (source.editor ?? '').trim() ? `تحقيق ${source.editor.trim()}` : '',
       kind.isBook ? source.edition.trim() : source.venue.trim(),
       kind.hasUrl ? source.url.trim() : '',
       source.date.trim(),

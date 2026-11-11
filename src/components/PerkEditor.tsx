@@ -82,6 +82,8 @@ interface Draft {
   sourceAuthor: string
   sourceDeath: string
   sourceEdition: string
+  /** محقِّقُ الكتاب الذي ليس في المكتبة */
+  sourceEditor: string
   sourceUrl: string
   sourceVenue: string
   sourceDate: string
@@ -106,6 +108,7 @@ function readDraft(): Draft | null {
     return {
       ...d, bookId: d.bookId ?? '', withinTitle: d.withinTitle ?? '',
       textKind: d.textKind ?? '', noSource: d.noSource ?? false,
+      sourceEditor: d.sourceEditor ?? '',
     }
   } catch { return null }
 }
@@ -165,6 +168,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
     sourceAuthor: perk?.source?.author ?? '',
     sourceDeath: perk?.source?.death ?? '',
     sourceEdition: perk?.source?.edition ?? '',
+    sourceEditor: perk?.source?.editor ?? '',
     sourceUrl: perk?.source?.url ?? '',
     sourceVenue: perk?.source?.venue ?? '',
     sourceDate: perk?.source?.date ?? '',
@@ -343,6 +347,7 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
           author: d.sourceAuthor.trim(),
           death: sk.isBook ? d.sourceDeath.trim() : '',
           edition: sk.isBook ? d.sourceEdition.trim() : '',
+          editor: sk.isBook ? d.sourceEditor.trim() : '',
           url: sk.hasUrl ? d.sourceUrl.trim() : '',
           venue: sk.whereLabel ? d.sourceVenue.trim() : '',
           date: sk.dateLabel ? d.sourceDate.trim() : '',
@@ -653,22 +658,32 @@ export default function PerkEditor({ perk, bookId, onClose }: Props) {
                     />
                   </div>
 
-                  {/* والوفاةُ والطبعةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
+                  {/* والوفاةُ والمحقِّقُ والطبعةُ للكتاب وحدَه: من سُمع منه حيٌّ
+                      يُرزق، وما نُشر على الشبكة لا محقِّقَ له ولا طبعة. والمحقِّقُ
+                      حقلٌ برأسه: كان يُكتب في سطر الطبعة أو في حقل المؤلِّف خطأً */}
                   {sk.isBook && (
-                    <div className="kn-field-pair">
-                      <Field
-                        label="وفاتُه"
-                        value={d.sourceDeath}
-                        onChange={(v) => set('sourceDeath', v)}
-                        placeholder="ت ٢٩١ هـ — إن عُرفت"
-                      />
+                    <>
+                      <div className="kn-field-pair">
+                        <Field
+                          label="وفاتُه"
+                          value={d.sourceDeath}
+                          onChange={(v) => set('sourceDeath', v)}
+                          placeholder="ت ٢٩١ هـ — إن عُرفت"
+                        />
+                        <Field
+                          label="محقِّقُه"
+                          value={d.sourceEditor}
+                          onChange={(v) => set('sourceEditor', v)}
+                          placeholder="أو المعتني به — إن كان"
+                        />
+                      </div>
                       <Field
                         label="طبعتُه"
                         value={d.sourceEdition}
                         onChange={(v) => set('sourceEdition', v)}
-                        placeholder="تحقيقُه ودارُه وسنتُه"
+                        placeholder="دارُه وبلدُه وسنتُه — دار الكتب المصرية، القاهرة، ١٣٧١ هـ"
                       />
-                    </div>
+                    </>
                   )}
 
                   {(sk.whereLabel || sk.dateLabel) && (

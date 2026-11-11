@@ -350,6 +350,7 @@ export function sourceView(
     const death = kind.isBook ? (src?.death ?? '').trim() : ''
     facts.push({ label: kind.whoTag, value: death ? `${who} (${death})` : who })
   }
+  if (kind.isBook && (src?.editor ?? '').trim()) facts.push({ label: 'المُحقِّق', value: src!.editor.trim() })
   const venue = (src?.venue ?? '').trim()
   if (kind.whereTag && venue && venue !== title) facts.push({ label: kind.whereTag, value: venue })
   if (kind.isBook && (src?.edition ?? '').trim()) facts.push({ label: 'الطبعة', value: src!.edition.trim() })
@@ -482,6 +483,7 @@ function haystack(perk: Perk, book: Book | undefined): string {
     // ومجلسُ السماع والموقعُ الذي نُشر فيه يُطلب بهما كما يُطلب بالطبعة — لِما
     // مصدرُه مكتوبٌ وحده، لا لفائدةٍ مصدرُها كتابٌ من الفهرس
     book ? '' : (perk.source?.edition ?? ''),
+    book ? '' : (perk.source?.editor ?? ''),
     book ? '' : (perk.source?.venue ?? ''),
   ].join(' ')
 }

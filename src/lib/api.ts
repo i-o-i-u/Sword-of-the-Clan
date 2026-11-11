@@ -107,7 +107,7 @@ function toPerk(row: Record<string, unknown>): Perk {
     // موضعٍ تقرؤه.
     source: src
       ? {
-        kind: SOURCE_BOOK, title: '', author: '', death: '', edition: '',
+        kind: SOURCE_BOOK, title: '', author: '', death: '', edition: '', editor: '',
         url: '', venue: '', date: '', ...src,
       }
       : null,
