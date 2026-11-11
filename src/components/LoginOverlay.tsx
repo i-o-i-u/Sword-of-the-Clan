@@ -8,14 +8,18 @@ import { claimOwnership, fetchOwnerRecord, ownerExists } from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { CloseButton, Overlay, cardStyle, tone } from './ui'
 
-const MIN_PASSWORD = 6
+const MIN_PASSWORD = 8
 
 /**
  * رسائل خطأ الدخول. رفضُ البريد يأتي من OWNER_EMAIL في الخادم برسالةٍ عربية
  * مفهومة، فتُمرَّر كما هي؛ وما عداه فبيانات خاطئة.
  */
 function describeSignInError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
+  // ما يرميه الخادمُ ليُقرأ نصُّه في `data` (`ConvexError`)، وفي الإنتاج لا يبقى
+  // من غيره إلا «Server Error» — فكان كلُّ إخفاقٍ يُقرأ «كلمة السر غير صحيحة»
+  const data = error && typeof error === 'object' && 'data' in error
+    ? String((error as { data: unknown }).data ?? '') : ''
+  const message = data || (error instanceof Error ? error.message : String(error ?? ''))
   if (message.includes('مستخدم واحد')) return 'هذا البريد ليس بريد صاحب المكتبة.'
   if (message.includes('OWNER_EMAIL')) {
     return 'إعداد الخادم ناقص: OWNER_EMAIL غير مضبوط على نشر Convex.'
@@ -32,8 +36,8 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [forgot, setForgot] = useState(false)
 
 
   /**
@@ -66,7 +70,6 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
-    setNotice('')
     setBusy(true)
     try {
       if (firstRun) {
@@ -190,14 +193,6 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {notice && (
-            <div style={{
-              fontSize: 12.5, color: 'var(--accent-soft)', background: 'var(--header)',
-              borderRadius: 8, padding: '8px 12px', lineHeight: 1.7,
-            }}>
-              {notice}
-            </div>
-          )}
 
           <button
             type="submit"
@@ -209,8 +204,33 @@ export default function LoginOverlay({ onClose }: { onClose: () => void }) {
               fontSize: 15, fontWeight: 700,
             }}
           >
-            {busy ? '…لحظة' : 'دخول'}
+            {busy ? '…لحظة' : firstRun ? 'إنشاء الحساب' : 'دخول'}
           </button>
+
+          {/* استردادُ كلمة السرّ: لا بريدَ يُرسَل من المكتبة، فتُعاد من لوحة Convex
+              بإجراءٍ داخليّ لا يبلغه متصفِّح (`account.resetPassword`) */}
+          {!firstRun && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
+              <button
+                type="button"
+                onClick={() => setForgot((v) => !v)}
+                aria-expanded={forgot}
+                style={{ border: 'none', background: 'none', padding: 0, color: 'var(--accent-soft)', textDecoration: 'underline', fontSize: 12 }}
+              >
+                نسيتَ كلمة السرّ؟
+              </button>
+              {forgot && (
+                <div style={{ marginTop: 6 }}>
+                  تُعاد من لوحة Convex لنشر الإنتاج: <em>Functions ← account ← resetPassword</em>،
+                  وتُكتب فيه كلمةُ السرّ الجديدة. أو من سطر الأوامر:
+                  <code dir="ltr" style={{ display: 'block', marginTop: 4, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                    {`npx convex run --prod account:resetPassword '{"password":"…"}'`}
+                  </code>
+                  وتُنهى معها الجلساتُ القائمة كلُّها.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </form>
     </Overlay>

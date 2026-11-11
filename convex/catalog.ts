@@ -1,7 +1,7 @@
 // المؤلِّفون والفوائد والإعارات والأرفف والتصنيفات والشرائح والإعدادات.
 // كلها لصاحب المكتبة وحده.
 
-import { v } from 'convex/values'
+import { ConvexError, v } from 'convex/values'
 import { mutation, type MutationCtx } from './_generated/server'
 import type { Doc, Id } from './_generated/dataModel'
 import { era, perkSource, visibility } from './schema'
@@ -73,7 +73,7 @@ async function applyDeath(
   },
 ) {
   const author = await ctx.db.get(id)
-  if (!author) throw new Error('لا مؤلِّف بهذا المعرّف.')
+  if (!author) throw new ConvexError('لا مؤلِّف بهذا المعرّف.')
 
   if (alive) {
     await ctx.db.patch(id, { alive: true, death: null, death_approx: false, death_text: '' })
@@ -122,6 +122,8 @@ export const ensureAuthors = mutation({
     await requireOwner(ctx)
     const out: { id: string; name: string }[] = []
     for (const row of rows) {
+      // الاسمُ الفارغ لا يُنشأ له سجلّ: الواجهةُ تُسقطه، والحارسُ ههنا
+      if (!row.name.trim()) throw new ConvexError('في الأسماء اسمٌ فارغ.')
       const id = await findOrCreateAuthorId(ctx, row.name)
       if (row.death) await applyDeath(ctx, id, row.death)
       out.push({ id, name: (await ctx.db.get(id))!.name })
@@ -153,7 +155,22 @@ export const updateAuthor = mutation({
   handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
     const before = await ctx.db.get(id)
-    if (!before) throw new Error('لا مؤلِّف بهذا المعرّف.')
+    if (!before) throw new ConvexError('لا مؤلِّف بهذا المعرّف.')
+
+    // الاسمُ فريدٌ في السجلّ بعد قصّ أطرافه، ولا يُمحى: كان قيدًا في SQL، وهو
+    // ههنا شرط. واسمان متطابقان رجلان في السجلّ لا يُفرَّق بينهما — يُدمجان.
+    if (patch.name !== undefined) {
+      const name = patch.name.trim()
+      if (!name) throw new ConvexError('الاسمُ لا يُترك فارغًا.')
+      if (name !== before.name) {
+        const twin = await ctx.db.query('authors')
+          .withIndex('by_name', (q) => q.eq('name', name)).first()
+        if (twin && twin._id !== id) {
+          throw new ConvexError(`في السجلّ اسمٌ مثله: «${name}». إن كانا رجلًا واحدًا فادمجهما من صفحته.`)
+        }
+      }
+      patch = { ...patch, name }
+    }
 
     await ctx.db.patch(id, patch)
 
@@ -206,6 +223,113 @@ export const updateAuthor = mutation({
         })
       }
     }
+  },
+})
+
+/** أفي هذا الكتاب ذكرٌ لهذا الشخص: مؤلِّفًا، أو مشارِكًا، أو في عنوانٍ مضموم؟ */
+function bookMentions(b: Doc<'books'>, id: Id<'authors'>): boolean {
+  return b.author_id === id
+    || (b.co_authors ?? []).some((c) => c.author_id === id)
+    || (b.contributors ?? []).some((c) => c.person_id === id)
+    || (b.within_titles ?? []).some(
+      (t) => t.author_id === id || (t.contributors ?? []).some((c) => c.person_id === id),
+    )
+}
+
+/** يرفع معرّفَ شخصٍ من قوائم الخصوصية، فلا تتراكم فيها معرّفاتٌ ميّتة */
+async function forgetAuthorInSettings(ctx: MutationCtx, id: Id<'authors'>) {
+  const s = await ctx.db.query('library_settings').first()
+  if (!s) return
+  const { [id as string]: _dropped, ...overrides } = s.author_field_overrides ?? {}
+  await ctx.db.patch(s._id, {
+    hidden_author_ids: (s.hidden_author_ids ?? []).filter((x) => x !== id),
+    author_field_overrides: overrides,
+    author_field_exceptions: Object.fromEntries(
+      Object.entries(s.author_field_exceptions ?? {})
+        .map(([field, ids]) => [field, ids.filter((x) => x !== id)]),
+    ),
+  })
+}
+
+/**
+ * حذفُ اسمٍ من سجلّ الأشخاص. **ولا يُحذف من له في المكتبة ذكر**: الكتابُ
+ * يحمل معرّفَه، وحذفُه يترك على الكتاب اسمًا بلا سجلّ. وإنما يُحذف اليتيمُ —
+ * اسمٌ كُتب خطأً ثم صُحِّح في نموذج الكتاب فبقي سجلُّه الأول بلا كتاب.
+ */
+export const removeAuthor = mutation({
+  args: { id: v.id('authors') },
+  handler: async (ctx, { id }) => {
+    await requireOwner(ctx)
+    const used = (await ctx.db.query('books').collect()).filter((b) => bookMentions(b, id))
+    if (used.length > 0) {
+      throw new ConvexError(
+        `له ذكرٌ في كتبٍ من المكتبة (عددها: ${used.length})، فلا يُحذف. ادمجه في غيره، أو ارفع اسمَه من كتبه أوّلًا.`,
+      )
+    }
+    await forgetAuthorInSettings(ctx, id)
+    await ctx.db.delete(id)
+  },
+})
+
+/**
+ * دمجُ سجلَّين لرجلٍ واحد: كلُّ ما نُسب إلى `from` يصير إلى `into` باسمه، ثم
+ * يُحذف `from`. يقع حين يُكتب الاسمُ بوجهين — «ابن تيميه» و«ابن تيمية» —
+ * فيقوم له سجلّان. وما خلا منه سجلُّ الباقي من وفاةٍ وترجمة يُسدّ من المحذوف.
+ */
+export const mergeAuthors = mutation({
+  args: { from: v.id('authors'), into: v.id('authors') },
+  handler: async (ctx, { from, into }) => {
+    await requireOwner(ctx)
+    if (from === into) throw new ConvexError('لا يُدمج الاسمُ في نفسه.')
+    const source = await ctx.db.get(from)
+    const target = await ctx.db.get(into)
+    if (!source || !target) throw new ConvexError('لا مؤلِّف بهذا المعرّف.')
+    const name = target.name
+
+    const swap = <T extends { name: string; person_id?: Id<'authors'> | null }>(rows: T[] | undefined) =>
+      (rows ?? []).map((c) => (c.person_id === from ? { ...c, person_id: into, name } : c))
+
+    for (const b of await ctx.db.query('books').collect()) {
+      if (!bookMentions(b, from)) continue
+      const authorId = b.author_id === from ? into : b.author_id
+      // ومن صار مؤلِّفَه الأولَ ومشارِكَه معًا لا يُذكر مرَّتين
+      const seen = new Set<string>(authorId ? [authorId] : [])
+      const coAuthors = (b.co_authors ?? [])
+        .map((c) => (c.author_id === from ? { author_id: into, name } : c))
+        .filter((c) => {
+          if (!c.author_id) return true
+          if (seen.has(c.author_id)) return false
+          seen.add(c.author_id)
+          return true
+        })
+      await ctx.db.patch(b._id, {
+        author_id: authorId,
+        author_name: b.author_id === from ? name : b.author_name,
+        co_authors: coAuthors,
+        contributors: swap(b.contributors),
+        within_titles: (b.within_titles ?? []).map((t) => ({
+          ...t,
+          author_id: t.author_id === from ? into : t.author_id,
+          author_name: t.author_id === from ? name : t.author_name,
+          contributors: swap(t.contributors),
+        })),
+      })
+    }
+
+    const hasDeath = target.alive || target.death !== null
+      || (target.death_approx && !!target.death_text.trim())
+    await ctx.db.patch(into, {
+      full_name: target.full_name.trim() ? target.full_name : source.full_name,
+      bio: target.bio.trim() ? target.bio : source.bio,
+      birth: target.birth ?? source.birth,
+      ...(hasDeath ? {} : {
+        death: source.death, era: source.era, alive: source.alive,
+        death_approx: source.death_approx, death_text: source.death_text,
+      }),
+    })
+
+    await forgetAuthorInSettings(ctx, from)
+    await ctx.db.delete(from)
   },
 })
 
@@ -262,7 +386,11 @@ export const updatePerk = mutation({
   args: { id: v.id('perks'), patch: v.object(perkFields) },
   handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
-    await ctx.db.patch(id, patch)
+    // النموذجُ يُرسل حقولَ الفائدة كلَّها، فما غاب منها فقد رُفع: **والمصدرُ
+    // المكتوب أوّلُ ذلك** — فائدةٌ حُوِّلت من سماعٍ إلى كتابٍ من الفهرس لا يبقى
+    // عليها مجلسُ السماع وتاريخُه. والحقلُ الغائب لا يمسّه `patch`، فيُكتب
+    // غيابُه صراحةً ليُرفع.
+    await ctx.db.patch(id, { ...patch, source: patch.source })
   },
 })
 
@@ -305,7 +433,7 @@ export const bulkEditPerks = mutation({
   handler: async (ctx, { ids, field, op, value }) => {
     await requireOwner(ctx)
     const name = value.trim()
-    if (!name) throw new Error('القيمة فارغة.')
+    if (!name) throw new ConvexError('القيمة فارغة.')
     // ومن أضاف عَلَمًا لم يُسجَّل سُجِّل، كما يُسجَّل من نموذج الفائدة
     if (field === 'people' && op === 'add') {
       const found = await ctx.db.query('perk_figures')
@@ -315,7 +443,11 @@ export const bulkEditPerks = mutation({
     for (const id of new Set(ids)) {
       const p = await ctx.db.get(id)
       if (!p) continue
-      const list: string[] = p[field] ?? []
+      // القائمةُ كما تقرؤها الواجهة: الحقلُ المفرد القديم مرفوعٌ إليها، وإلّا
+      // سقط نوعُ الفائدة القديمُ بأوّل إضافةٍ جماعيّة
+      const list: string[] = field === 'tags' || field === 'notebook_ids'
+        ? (p[field] ?? [])
+        : listOf(p, field)
       const has = list.includes(name)
       if (op === 'add' && !has) await ctx.db.patch(id, { [field]: [...list, name] })
       if (op === 'remove' && has) await ctx.db.patch(id, { [field]: list.filter((x) => x !== name) })
@@ -601,7 +733,7 @@ export const findOrCreatePerkFigure = mutation({
   handler: async (ctx, { name, death }) => {
     await requireOwner(ctx)
     const trimmed = name.trim()
-    if (!trimmed) throw new Error('اسم العَلَم فارغ.')
+    if (!trimmed) throw new ConvexError('اسم العَلَم فارغ.')
     const found = await ctx.db
       .query('perk_figures')
       .withIndex('by_name', (q) => q.eq('name', trimmed))
@@ -618,7 +750,7 @@ export const insertNotebook = mutation({
   handler: async (ctx, { name, note, icon }) => {
     await requireOwner(ctx)
     const trimmed = name.trim()
-    if (!trimmed) throw new Error('اسم الكرّاسة فارغ.')
+    if (!trimmed) throw new ConvexError('اسم الكرّاسة فارغ.')
     return await ctx.db.insert('perk_notebooks', {
       name: trimmed, note: (note ?? '').trim(), icon: icon ?? '',
     })
@@ -644,7 +776,7 @@ export const updateNotebook = mutation({
     // والواجهةُ تمنع ذلك، غير أنّ الحارسَ في الخادم لا فيها
     if (patch.name !== undefined) {
       const name = patch.name.trim()
-      if (!name) throw new Error('اسم الكرّاسة فارغ.')
+      if (!name) throw new ConvexError('اسم الكرّاسة فارغ.')
       patch = { ...patch, name }
     }
     if (patch.layout) {
@@ -695,8 +827,10 @@ export const insertLoan = mutation({
   },
   handler: async (ctx, loan) => {
     await requireOwner(ctx)
+    if (!loan.borrower.trim()) throw new ConvexError('اكتب اسمَ المستعير.')
     await ctx.db.insert('loans', {
       ...loan,
+      borrower: loan.borrower.trim(),
       // كان current_date. ويومُ الإعارة بتوقيت مكّة (+٣) لا بالتوقيت العالميّ،
       // وإلّا كُتب ما يُعار بين منتصف الليل والثالثة فجرًا بتاريخ الأمس
       lent_date: new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10),
@@ -710,6 +844,36 @@ export const returnLoan = mutation({
   handler: async (ctx, { id }) => {
     await requireOwner(ctx)
     await ctx.db.patch(id, { returned: true })
+  },
+})
+
+/** تصحيحُ إعارةٍ سُجِّلت: اسمُ المستعير وموعدُ الردّ، وردُّها إلى «قيد الإعارة» */
+export const updateLoan = mutation({
+  args: {
+    id: v.id('loans'),
+    patch: v.object({
+      borrower: v.optional(v.string()),
+      due_date: v.optional(v.union(v.string(), v.null())),
+      returned: v.optional(v.boolean()),
+    }),
+  },
+  handler: async (ctx, { id, patch }) => {
+    await requireOwner(ctx)
+    if (patch.borrower !== undefined) {
+      const borrower = patch.borrower.trim()
+      if (!borrower) throw new ConvexError('اسمُ المستعير لا يُترك فارغًا.')
+      patch = { ...patch, borrower }
+    }
+    await ctx.db.patch(id, patch)
+  },
+})
+
+/** حذفُ إعارةٍ سُجِّلت خطأً: السجلُّ لا يحفظ ما لم يقع */
+export const removeLoan = mutation({
+  args: { id: v.id('loans') },
+  handler: async (ctx, { id }) => {
+    await requireOwner(ctx)
+    await ctx.db.delete(id)
   },
 })
 
@@ -760,10 +924,17 @@ export const updateSettings = mutation({
       hidden_publisher_fields: v.optional(v.array(v.string())),
       publisher_field_exceptions: v.optional(v.record(v.string(), v.array(v.string()))),
       publisher_field_overrides: v.optional(v.record(v.string(), v.array(v.string()))),
+
+      // العلامتان تصلان مع الإعدادات حين تُحفظ كلُّها من نافذتها، **فتُقبلان
+      // ولا تُكتبان**: يرفعهما `markSet` وحده. وكانتا خارج المُصدِّق، فيردّ
+      // الطلبَ كلَّه — فلم تحفظ نافذةُ الإعدادات شيئًا منذ أُضيفتا.
+      perk_kinds_set: v.optional(v.boolean()),
+      perk_categories_set: v.optional(v.boolean()),
     }),
   },
-  handler: async (ctx, { patch }) => {
+  handler: async (ctx, { patch: input }) => {
     await requireOwner(ctx)
+    const { perk_kinds_set: _k, perk_categories_set: _c, ...patch } = input
     const row = await ctx.db.query('library_settings').first()
     if (row) await ctx.db.patch(row._id, patch)
     else await ctx.db.insert('library_settings', { ...DEFAULT_SETTINGS, ...patch })
@@ -784,7 +955,7 @@ export const findOrCreatePublisher = mutation({
   handler: async (ctx, { name, place }) => {
     await requireOwner(ctx)
     const trimmed = name.trim()
-    if (!trimmed) throw new Error('اسم الدار فارغ.')
+    if (!trimmed) throw new ConvexError('اسم الدار فارغ.')
 
     const found = await ctx.db
       .query('publishers')
@@ -815,7 +986,7 @@ export const ensurePublishers = mutation({
     const out: { id: string; name: string; place: string }[] = []
     for (const { name, place } of rows) {
       const trimmed = name.trim()
-      if (!trimmed) throw new Error('اسم الدار فارغ.')
+      if (!trimmed) throw new ConvexError('اسم الدار فارغ.')
       const found = await ctx.db
         .query('publishers')
         .withIndex('by_name', (q) => q.eq('name', trimmed))
@@ -854,7 +1025,19 @@ export const updatePublisher = mutation({
   handler: async (ctx, { id, patch }) => {
     await requireOwner(ctx)
     const before = await ctx.db.get(id)
-    if (!before) throw new Error('لا دار بهذا المعرّف.')
+    if (!before) throw new ConvexError('لا دار بهذا المعرّف.')
+
+    // اسمُ الدار فريدٌ ولا يُمحى، كاسم المؤلِّف
+    if (patch.name !== undefined) {
+      const name = patch.name.trim()
+      if (!name) throw new ConvexError('اسمُ الدار لا يُترك فارغًا.')
+      if (name !== before.name) {
+        const twin = await ctx.db.query('publishers')
+          .withIndex('by_name', (q) => q.eq('name', name)).first()
+        if (twin && twin._id !== id) throw new ConvexError(`في السجلّ دارٌ بهذا الاسم: «${name}».`)
+      }
+      patch = { ...patch, name }
+    }
 
     await ctx.db.patch(id, patch)
 
@@ -922,8 +1105,10 @@ export const removePublisher = mutation({
 /** `parent` فارغًا: تصنيفٌ رئيس. وباسم رئيسه: فرعٌ تحته. */
 export const addCategory = mutation({
   args: { name: v.string(), position: v.number(), parent: v.optional(v.string()) },
-  handler: async (ctx, { name, position, parent }) => {
+  handler: async (ctx, { name: raw, position, parent }) => {
     await requireOwner(ctx)
+    const name = raw.trim()
+    if (!name) throw new ConvexError('اسمُ التصنيف فارغ.')
     const exists = await ctx.db
       .query('categories').withIndex('by_name', (q) => q.eq('name', name)).first()
     if (exists) return
@@ -931,7 +1116,51 @@ export const addCategory = mutation({
   },
 })
 
-/** حذفُ الرئيس يحذف فروعَه معه: الفرعُ لا يقوم بغير رئيسه */
+/**
+ * يُمضي تبديلًا في التصنيف على الكتب وعناوينها المضمومة: الاسمُ مكتوبٌ على
+ * الكتاب نصًّا — رئيسُه وفرعُه — فيُزامَن كما يُزامَن اسمُ المؤلِّف والدار.
+ */
+async function recategorize(
+  ctx: MutationCtx,
+  fix: (category: string, sub: string) => { category: string; sub: string },
+) {
+  for (const b of await ctx.db.query('books').collect()) {
+    const own = fix(b.category, b.sub_category ?? '')
+    const ownChanged = own.category !== b.category || own.sub !== (b.sub_category ?? '')
+    let titlesChanged = false
+    const titles = (b.within_titles ?? []).map((t) => {
+      const next = fix(t.category ?? '', t.sub_category ?? '')
+      if (next.category === (t.category ?? '') && next.sub === (t.sub_category ?? '')) return t
+      titlesChanged = true
+      return { ...t, category: next.category, sub_category: next.sub }
+    })
+    if (!ownChanged && !titlesChanged) continue
+    await ctx.db.patch(b._id, {
+      ...(ownChanged ? { category: own.category, sub_category: own.sub } : {}),
+      ...(titlesChanged ? { within_titles: titles } : {}),
+    })
+  }
+}
+
+/** يُبدّل أسماءً في قائمة التصنيفات المخفيّة، أو يرفعها (`to` فارغًا) */
+async function syncHiddenCategories(ctx: MutationCtx, names: Map<string, string>) {
+  const s = await ctx.db.query('library_settings').first()
+  if (!s) return
+  const next = [...new Set(
+    s.hidden_categories.map((n) => (names.has(n) ? names.get(n)! : n)).filter(Boolean),
+  )]
+  if (JSON.stringify(next) !== JSON.stringify(s.hidden_categories)) {
+    await ctx.db.patch(s._id, { hidden_categories: next })
+  }
+}
+
+/**
+ * حذفُ تصنيف. وحذفُ الرئيس يحذف فروعَه معه: الفرعُ لا يقوم بغير رئيسه.
+ *
+ * **ويُرفع اسمُه من الكتب** ومن قائمة المخفيّ: كان يبقى مكتوبًا على الكتب
+ * فلا يُبلَغ من عمود التصفُّح ولا يُعرف أنه حُذف. ولا يُحذف كتابٌ واحد —
+ * التصنيفُ صفةٌ للكتاب لا وعاءٌ له.
+ */
 export const removeCategory = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
@@ -940,12 +1169,57 @@ export const removeCategory = mutation({
       .query('categories').withIndex('by_name', (q) => q.eq('name', name)).first()
     if (!row) return
 
+    const gone = new Map<string, string>([[name, '']])
     if (!row.parent) {
       const children = (await ctx.db.query('categories').collect())
         .filter((c) => c.parent === name)
-      for (const child of children) await ctx.db.delete(child._id)
+      for (const child of children) {
+        gone.set(child.name, '')
+        await ctx.db.delete(child._id)
+      }
+      // والرئيسُ يرفع معه فرعَ الكتاب: الفرعُ لا يُحفظ بغير رئيسه
+      await recategorize(ctx, (category, sub) => (
+        category === name ? { category: '', sub: '' } : { category, sub }
+      ))
+    } else {
+      await recategorize(ctx, (category, sub) => ({ category, sub: sub === name ? '' : sub }))
     }
+    await syncHiddenCategories(ctx, gone)
     await ctx.db.delete(row._id)
+  },
+})
+
+/**
+ * تسميةُ تصنيفٍ من جديد. والاسمُ مكتوبٌ في فروعه (`parent`) وعلى الكتب وفي
+ * قائمة المخفيّ، فيُزامَن فيها كلِّها — ولولا ذلك لكان تصحيحُ حرفٍ في اسمه
+ * حذفًا له وإنشاءً لغيره، فتضيع نسبةُ كتبه.
+ */
+export const renameCategory = mutation({
+  args: { name: v.string(), to: v.string() },
+  handler: async (ctx, { name, to: raw }) => {
+    await requireOwner(ctx)
+    const to = raw.trim()
+    if (!to) throw new ConvexError('اسمُ التصنيف لا يُترك فارغًا.')
+    if (to === name) return
+    const row = await ctx.db
+      .query('categories').withIndex('by_name', (q) => q.eq('name', name)).first()
+    if (!row) throw new ConvexError('لا تصنيفَ بهذا الاسم.')
+    const taken = await ctx.db
+      .query('categories').withIndex('by_name', (q) => q.eq('name', to)).first()
+    if (taken) throw new ConvexError(`في التصنيفات اسمٌ مثله: «${to}».`)
+
+    await ctx.db.patch(row._id, { name: to })
+    if (!row.parent) {
+      for (const child of await ctx.db.query('categories').collect()) {
+        if (child.parent === name) await ctx.db.patch(child._id, { parent: to })
+      }
+      await recategorize(ctx, (category, sub) => ({
+        category: category === name ? to : category, sub,
+      }))
+    } else {
+      await recategorize(ctx, (category, sub) => ({ category, sub: sub === name ? to : sub }))
+    }
+    await syncHiddenCategories(ctx, new Map([[name, to]]))
   },
 })
 

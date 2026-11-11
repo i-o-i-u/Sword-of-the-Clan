@@ -1304,9 +1304,12 @@ export function starsText(rating: number): string {
   return rating > 0 ? '★'.repeat(rating) + '☆'.repeat(5 - rating) : '—'
 }
 
-/** عدد المجلدات المادية المعروضة على الرف، بحدٍّ أقصى ٤٠ كعبًا */
+/**
+ * عددُ المجلَّدات الماديّة. **بلا سقف**: كان مقصوصًا على أربعين، فيقول الجدولُ
+ * «٤٠» لكتابٍ في ستّين مجلَّدًا ويعدّ الرفُّ ناقصًا.
+ */
 export function volumesOf(book: Pick<Book, 'volumes'>): number {
-  return Math.min(40, Math.max(1, book.volumes ?? 1))
+  return Math.max(1, Math.round(book.volumes ?? 1))
 }
 
 // ------------------------------------------------------------- عن المكتبة

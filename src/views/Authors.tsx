@@ -6,6 +6,7 @@
 // إدخالٍ وهو إنما جاء ليقرأ.
 
 import { useMemo, useState } from 'react'
+import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { goBack, navigate, pressable } from '../lib/router'
 import { lifeLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
@@ -102,8 +103,10 @@ export function AuthorsIndex() {
  * صفحةٌ واحدة، فلا يُشقّ له مسارٌ ثانٍ.
  */
 export function AuthorPage({ authorId }: { authorId: string }) {
-  const { authors, books, canEdit, patchAuthor } = useLibrary()
+  const { authors, books, canEdit, patchAuthor, run } = useLibrary()
   const author = authors.find((a) => a.id === authorId)
+  /** الاسمُ الذي يُدمج فيه هذا السجلّ، يُختار من السجلّ نفسه */
+  const [mergeInto, setMergeInto] = useState('')
 
   // الصفحة عرضٌ حتى يُطلب التعديل، فالقلمُ هو ما يفتح الحقول
   const [editing, setEditing] = useState(false)
@@ -132,6 +135,8 @@ export function AuthorPage({ authorId }: { authorId: string }) {
   // واعتنى فمحقِّق. ومن لا عمل له في المكتبة بعدُ يبقى على «المؤلِّف» — هو
   // الأصلُ الذي تُفتح به صفحةُ اسمٍ لم يُنسب إليه شيء.
   const rank = useMemo(() => topRole(books, authorId), [books, authorId])
+  /** اسمٌ لا ذكرَ له في كتابٍ من المكتبة: يُحذف، وما سواه يُدمج */
+  const orphan = rank === null
   const editLabel = `تعديل بيانات ${rolePersonLabel(rank ?? AUTHOR_ROLE)}`
 
   if (!author) {
@@ -265,6 +270,67 @@ export function AuthorPage({ authorId }: { authorId: string }) {
 
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
               يُحفظ ما تكتبه من تلقائه بعد أن تكفّ عن الكتابة.
+            </div>
+
+            {/* الدمجُ والحذف: الاسمُ يُكتب بوجهين فيقوم له سجلّان، أو يُصحَّح في
+                نموذج الكتاب فيبقى سجلُّه الأوّل يتيمًا بلا كتاب */}
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 18, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>هو والاسمُ</span>
+                <select
+                  value={mergeInto}
+                  onChange={(e) => setMergeInto(e.target.value)}
+                  aria-label="الاسم الذي يُدمج فيه"
+                  style={{ ...inputStyle, width: 'auto', minWidth: 220, flex: 1 }}
+                >
+                  <option value="">— اختر من السجلّ —</option>
+                  {authors
+                    .filter((a) => a.id !== author.id)
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+                    .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>رجلٌ واحد</span>
+                <button
+                  type="button"
+                  disabled={!mergeInto}
+                  onClick={async () => {
+                    const target = authors.find((a) => a.id === mergeInto)
+                    if (!target) return
+                    if (!window.confirm(
+                      `دمجُ «${author.name}» في «${target.name}»؟ ينتقل إليه كلُّ ما نُسب إلى هذا الاسم من كتبٍ وأعمال، ثم يُحذف هذا السجلّ. لا رجعة في هذا.`,
+                    )) return
+                    if (await run(() => api.mergeAuthors(author.id, target.id))) {
+                      navigate({ name: 'author', id: target.id })
+                    }
+                  }}
+                  style={{
+                    border: '1px solid var(--accent)', background: 'none', color: 'var(--accent)',
+                    borderRadius: 8, padding: '7px 14px', fontSize: 12.5,
+                    opacity: mergeInto ? 1 : 0.5,
+                  }}
+                >
+                  ادمجهما
+                </button>
+              </div>
+
+              {orphan && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!window.confirm(`حذفُ «${author.name}» من سجلّ الأشخاص؟ لا كتابَ له في المكتبة. لا رجعة في هذا.`)) return
+                      if (await run(() => api.removeAuthor(author.id))) navigate({ name: 'authors' })
+                    }}
+                    style={{
+                      border: '1px solid var(--danger)', background: 'none', color: 'var(--danger)',
+                      borderRadius: 8, padding: '7px 15px', fontSize: 12.5,
+                    }}
+                  >
+                    حذف هذا الاسم من السجلّ
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : (

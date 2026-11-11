@@ -11,7 +11,7 @@ import {
 import { useLibrary } from '../lib/library'
 import { linkTo, navigate } from '../lib/router'
 import { useViewState } from '../lib/viewState'
-import { deathLabel, toArabicDigits, toHijriYear } from '../lib/hijri'
+import { deathCentury, deathLabel, deathSortKey, toArabicDigits, toHijriYear } from '../lib/hijri'
 import {
   ALL_SEARCH_KEYS, DEFAULT_SEARCH_KEYS, QUICK_OPTS, SEARCH_FIELDS,
   bookTexts, matchTexts, normalizeText, withinText, type SearchOptions,
@@ -100,17 +100,24 @@ export default function Browse() {
   const advancedOn = advanced && canUseAdvanced
   const canSeeStats = isOwner || settings.visibility.stats
   const canUseCalculator = isOwner || settings.show_calculator
+  // وما حُجب عن الزائر من الحالة والتقييم لا يُرشَّح به: مرشِّحٌ لا يُخرج شيئًا
+  // ليس مرشِّحًا. وكذلك الترتيبُ بالتقييم والقيمة
+  const canSeeStatus = isOwner || settings.visibility.status
+  const canSeeRatings = isOwner || settings.visibility.ratings
+  const canSeeValue = isOwner || settings.visibility.value
+  const sortOptions = SORT_OPTIONS.filter((o) => (o.key !== 'rating' || canSeeRatings)
+    && (o.key !== 'value' || canSeeValue))
 
   const searchOpts = advancedOn ? opts : QUICK_OPTS
   const searchKeys = advancedOn ? fields : ALL_SEARCH_KEYS
 
   // ------------------------------------------------------------ المرشِّحات
   /** قرن وفاة صاحب الكتاب، هجريًّا. صفرٌ لمن لا وفاة له. */
-  const centuryOf = useMemo(() => (b: Book) => {
-    const a = authorById(b.author_id)
-    const y = a ? toHijriYear(a.death, a.era) : null
-    return y == null || y <= 0 ? 0 : Math.ceil(y / 100)
-  }, [authorById])
+  // والوفاةُ التقريبية تُعدّ في قرنها («نحو ١٠٦٠»، «القرن الرابع»)، لا تسقط
+  const centuryOf = useMemo(
+    () => (b: Book) => deathCentury(authorById(b.author_id)),
+    [authorById],
+  )
 
   const passCabinet = (b: Book) => filterCabinet === ALL || b.cabinet_no.trim() === filterCabinet
   // التصنيف يُصفّى برئيسه، ثم بفرعه إن اختير — والاثنان محفوظان في الكتاب
@@ -141,6 +148,22 @@ export default function Browse() {
     () => normalizeText(deferredQuery.trim(), searchOpts),
     [deferredQuery, searchOpts],
   )
+  /**
+   * ما يُضيفه الكتابُ إلى العرض من بطاقات على المرشِّحات القائمة — ويجوز استثناء
+   * وجهٍ لحساب عدّاده: هو نفسُه إن ظهر ولم يكن مجموعةً ولا نشرةً أخرى، وما ظهر
+   * من عناوينه المضمومة. **وعليه تقوم عدّاداتُ الدواليب والتصنيفات**: كانت تعدّ
+   * السجلّات — والنشرةُ الأخرى منها — ولا تعدّ العنوانَ المضموم الذي يُظهره
+   * النقر، فيقول العدّادُ صفرًا ويُخرج النقرُ كتبًا.
+   */
+  const cardsOf = (b: Book, except?: 'cabinet' | 'category') => {
+    if (!(except === 'cabinet' || passCabinet(b))) return 0
+    if (!(passStatus(b) && passPlace(b) && passRating(b) && passCentury(b))) return 0
+    const own = (except === 'category' || passCategory(b)) && passLetter(b) && passSearch(b)
+      && !isCollection(b) && (viewMode === 'shelf' || !b.edition_of)
+    return (own ? 1 : 0)
+      + withinTitlesOf(b).filter((t, i) => passWithin(b, t, i, except)).length
+  }
+
   /** الكتبُ التي أصابها البحثُ في نفسها، أو `null` إن لم يكن بحث */
   const searchHits = useMemo(() => {
     if (!needle) return null
@@ -179,17 +202,16 @@ export default function Browse() {
   }
 
   const sorter = useMemo(() => {
-    const deathKey = (b: Book) => {
-      const a = authorById(b.author_id)
-      const v = a ? toHijriYear(a.death, a.era) : null
-      return v == null ? 1e9 : v
-    }
+    // والتقريبُ يُرتَّب في موضعه من الزمن لا آخرًا مع الأحياء (`deathSortKey`)
+    const deathKey = (b: Book) => deathSortKey(authorById(b.author_id))
+    // وسنةُ النشر تُرتَّب هجريّةً: كانت تُقارَن أرقامُها خامًا، فتسبق ١٩٩٠ م ١٤٤٧ هـ
+    const yearKey = (b: Book) => toHijriYear(b.year, b.year_era) ?? -1e9
     const byTitle = (a: Book, b: Book) => a.title.localeCompare(b.title, 'ar')
     const sorters: Record<SortKey, (a: Book, b: Book) => number> = {
       authorDeath: (a, b) => (deathKey(a) - deathKey(b)) || byTitle(a, b),
       title: byTitle,
       newest: (a, b) => b.created_at.localeCompare(a.created_at),
-      year: (a, b) => (b.year ?? 0) - (a.year ?? 0),
+      year: (a, b) => yearKey(b) - yearKey(a),
       rating: (a, b) => b.rating - a.rating,
       volumes: (a, b) => (b.volumes ?? 0) - (a.volumes ?? 0),
       pages: (a, b) => (b.pages ?? 0) - (a.pages ?? 0),
@@ -285,26 +307,41 @@ export default function Browse() {
   )
 
   // عدّاد كل وجهٍ يُحسب مقابل بقية المرشِّحات النشطة، لا مقابل الكل
+  /** بطاقاتُ الكتاب في تصنيفٍ بعينه وفرعه، على سائر المرشِّحات القائمة */
+  const categoryCards = (b: Book, category: string, sub: string) => {
+    if (!(passCabinet(b) && passStatus(b) && passPlace(b) && passRating(b) && passCentury(b))) return 0
+    const inCat = (c: string, s: string) => c === category && (sub === ALL || s === sub)
+    const own = inCat(b.category, b.sub_category) && passLetter(b) && passSearch(b)
+      && !isCollection(b) && (viewMode === 'shelf' || !b.edition_of)
+    return (own ? 1 : 0) + withinTitlesOf(b).filter((t, i) => inCat(t.category ?? '', t.sub_category ?? '')
+      && (!filterLetter || titleInitial(t.title) === filterLetter) && withinHit(b, i)).length
+  }
+
   const cabinetFacets = useMemo(
     () => [ALL, ...cabinets].map((name) => ({
       name,
       label: name === ALL ? 'كل الدواليب' : `دولاب ${name}`,
-      count: books.filter((b) => (name === ALL || b.cabinet_no.trim() === name) && passes(b, 'cabinet')).length,
+      count: books
+        .filter((b) => name === ALL || b.cabinet_no.trim() === name)
+        .reduce((n, b) => n + cardsOf(b, 'cabinet'), 0),
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, cabinets, filterCategory, filterSub, filterStatus, filterPlace, filterRating,
-      filterCentury, filterLetter, searchHits, withinTexts, needle],
+      filterCentury, filterLetter, searchHits, withinTexts, needle, viewMode],
   )
 
   const categoryFacets = useMemo(
     () => [ALL, ...mainCategories].map((name) => ({
       name,
       label: name === ALL ? 'كل التصنيفات' : name,
-      count: books.filter((b) => (name === ALL || b.category === name) && passes(b, 'category')).length,
+      // والعنوانُ المضموم يُعدّ في تصنيفه هو لا في تصنيف ضامِّه
+      count: name === ALL
+        ? books.reduce((n, b) => n + cardsOf(b, 'category'), 0)
+        : books.reduce((n, b) => n + categoryCards(b, name, ALL), 0),
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [books, mainCategories, filterCabinet, filterStatus, filterPlace, filterRating,
-      filterCentury, filterLetter, searchHits, withinTexts, needle],
+      filterCentury, filterLetter, searchHits, withinTexts, needle, viewMode],
   )
 
   /**
@@ -321,6 +358,14 @@ export default function Browse() {
     setFilterCategory(ALL); setFilterSub(ALL)
     setFilterPlace(ALL); setFilterRating(0); setFilterCentury(0)
   }
+
+  /** يرفع كلَّ ما ضيّق الفهرس: الدولابَ والحالةَ والحرفَ والبحثَ مع التصفيات */
+  function clearEverything() {
+    clearFilters()
+    setFilterCabinet(ALL); setFilterStatus(ALL); setFilterLetter(''); setQuery('')
+  }
+  const narrowed = activeFilters > 0 || filterCabinet !== ALL || filterStatus !== ALL
+    || !!filterLetter || !!query.trim()
 
   /** اختيارُ رئيسٍ جديد يُسقط فرعَ سابقه: الفرعُ لا يقوم بغير رئيسه */
   function chooseCategory(name: string) {
@@ -408,9 +453,7 @@ export default function Browse() {
                       <span>{sub === ALL ? 'كل الفروع' : sub}</span>
                       <span style={countPillStyle(filterSub === sub)}>
                         {/* بالمرشِّحات القائمة كعدّادات إخوته، لا بالفهرس كلِّه */}
-                        {books.filter((b) => b.category === f.name
-                          && (sub === ALL || b.sub_category === sub)
-                          && passes(b, 'category')).length}
+                        {books.reduce((n, b) => n + categoryCards(b, f.name, sub), 0)}
                       </span>
                     </button>
                   ))}
@@ -420,6 +463,7 @@ export default function Browse() {
           ))}
         </div>
 
+        {canSeeStatus && (
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
             حالة القراءة (اختياري)
@@ -437,6 +481,7 @@ export default function Browse() {
             </select>
           </label>
         </div>
+        )}
         </div>
       </aside>
 
@@ -546,7 +591,7 @@ export default function Browse() {
               aria-label="طريقة الترتيب"
               style={toolStyle}
             >
-              {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              {sortOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
 
             <button
@@ -580,6 +625,7 @@ export default function Browse() {
               category={filterCategory} onCategory={chooseCategory}
               place={filterPlace} onPlace={setFilterPlace}
               rating={filterRating} onRating={setFilterRating}
+              showRating={canSeeRatings}
               century={filterCentury} onCentury={setFilterCentury}
               activeCount={activeFilters}
               onClear={clearFilters}
@@ -683,7 +729,21 @@ export default function Browse() {
         </section>
 
         {listed.length === 0 ? (
-          <EmptyState title="لا توجد كتب مطابقة" hint="جرّب تعديل الفلاتر أو كلمة البحث" />
+          // المكتبةُ الخالية غيرُ الترشيح الذي لم يُصب: لكلٍّ خبرُه
+          books.length === 0 ? (
+            <EmptyState title="لم يُفهرس كتابٌ بعد" hint="تظهر الكتبُ ههنا أوّلَ ما تُضاف إلى الفهرس." />
+          ) : (
+            <div>
+              <EmptyState title="لا كتبَ تطابق هذا الترشيح" hint="وسِّع البحث، أو ارفع شرطًا من الشروط." />
+              {narrowed && (
+                <div style={{ textAlign: 'center', marginTop: -56 }}>
+                  <button type="button" onClick={clearEverything} style={toolStyle}>
+                    ارفع الترشيحَ كلَّه
+                  </button>
+                </div>
+              )}
+            </div>
+          )
         ) : viewMode === 'grid' ? (
           <>
             <GridView books={page} within={shownWithin} />
@@ -695,11 +755,14 @@ export default function Browse() {
             <MoreSentinel shown={page.length} total={listed.length} onMore={more} />
           </>
         ) : (
-          <ShelfView
-            books={listed}
-            cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]}
-            dots={settings.show_status_dots}
-          />
+          <>
+            <ShelfView
+              books={page}
+              cabinets={filterCabinet === ALL ? cabinets : [filterCabinet]}
+              dots={settings.show_status_dots}
+            />
+            <MoreSentinel shown={page.length} total={listed.length} onMore={more} />
+          </>
         )}
       </div>
 
@@ -726,7 +789,7 @@ function viewName(label: string): string {
 // ---------------------------------------------------------- لوحة التصفيات
 function FiltersPanel(
   { categories, places, centuries, category, onCategory, place, onPlace,
-    rating, onRating, century, onCentury, activeCount, onClear }: {
+    rating, onRating, showRating, century, onCentury, activeCount, onClear }: {
     categories: string[]
     places: string[]
     centuries: number[]
@@ -736,6 +799,7 @@ function FiltersPanel(
     onPlace: (v: string) => void
     rating: number
     onRating: (v: number) => void
+    showRating: boolean
     century: number
     onCentury: (v: number) => void
     activeCount: number
@@ -763,6 +827,7 @@ function FiltersPanel(
           ))}
       </FilterRow>
 
+      {showRating && (
       <FilterRow label="التقييم" icon={<span style={{ color: 'var(--star)' }}>★</span>}>
         <button type="button" onClick={() => onRating(0)} style={chipStyle(rating === 0)}>الكل</button>
         {[5, 4, 3, 2, 1].map((n) => (
@@ -771,6 +836,7 @@ function FiltersPanel(
           </button>
         ))}
       </FilterRow>
+      )}
 
       <FilterRow label="قرن وفاة المؤلِّف" icon={<HourglassIcon size={13} />}>
         <button type="button" onClick={() => onCentury(0)} style={chipStyle(century === 0)}>الكل</button>
@@ -1021,16 +1087,17 @@ function CatalogBadge({ book }: { book: Book }) {
   if (score.missing <= 0) return null
 
   // اللون يتدرّج بقدر النقص: أخضرُ لِما قارب التمام، فأصفر، فأحمرُ للمُقِلّ
+  // من رموز المظهر لا ألوانًا ثابتة، فتتبع المظاهرَ الثلاثة
   const tone = score.percent >= 80
-    ? 'oklch(0.55 0.11 150)'
-    : score.percent >= 50 ? 'oklch(0.62 0.14 75)' : 'oklch(0.55 0.15 30)'
+    ? 'var(--ok)'
+    : score.percent >= 50 ? 'var(--warn)' : 'var(--danger)'
 
   return (
     <span
       className="catalog-badge"
       title={`الحقول المفهرسة: ${score.filled} من ${score.total} — الناقص: ${score.missing}٪`}
       style={{
-        background: `conic-gradient(${tone} ${score.percent * 3.6}deg, oklch(0.85 0.01 60) 0)`,
+        background: `conic-gradient(${tone} ${score.percent * 3.6}deg, var(--border) 0)`,
       }}
     >
       <span className="catalog-badge-core">{score.missing}٪</span>
@@ -1178,6 +1245,25 @@ function ShelfView(
     }))
     .filter((s) => s.roomBooks.length > 0)
 
+  /**
+   * الدولابُ أرففٌ: لكلّ رقم رفٍّ لوحُه، مرتَّبةً بأرقامها، وما لم يُكتب رفُّه
+   * في آخرها. وكانت كتبُ الدولاب كلُّها على لوحٍ واحد، فلا يُعرف رفٌّ من رفّ.
+   */
+  const shelvesOf = (list: Book[]) => {
+    const map = new Map<string, Book[]>()
+    for (const b of list) {
+      const key = b.shelf_no.trim()
+      map.set(key, [...(map.get(key) ?? []), b])
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      if (!a) return 1
+      if (!b) return -1
+      const na = parseNumber(a)
+      const nb = parseNumber(b)
+      return na !== null && nb !== null ? na - nb : a.localeCompare(b, 'ar')
+    })
+  }
+
   if (sections.length === 0) {
     return <EmptyState title="لا توجد كتب مطابقة" hint="جرّب تعديل الفلاتر أو كلمة البحث" />
   }
@@ -1197,11 +1283,19 @@ function ShelfView(
               </div>
             </div>
 
+            {shelvesOf(roomBooks).map(([shelf, shelfBooks]) => (
+            <div key={shelf || 'بلا رفّ'} style={{ marginBottom: 12 }}>
+            {/* اسمُ الرفّ لا يُكتب إذا لم يكن في الدولاب إلا رفٌّ لم يُرقَّم */}
+            {(shelf || shelvesOf(roomBooks).length > 1) && (
+              <div style={{ fontSize: 12, color: 'var(--muted)', margin: '0 4px 5px' }}>
+                {shelf ? `رفّ ${shelf}` : 'بلا رقم رفّ'}
+              </div>
+            )}
             <div className="shelf-board thin-scroll" style={{
               borderRadius: 10, padding: '24px 20px 0', display: 'flex', alignItems: 'flex-end',
               gap: 3, overflowX: 'auto', boxShadow: 'inset 0 0 0 1px var(--border)',
             }}>
-              {roomBooks.flatMap((book) => {
+              {shelfBooks.flatMap((book) => {
                 const count = volumesOf(book)
                 // كعبٌ واحدٌ للكتاب كلِّه، يُكرَّر على مجلَّداته ويُميَّز كلٌّ
                 // منها برقمه. والمفتاح «1»، وما قبله من كعوبٍ لكل مجلَّد
@@ -1211,9 +1305,26 @@ function ShelfView(
                 const width = useImage ? 34 : 32 + (book.title.length % 4) * 4
                 const height = Math.round(Math.min(238, Math.max(152, 152 + ((book.pages ?? 200) / 1200) * 86)))
 
+                // والمجلَّدُ الناقص موضعُه على الرفّ فارغ: يُرسم ظلًّا منقوطًا لا
+                // كعبًا قائمًا، فيُرى النقصُ بالعين كما يُرى على الرفّ نفسه
+                const missing = new Set((book.missing_volumes ?? []).map((m) => m.no))
                 return Array.from({ length: count }, (_, i) => {
                   const volume = i + 1
                   const url = spineUrl ?? book.spine_images?.[String(volume)]
+                  if (count > 1 && missing.has(volume)) {
+                    const reason = book.missing_volumes.find((m) => m.no === volume)?.reason.trim()
+                    return (
+                      <a
+                        key={`${book.id}-${volume}`}
+                        className="spine spine-missing"
+                        {...linkTo({ name: 'book', id: book.id })}
+                        title={`${book.title} — المجلد ${volume} ناقص${reason ? `: ${reason}` : ''}`}
+                        style={{ flex: 'none', width, height, borderRadius: '2px 2px 0 0' }}
+                      >
+                        <span className="spine-missing-no">{volume}</span>
+                      </a>
+                    )
+                  }
                   return (
                     <a
                       key={`${book.id}-${volume}`}
@@ -1284,6 +1395,8 @@ function ShelfView(
                 })
               })}
             </div>
+            </div>
+            ))}
           </div>
         )
       })}

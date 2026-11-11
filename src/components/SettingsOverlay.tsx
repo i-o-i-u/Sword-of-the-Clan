@@ -43,7 +43,7 @@ type QuoteEdits = Record<string, { text?: string; author?: string }>
 type SetField = (patch: Partial<Settings>) => void
 
 export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
-  const { settings, previewSettings, discardPreview, saveSettings, reload } = useLibrary()
+  const { settings, previewSettings, discardPreview, saveSettings, reload, run } = useLibrary()
   const [tab, setTab] = useState<Tab>('appearance')
   const [quoteEdits, setQuoteEdits] = useState<QuoteEdits>({})
   const [saving, setSaving] = useState(false)
@@ -73,10 +73,14 @@ export default function SettingsOverlay({ onClose }: { onClose: () => void }) {
   async function save() {
     setSaving(true)
     try {
-      if (fieldsDirty) await saveSettings(settings)
-      for (const [id, patch] of Object.entries(quoteEdits)) {
-        await api.updateLandingQuote(id, patch)
-      }
+      // لا يُقال «حُفظ» على إخفاق: كانت النافذةُ تقوله ولو رُدَّ الطلبُ كلُّه
+      if (fieldsDirty && !(await saveSettings(settings))) return
+      const quotesOk = await run(async () => {
+        for (const [id, patch] of Object.entries(quoteEdits)) {
+          await api.updateLandingQuote(id, patch)
+        }
+      })
+      if (!quotesOk) return
       snapshot.current = settings
       setQuoteEdits({})
       if (quotesDirty) await reload()
@@ -494,7 +498,7 @@ function LandingTab(
 
 // -------------------------------------------------------------- المكتبة
 function LibraryTab({ setField }: { setField: SetField }) {
-  const { settings, categories, run, reload } = useLibrary()
+  const { settings, categories, run, books: settingsBooks } = useLibrary()
 
   return (
     <div>
@@ -535,12 +539,16 @@ function LibraryTab({ setField }: { setField: SetField }) {
         categories={categories}
         onAdd={async (name, parent) => {
           await run(() => api.addCategory(name, categories.length, parent))
-          await reload()
         }}
         onRemove={async (name) => {
+          const books = settingsBooks.filter((b) => b.category === name || b.sub_category === name).length
+          // والحذفُ يرفع اسمَه من كتبه، فيُقال ذلك قبل أن يقع
+          if (books > 0 && !window.confirm(
+            `حذفُ «${name}»؟ يُرفع من كتبه (عددها: ${books}) فتبقى بلا تصنيف، ولا يُحذف منها كتاب.`,
+          )) return
           await run(() => api.removeCategory(name))
-          await reload()
         }}
+        onRename={async (name, to) => { await run(() => api.renameCategory(name, to)) }}
       />
     </div>
   )
@@ -551,12 +559,50 @@ function LibraryTab({ setField }: { setField: SetField }) {
  * ولا يُحذف آخرُ تصنيفٍ رئيسٍ: كتابٌ بلا تصنيفٍ يجوز، ومكتبةٌ بلا تصانيف لا.
  */
 function CategoryManager(
-  { categories, onAdd, onRemove }: {
+  { categories, onAdd, onRemove, onRename }: {
     categories: { name: string; parent: string }[]
     onAdd: (name: string, parent: string) => Promise<void>
     onRemove: (name: string) => Promise<void>
+    onRename: (name: string, to: string) => Promise<void>
   },
 ) {
+  // التصنيفُ الذي يُسمّى الآن من جديد، ومسوّدةُ اسمه. وكان لا يُسمّى إلا بحذفه
+  // وإنشاء غيره، فتضيع نسبةُ كتبه إليه
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+
+  async function commitRename(name: string) {
+    const to = renameDraft.trim()
+    setRenaming(null)
+    if (!to || to === name) return
+    if (categories.some((c) => c.name === to)) return
+    await onRename(name, to)
+  }
+
+  /** الاسمُ نفسُه، أو حقلُه إن كان يُسمّى من جديد */
+  const nameOf = (name: string) => (renaming === name ? (
+    <input
+      autoFocus
+      value={renameDraft}
+      onChange={(e) => setRenameDraft(e.target.value)}
+      onBlur={() => void commitRename(name)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); void commitRename(name) }
+        if (e.key === 'Escape') { e.preventDefault(); setRenaming(null) }
+      }}
+      aria-label={`الاسم الجديد لـ«${name}»`}
+      style={{ ...smallInput, fontSize: 12.5, padding: '3px 8px', width: 160 }}
+    />
+  ) : (
+    <button
+      type="button"
+      onClick={() => { setRenaming(name); setRenameDraft(name) }}
+      title="اضغط لتسميته من جديد"
+      style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'text' }}
+    >
+      {name}
+    </button>
+  ))
   // موضعُ حقل الإضافة المفتوح: اسمُ الرئيس، أو `''` لتصنيفٍ رئيسٍ جديد
   const [adding, setAdding] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -621,7 +667,7 @@ function CategoryManager(
           border: '1px solid var(--border)', borderRadius: 10, padding: '9px 11px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
-            {main.name}
+            {nameOf(main.name)}
             {removeX(main.name, mains.length <= 1)}
             <button
               type="button"
@@ -642,7 +688,7 @@ function CategoryManager(
                   display: 'flex', alignItems: 'center', gap: 5, background: 'var(--header)',
                   borderRadius: 999, padding: '3px 6px 3px 11px', fontSize: 12,
                 }}>
-                  {sub.name}
+                  {nameOf(sub.name)}
                   {removeX(sub.name, false)}
                 </span>
               ))}

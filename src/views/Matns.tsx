@@ -9,7 +9,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate, pressable } from '../lib/router'
+import { linkTo, navigate } from '../lib/router'
 import { matnTitles, type CountedTitle } from '../lib/editions'
 import { BOOKS_COUNT, MATNS_COUNT, countLabel } from '../lib/types'
 import {
@@ -97,10 +97,8 @@ export default function Matns() {
 
               <ol className="series-list series-list-filed">
                 {group.books.map((matn, i) => (
-                  <li
-                    key={`${matn.book.id}-${matn.within ? matn.title : ''}-${i}`}
-                    {...pressable(() => navigate({ name: 'book', id: matn.book.id }))}
-                  >
+                  <li key={`${matn.book.id}-${matn.within ? matn.title : ''}-${i}`}>
+                    <a className="series-link" {...linkTo({ name: 'book', id: matn.book.id })}>
                     {/* الفرعُ موضعُ الرقم من السلاسل: هو أخصُّ ما يُعرف به
                         المتنُ بعد فنِّه، وشرطةٌ لمن لم يُكتب فرعُه */}
                     <span className="series-no series-no-text">
@@ -108,6 +106,7 @@ export default function Matns() {
                     </span>
                     <span className="series-title">{matn.title}</span>
                     <span className="series-author">{matn.author_name}</span>
+                    </a>
                   </li>
                 ))}
               </ol>

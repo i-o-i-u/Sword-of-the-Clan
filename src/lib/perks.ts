@@ -342,9 +342,10 @@ function haystack(perk: Perk, book: Book | undefined): string {
     perk.tags.join(' '), perk.people.join(' '),
     (perk.footnotes ?? []).map((f) => f.text).join(' '),
     sourceTitle(perk, book), sourceAuthor(perk, book),
-    perk.source?.edition ?? '',
-    // ومجلسُ السماع والموقعُ الذي نُشر فيه يُطلب بهما كما يُطلب بالطبعة
-    perk.source?.venue ?? '',
+    // ومجلسُ السماع والموقعُ الذي نُشر فيه يُطلب بهما كما يُطلب بالطبعة — لِما
+    // مصدرُه مكتوبٌ وحده، لا لفائدةٍ مصدرُها كتابٌ من الفهرس
+    book ? '' : (perk.source?.edition ?? ''),
+    book ? '' : (perk.source?.venue ?? ''),
   ].join(' ')
 }
 
@@ -445,7 +446,8 @@ export function sortPerks(
     case 'oldest': return list.sort((a, b) => at(a) - at(b))
     case 'precious': return list.sort((a, b) => b.rating - a.rating || at(b) - at(a))
     case 'longest': return list.sort((a, b) => b.text.length - a.text.length)
-    case 'title': return list.sort((a, b) => a.title.localeCompare(b.title, 'ar'))
+    // وما لا عنوانَ له يُرتَّب بمطلع نصّه — اسمِه في القائمة — لا في صدرها
+    case 'title': return list.sort((a, b) => perkName(a).localeCompare(perkName(b), 'ar'))
     case 'book':
       return list.sort((a, b) => sourceTitle(a, a.book_id ? bookById(a.book_id) : undefined)
         .localeCompare(sourceTitle(b, b.book_id ? bookById(b.book_id) : undefined), 'ar'))

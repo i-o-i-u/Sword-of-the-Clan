@@ -13,7 +13,8 @@
 // عليه يقوم ترتيب الكتب بأقدمية أصحابها، وطلبُه ساعةَ كتابة الاسم أيسر من
 // العودة إليه بعدُ في صفحة المؤلِّف.
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { QUICK_OPTS, normalizeText } from '../lib/search'
 import * as api from '../lib/api'
 import { useLibrary } from '../lib/library'
 import { goBack, navigate, setLeaveGuard, useLeaveGuard } from '../lib/router'
@@ -30,7 +31,7 @@ import HijriYearPicker, { type HijriYear } from '../components/HijriYearPicker'
 import ImageSlot from '../components/ImageSlot'
 import IsbnField from '../components/IsbnField'
 import {
-  BackButton, Combobox, RiyalGlyph, SectionHeading, TagIcon,
+  BackButton, Combobox, EmptyState, RiyalGlyph, SectionHeading, TagIcon,
   cardStyle, primaryButtonStyle,
 } from '../components/ui'
 
@@ -57,6 +58,11 @@ const row4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))',
 /** مؤلِّفٌ في النموذج: اسمُه ووفاتُه كما تُدخَل قبل أن تُحفظ في صفحته */
 interface AuthorRow {
   name: string
+  /**
+   * تقويمُ سنة الوفاة. كان النموذجُ يُرسل «هـ» ثابتًا، فمن ضُبطت وفاتُه «م» من
+   * صفحته انقلبت هجريّةً بأوّل حفظٍ لكتابٍ له.
+   */
+  era: 'هـ' | 'م' | 'ق.هـ' | 'ق.م'
   alive: boolean
   approx: boolean
   death: string
@@ -82,7 +88,7 @@ interface WithinRow {
 
 const EMPTY_WITHIN: WithinRow = {
   title: '',
-  author: { name: '', alive: false, approx: false, death: '', text: '' },
+  author: { name: '', era: 'هـ', alive: false, approx: false, death: '', text: '' },
   contributors: [],
   category: '',
   sub_category: '',
@@ -90,7 +96,7 @@ const EMPTY_WITHIN: WithinRow = {
   at: '',
 }
 
-const EMPTY_AUTHOR: AuthorRow = { name: '', alive: false, approx: false, death: '', text: '' }
+const EMPTY_AUTHOR: AuthorRow = { name: '', era: 'هـ', alive: false, approx: false, death: '', text: '' }
 const EMPTY_YEAR: HijriYear = { year: null, month: null, day: null, approx: false, text: '' }
 
 const str = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v))
@@ -162,7 +168,14 @@ function DeathFields(
             placeholder="السنة"
             style={{ ...inputStyle, flex: 1 }}
           />
-          <span style={{ fontSize: 13 }}>هـ</span>
+          <select
+            value={row.era}
+            onChange={(e) => onPatch({ era: e.target.value as AuthorRow['era'] })}
+            aria-label="تقويم سنة الوفاة"
+            style={{ ...inputStyle, width: 'auto', flex: 'none' }}
+          >
+            {(['هـ', 'م', 'ق.هـ', 'ق.م'] as const).map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
         </span>
       )}
     </div>
@@ -181,6 +194,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     if (!known) return { ...EMPTY_AUTHOR, name }
     return {
       name,
+      era: known.era || 'هـ',
       alive: known.alive,
       approx: known.death_approx,
       death: str(known.death),
@@ -232,6 +246,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
   const [year, setYear] = useState<HijriYear>(() => (editing
     ? { year: editing.year, month: editing.year_month, approx: editing.year_approx, text: editing.year_text }
     : EMPTY_YEAR))
+  // تقويمُ سنة النشر: الهجريّ هو الأصل، والميلاديُّ لِما طُبع به — وكان «هـ»
+  // ثابتًا لا يُسأل عنه، فلا يُفهرس كتابٌ طُبع سنة ١٩٩٠ إلا خطأً
+  const [yearEra, setYearEra] = useState<'هـ' | 'م'>(
+    () => (editing?.year_era === 'م' ? 'م' : 'هـ'),
+  )
   const [editionNo, setEditionNo] = useState(
     () => (editing?.edition_worded ? editionNumberOf(editing.edition) : editing?.edition ?? ''),
   )
@@ -352,6 +371,11 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     () => editing?.spine_images?.['1'] ?? null,
   )
   const [saving, setSaving] = useState(false)
+  /**
+   * الكتابُ الذي أُنشئ في هذا النموذج وإن أخفق ما بعد إنشائه — صلاتُه مثلًا. فإن
+   * أُعيد الحفظُ عُدِّل ولم يُنشأ ثانيًا: كان كلُّ إرسالٍ بعد إخفاقٍ كتابًا مكرَّرًا.
+   */
+  const createdId = useRef<string | null>(null)
 
   /**
    * أفي النموذج ما لم يُحفظ؟ فإن كان سُئل صاحبُه قبل أن يغادره — بتبويبٍ في
@@ -398,7 +422,9 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     return [...found].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ar'))
   }, [authors, books])
 
-  const volumeCount = singleVolume ? 1 : Math.min(40, Math.max(1, parseNumber(volumes) ?? 1))
+  // والسقفُ للتفصيل وحده حمايةً من رقمٍ مُحرَّف، وهو فوق كلّ ما يُطبع: كان أربعين
+  // فلا تُفصَّل مجلَّداتُ ما زاد ولا تُجمع صفحاتُها
+  const volumeCount = singleVolume ? 1 : Math.min(400, Math.max(1, parseNumber(volumes) ?? 1))
   const manyVolumes = !singleVolume && volumeCount > 1
   // مجلَّدات الفهارس خارج الحساب، وما جاوز العددَ المُدخَل لا يُعتدّ به
   const volumeSum = sumVolumePages(volumePages.slice(0, volumeCount), indexVolumes)
@@ -430,6 +456,17 @@ export default function AddBook({ bookId }: { bookId?: string }) {
       : 'مؤلِّفٌ جديد، ستُنشأ له صفحة خاصة'
   }, [authorRows, authors, editing])
 
+  /**
+   * كتبٌ في الفهرس بالعنوان نفسه. **خبرٌ لا منع**: قد تكون نشرةً أخرى تُنسَب إلى
+   * أختها، أو نسخةً ثانية تُعدّ في «نُسَخه»، أو كتابين اتّفق عنواناهما.
+   */
+  const twins = useMemo(() => {
+    const n = normalizeText(title.trim(), QUICK_OPTS)
+    if (!n) return []
+    return books.filter((b) => b.id !== editing?.id && b.id !== editionOf
+      && normalizeText(b.title, QUICK_OPTS) === n)
+  }, [books, title, editing, editionOf])
+
   // والمجموعةُ لا مؤلِّف لها، فلا يُحبَس حفظُها على اسمٍ لا وجود له
   const ready = !!(title.trim() && (collection || authorRows[0]?.name.trim()))
 
@@ -443,6 +480,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     if (!known) { patchAuthorRow(i, { name }); return }
     patchAuthorRow(i, {
       name,
+      era: known.era || 'هـ',
       alive: known.alive,
       approx: known.death_approx,
       death: known.death === null ? '' : String(known.death),
@@ -485,7 +523,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           name,
           death: death && {
             death: death.alive || death.approx ? null : parseNumber(death.death),
-            era: 'هـ',
+            era: death.era,
             alive: death.alive,
             approx: death.approx,
             text: death.text.trim(),
@@ -627,7 +665,7 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         place: publisherPlace,
         year: year.approx ? null : year.year,
         year_month: year.approx ? null : year.month,
-        year_era: 'هـ',
+        year_era: yearEra,
         year_approx: year.approx,
         year_text: year.approx ? year.text.trim() : '',
         edition: editionWorded ? editionInWords(editionNo) : editionNo.trim(),
@@ -691,10 +729,13 @@ export default function AddBook({ bookId }: { bookId?: string }) {
         use_spine: !!spine,
       }
 
-      const id = editing ? (await api.updateBook(editing.id, fields), editing.id)
+      const existing = editing?.id ?? createdId.current
+      const id = existing ? (await api.updateBook(existing, fields), existing)
         : (await api.insertBook(fields)).id
+      createdId.current = id
 
       if (newWorks.length) await api.insertWorks(id, newWorks)
+      setNewWorks([])
       await reload()
       // حُفظ الكتاب، فلا يُسأل صاحبُه عن مغادرة نموذجٍ لم يبقَ فيه ما يضيع
       setLeaveGuard(null)
@@ -705,6 +746,16 @@ export default function AddBook({ bookId }: { bookId?: string }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // `#/edit/` بمعرّفٍ لا كتابَ له: كان يفتح نموذجَ إضافةٍ فارغًا يُظنّ تعديلًا
+  if (bookId && !editing) {
+    return (
+      <main className="app-main" style={{ maxWidth: 900, margin: '0 auto', padding: 32 }}>
+        <BackButton label="العودة إلى المكتبة" onClick={() => goBack({ name: 'browse' })} />
+        <EmptyState title="لم يُعثَر على هذا الكتاب" hint="قد يكون حُذف، أو أنّ الرابطَ ناقص." />
+      </main>
+    )
   }
 
   return (
@@ -746,6 +797,18 @@ export default function AddBook({ bookId }: { bookId?: string }) {
               onUploaded={(url) => setCoverUrl(url)}
             />
           </div>
+          {coverUrl && (
+            <button
+              type="button"
+              onClick={() => setCoverUrl(null)}
+              style={{
+                alignSelf: 'flex-start', border: '1px solid var(--border)', background: 'none',
+                color: 'var(--muted)', borderRadius: 8, padding: '5px 10px', fontSize: 11.5, marginTop: -6,
+              }}
+            >
+              إزالة الغلاف
+            </button>
+          )}
 
           {/* الكعب هو ما يُعرض في «عرض الأرفف»: كعوب الكتب مصفوفةً كما تُرى في
               المكتبة. وهو صورةٌ واحدة للكتاب كلِّه — كعوب مجلَّدات الطبعة
@@ -790,6 +853,12 @@ export default function AddBook({ bookId }: { bookId?: string }) {
             {collection ? 'اسم المجموعة' : 'عنوان الكتاب'}
             <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
           </label>
+          {twins.length > 0 && (
+            <div role="status" style={{ fontSize: 12, color: 'var(--warn)', lineHeight: 1.8, marginTop: -6 }}>
+              في الفهرس بهذا العنوان: {twins.map((b) => [b.title, b.author_name, b.publisher].filter(Boolean).join(' — ')).join('؛ ')}.
+              {' '}إن كان نشرةً أخرى منه فانسبه إليه من «ارتباطه بكتبٍ أخرى»، وإن كان نسخةً ثانية فزِد «نُسَخه» هناك.
+            </div>
+          )}
 
           {/* المجموعةُ ليست كتابًا فلا مؤلِّف لها: «برنامج مهمّات العلم» اسمُ
               مجموعةٍ طُبع فيها كتابُ التوحيد والأربعون النووية وغيرُهما، لكلٍّ
@@ -1134,7 +1203,39 @@ export default function AddBook({ bookId }: { bookId?: string }) {
           )}
 
           <div className="form-row" style={row2}>
-            <HijriYearPicker label="سنة النَّشْر" value={year} onChange={setYear} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {yearEra === 'هـ' ? (
+                <HijriYearPicker label="سنة النَّشْر" value={year} onChange={setYear} />
+              ) : (
+                <label style={labelStyle}>
+                  سنة النَّشْر (ميلاديّة)
+                  <input
+                    value={year.year == null ? '' : String(year.year)}
+                    onChange={(e) => setYear({ ...year, year: parseNumber(e.target.value), month: null, approx: false })}
+                    inputMode="numeric"
+                    placeholder="مثال: ١٩٩٠"
+                    style={inputStyle}
+                  />
+                </label>
+              )}
+              <span style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
+                {(['هـ', 'م'] as const).map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setYearEra(e); if (e === 'م') setYear({ ...year, month: null, approx: false }) }}
+                    aria-pressed={yearEra === e}
+                    style={{
+                      border: `1px solid ${yearEra === e ? 'var(--accent)' : 'var(--border)'}`,
+                      background: 'none', color: yearEra === e ? 'var(--accent)' : 'var(--muted)',
+                      borderRadius: 7, padding: '2px 10px', fontSize: 12,
+                    }}
+                  >
+                    {e === 'هـ' ? 'هجريّة' : 'ميلاديّة'}
+                  </button>
+                ))}
+              </span>
+            </div>
 
             <div style={{ ...labelStyle, gap: 6 }}>
               رقم الطبعة

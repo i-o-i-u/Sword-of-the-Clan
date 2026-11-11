@@ -15,7 +15,10 @@ import * as api from '../lib/api'
 import { useLibrary, useNeedPerks } from '../lib/library'
 import { goBack, hashFor, navigate, pressable, shortBookLink } from '../lib/router'
 import { citationOf } from '../lib/citation'
-import { HIJRI_MONTHS, deathLabel, toArabicDigits, yearLabel } from '../lib/hijri'
+import {
+  HIJRI_MONTHS, deathLabel, hijriParts, hijriToDate, shortDayLabel, toArabicDigits, yearLabel,
+} from '../lib/hijri'
+import HijriDatePicker from '../components/HijriDatePicker'
 import { formatIsbn, isbnInfo } from '../lib/isbn'
 import {
   BOOKS_COUNT, COPIES_COUNT, LANGUAGES, PERKS_COUNT, STATUSES, STATUS_UNKNOWN,
@@ -66,7 +69,7 @@ interface Row {
 export default function BookDetail({ bookId }: { bookId: string }) {
   const {
     books, bookById, authorById, works, perks, loans, publishers, settings,
-    isOwner, canEdit, patchBook, run, reload,
+    isOwner, canEdit, patchBook, run,
   } = useLibrary()
   // فوائدُ الكتاب تُعرض في بطاقته، والفوائدُ لا تصل حتى تُطلب
   const perksReady = useNeedPerks()
@@ -93,6 +96,8 @@ export default function BookDetail({ bookId }: { bookId: string }) {
   const bookWorks = useMemo(() => works.filter((w) => w.book_id === id), [works, id])
   const worksAbout = useMemo(() => works.filter((w) => w.target_book_id === id), [works, id])
   const bookPerks = useMemo(() => perks.filter((p) => p.book_id === id), [perks, id])
+  /** فوائدُ الكتاب كلُّها وإن لم تصل بعد: الخادمُ يحذفها معه، فيُعدّ ما وصل منها */
+  const bookPerksAll = bookPerks.length
   const bookLoans = useMemo(() => loans.filter((l) => l.book_id === id), [loans, id])
 
   if (!book) {
@@ -508,7 +513,7 @@ export default function BookDetail({ bookId }: { bookId: string }) {
           )}
           {!hidden('within') && inside.length > 0 && <PrintedWithin books={inside} />}
 
-          {showTo('perks') && perksReady && <PerksPanel bookId={book.id} perks={bookPerks} />}
+          {showTo('perks') && perksReady && <PerksPanel bookId={book.id} perks={bookPerks} bookTitle={book.title.trim()} />}
 
           {/* حالة القراءة والتقييم: كلاهما يُرفع فيصير غير مثبَت، فليس كل
               كتابٍ في المكتبة قد استقرّ له حكم. */}
@@ -599,10 +604,16 @@ export default function BookDetail({ bookId }: { bookId: string }) {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!confirm(`هل تحذف «${book.title}» من الفهرس؟ لا رجعة في هذا.`)) return
-                  await run(() => api.deleteBook(book.id))
-                  await reload()
-                  navigate({ name: 'browse' })
+                  // ويُقال ما يذهب معه: فوائدُه وإعاراتُه تُحذف بحذفه، وكان التأكيدُ
+                  // لا يذكرها فتضيع الفوائدُ بنصوصها وهوامشها على غير علم
+                  const lost = [
+                    bookPerksAll > 0 && `ما قُيِّد منه من فوائد (عددها: ${formatNumber(bookPerksAll)})`,
+                    bookLoans.length > 0 && `سجلُّ إعارته (عدده: ${formatNumber(bookLoans.length)})`,
+                  ].filter(Boolean)
+                  const warn = lost.length ? `\nويُحذف معه: ${lost.join('، و')}.` : ''
+                  if (!confirm(`هل تحذف «${book.title}» من الفهرس؟ لا رجعة في هذا.${warn}`)) return
+                  // ولا يُنتقل عنه إلا إذا وقع الحذف: كان ينتقل على الإخفاق كذلك
+                  if (await run(() => api.deleteBook(book.id))) navigate({ name: 'browse' })
                 }}
                 style={{
                   border: '1px solid var(--danger)', background: 'none', color: 'var(--danger)',
@@ -1429,7 +1440,7 @@ function WorksAbout({ rows }: { rows: { type: string; target: Book | undefined }
  * ولا يُعرض فارغًا: بطاقةٌ تُخبر أن لا فائدة فيه ليست خبرًا. ويبقى لصاحب
  * المكتبة زرٌّ مفردٌ يفتح النموذج.
  */
-function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
+function PerksPanel({ bookId, perks, bookTitle }: { bookId: string; perks: Perk[]; bookTitle: string }) {
   const { canEdit } = useLibrary()
   const [editing, setEditing] = useState<Perk | null | undefined>(undefined)
 
@@ -1464,11 +1475,11 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
               <button
                 type="button"
                 className="card-action"
-                onClick={() => navigate({ name: 'perks' })}
-                title="كنّاش المكتبة كلُّه"
+                onClick={() => navigate({ name: 'perks', pick: { field: 'source', value: bookTitle } })}
+                title="فوائدُ هذا الكتاب في الكنّاش، بمصفِّياته وترتيبه"
               >
                 <PerkIcon size={15} />
-                <span>الكنّاش كلُّه</span>
+                <span>فوائدُه في الكنّاش</span>
               </button>
               {canEdit && (
                 <button type="button" onClick={() => setEditing(null)} style={ghostButtonStyle}>
@@ -1504,11 +1515,38 @@ function PerksPanel({ bookId, perks }: { bookId: string; perks: Perk[] }) {
 }
 
 // -------------------------------------------------------------- سجل الإعارة
+/** يومُ مكّة الآن تاريخًا ISO: به يُعرف تأخُّرُ الإعارة */
+function todayIso(): string {
+  return new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10)
+}
+
+/** التاريخُ المحفوظ (ISO) هجريًّا كما يُعرض في سائر الموقع */
+function hijriOfIso(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(`${iso}T00:00:00Z`)
+  return Number.isFinite(d.getTime()) ? shortDayLabel(d) : iso
+}
+
+/** أجزاءُ اليوم الهجريّ من تاريخٍ محفوظ، لمنتقي الموعد */
+function partsOfIso(iso: string | null): { d: number | null; m: number | null; y: number | null } {
+  if (!iso) return { d: null, m: null, y: null }
+  const p = hijriParts(new Date(`${iso}T00:00:00Z`))
+  return { d: p.d, m: p.m, y: p.y }
+}
+
+/** يومٌ هجريّ تاريخًا ISO، كما يُحفظ الموعد */
+function isoOfHijri(d: number | null, m: number | null, y: number | null): string {
+  return d && m && y ? hijriToDate(y, m, d).toISOString().slice(0, 10) : ''
+}
+
 function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeof useLibrary>['loans'] }) {
-  const { canEdit, run, reload } = useLibrary()
+  const { canEdit, run } = useLibrary()
   const [open, setOpen] = useState(false)
   const [borrower, setBorrower] = useState('')
   const [due, setDue] = useState('')
+  /** الإعارةُ التي تُصحَّح الآن، ومسوّدتُها */
+  const [fixing, setFixing] = useState<{ id: string; borrower: string; due: string } | null>(null)
+  const today = todayIso()
 
   const smallInput = {
     padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
@@ -1538,18 +1576,28 @@ function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeo
             placeholder="اسم المستعير"
             style={{ ...smallInput, flex: 1, minWidth: 160 }}
           />
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={smallInput} />
+          {/* الموعدُ هجريٌّ كسائر تواريخ الموقع، ويُحفظ ISO كما كان */}
+          <div style={{ minWidth: 200 }}>
+            <HijriDatePicker
+              label="موعد الردّ (اختياري)"
+              {...(() => { const p = partsOfIso(due || null); return { day: p.d, month: p.m, year: p.y } })()}
+              onChange={(d, m, y) => setDue(isoOfHijri(d, m, y))}
+            />
+          </div>
           <button
             type="button"
+            disabled={!borrower.trim()}
+            title={borrower.trim() ? undefined : 'اكتب اسمَ المستعير'}
             onClick={async () => {
-              await run(() => api.insertLoan({
-                book_id: bookId, borrower: borrower.trim() || '—', due_date: due || null,
+              // لا تُغلق الخانةُ على إخفاق: ما كُتب فيها باقٍ ليُعاد حفظُه
+              const ok = await run(() => api.insertLoan({
+                book_id: bookId, borrower: borrower.trim(), due_date: due || null,
               }))
-              setOpen(false); setBorrower(''); setDue('')
-              await reload()
+              if (ok) { setOpen(false); setBorrower(''); setDue('') }
             }}
             style={{
-              background: 'var(--accent)', color: 'var(--on-accent)', border: 'none',
+              background: borrower.trim() ? 'var(--accent)' : 'var(--border)',
+              color: borrower.trim() ? 'var(--on-accent)' : 'var(--muted)', border: 'none',
               borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600,
             }}
           >
@@ -1562,33 +1610,95 @@ function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeo
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>لم يُعَر هذا الكتاب من قبل.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {loans.map((loan) => (
-            <div key={loan.id} style={{
-              ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              borderRadius: 10, padding: '10px 14px', fontSize: 13, flexWrap: 'wrap', gap: 8,
-            }}>
-              <div>
-                <strong>{loan.borrower}</strong> — استعار في {loan.lent_date}، الموعد {loan.due_date ?? '—'}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                  fontSize: 11, padding: '2px 8px', borderRadius: 6,
-                  ...tone(loan.returned ? 'ok' : 'warn'),
-                }}>
-                  {loan.returned ? 'تم الإرجاع' : 'قيد الإعارة'}
-                </span>
-                {canEdit && !loan.returned && (
+          {loans.map((loan) => {
+            // المتأخِّرةُ: لم تُردّ وقد مضى موعدُها — خبرٌ يُعرف بنظرة
+            const late = !loan.returned && !!loan.due_date && loan.due_date < today
+            const linkBtn = { border: 'none', background: 'none', color: 'var(--accent)', fontSize: 12, textDecoration: 'underline' } as const
+            if (fixing?.id === loan.id) {
+              const p = partsOfIso(fixing.due || null)
+              return (
+                <div key={loan.id} style={{ ...cardStyle, borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <input
+                    value={fixing.borrower}
+                    onChange={(e) => setFixing({ ...fixing, borrower: e.target.value })}
+                    aria-label="اسم المستعير"
+                    style={{ ...smallInput, flex: 1, minWidth: 160 }}
+                  />
+                  <div style={{ minWidth: 200 }}>
+                    <HijriDatePicker
+                      label="موعد الردّ"
+                      day={p.d} month={p.m} year={p.y}
+                      onChange={(d, m, y) => setFixing({ ...fixing, due: isoOfHijri(d, m, y) })}
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={async () => { await run(() => api.returnLoan(loan.id)); await reload() }}
-                    style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 12, textDecoration: 'underline' }}
+                    disabled={!fixing.borrower.trim()}
+                    onClick={async () => {
+                      const ok = await run(() => api.updateLoan(loan.id, {
+                        borrower: fixing.borrower.trim(), due_date: fixing.due || null,
+                      }))
+                      if (ok) setFixing(null)
+                    }}
+                    style={{ ...ghostButtonStyle, padding: '7px 14px' }}
                   >
-                    تسجيل الإرجاع
+                    حفظ
                   </button>
-                )}
+                  <button type="button" onClick={() => setFixing(null)} style={linkBtn}>إلغاء</button>
+                </div>
+              )
+            }
+            return (
+              <div key={loan.id} style={{
+                ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                borderRadius: 10, padding: '10px 14px', fontSize: 13, flexWrap: 'wrap', gap: 8,
+              }}>
+                <div>
+                  <strong>{loan.borrower}</strong> — استعار في {hijriOfIso(loan.lent_date)}
+                  {loan.due_date && <>، والموعد {hijriOfIso(loan.due_date)}</>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 6,
+                    ...tone(loan.returned ? 'ok' : late ? 'danger' : 'warn'),
+                  }}>
+                    {loan.returned ? 'تم الإرجاع' : late ? 'متأخِّرةٌ عن موعدها' : 'قيد الإعارة'}
+                  </span>
+                  {canEdit && !loan.returned && (
+                    <button type="button" onClick={() => void run(() => api.returnLoan(loan.id))} style={linkBtn}>
+                      تسجيل الإرجاع
+                    </button>
+                  )}
+                  {canEdit && loan.returned && (
+                    <button type="button" onClick={() => void run(() => api.updateLoan(loan.id, { returned: false }))} style={linkBtn}>
+                      لم تُردّ بعد
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setFixing({ id: loan.id, borrower: loan.borrower, due: loan.due_date ?? '' })}
+                      style={linkBtn}
+                    >
+                      تصحيح
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`حذفُ إعارة «${loan.borrower}» من السجلّ؟ لا رجعة في هذا.`)) return
+                        void run(() => api.removeLoan(loan.id))
+                      }}
+                      style={{ ...linkBtn, color: 'var(--danger)' }}
+                    >
+                      حذف
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
@@ -1599,7 +1709,8 @@ function LoansPanel({ bookId, loans }: { bookId: string; loans: ReturnType<typeo
 function publishYear(book: Book): string {
   if (book.year_approx) return book.year_text
   if (book.year == null) return ''
-  const year = yearLabel(book.year, book.year_era)
+  // بالأرقام الهنديّة كتاريخ الوُرود وسائر السنين: كانت لاتينيّةً هنا وهنديّةً هناك
+  const year = toArabicDigits(yearLabel(book.year, book.year_era))
   return book.year_month ? `${HIJRI_MONTHS[book.year_month - 1]} ${year}` : year
 }
 

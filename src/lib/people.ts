@@ -82,11 +82,22 @@ export function authoredWithin(books: Book[], personId: string): WithinWork[] {
   return out
 }
 
+/**
+ * مَن عمل في الكتاب بصفة: مشارِكوه، ومشارِكو ما ضُمَّ إليه من عناوين — فمحقِّقُ
+ * الأربعين النوويّة في مجموعٍ محقِّقٌ في المكتبة، وكان يسقط من كلّ عدٍّ.
+ */
+export function contributorsIn(book: Book) {
+  return [
+    ...(book.contributors ?? []),
+    ...withinTitlesOf(book).flatMap((t) => t.contributors ?? []),
+  ]
+}
+
 /** ما عمل فيه الرجل بصفةٍ غير التأليف، مقسومًا بصفاته */
 export function contributedBooks(books: Book[], personId: string): RoleWorks[] {
   const map = new Map<string, Book[]>()
   for (const book of books) {
-    for (const c of book.contributors ?? []) {
+    for (const c of contributorsIn(book)) {
       if (c.person_id !== personId) continue
       const list = map.get(c.role) ?? []
       // الرجلُ قد يُذكر مرَّتين في الكتاب الواحد بصفةٍ واحدة — لنطاقين من
@@ -115,7 +126,7 @@ export function topRole(books: Book[], personId: string): string | null {
     || authoredWithin(books, personId).length > 0) return AUTHOR_ROLE
 
   const has = new Set(
-    books.flatMap((b) => (b.contributors ?? [])
+    books.flatMap((b) => contributorsIn(b)
       .filter((c) => c.person_id === personId)
       .map((c) => c.role)),
   )
@@ -124,7 +135,7 @@ export function topRole(books: Book[], personId: string): string | null {
 
 /** هل لهذا الرجل في المكتبة عملٌ بصفةٍ غير التأليف؟ */
 export function hasContributions(books: Book[], personId: string): boolean {
-  return books.some((b) => (b.contributors ?? []).some((c) => c.person_id === personId))
+  return books.some((b) => contributorsIn(b).some((c) => c.person_id === personId))
 }
 
 /**
@@ -134,7 +145,7 @@ export function hasContributions(books: Book[], personId: string): boolean {
 export function peopleByRole(books: Book[]): RolePeople[] {
   const map = new Map<string, Set<string>>()
   for (const book of books) {
-    for (const c of book.contributors ?? []) {
+    for (const c of contributorsIn(book)) {
       if (!c.person_id) continue
       if (!map.has(c.role)) map.set(c.role, new Set())
       map.get(c.role)!.add(c.person_id)

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as account from "../account.js";
 import type * as auth from "../auth.js";
 import type * as books from "../books.js";
 import type * as catalog from "../catalog.js";
@@ -27,6 +28,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  account: typeof account;
   auth: typeof auth;
   books: typeof books;
   catalog: typeof catalog;

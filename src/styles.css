@@ -1,7 +1,7 @@
 /* الأنماط العامة. رموز المظهر تُكتب على :root من applyTheme، فالتبديل بين
    المظاهر الثلاثة يسري على الواجهة كلها دفعةً واحدة. */
 
-/* خط «كتاب» ملفٌّ محلّي في public/fonts/Kitab-Regular.ttf، ويُسجَّل في
+/* خط «كتاب» ملفٌّ محلّي في public/fonts/Kitab-Regular.woff2، ويُسجَّل في
    theme.ts لأن مساره يتبع مسار النشر. لو حُذف تراجع المتصفح إلى أميري
    تلقائيًّا دون أن ينكسر شيء. */
 
@@ -193,17 +193,6 @@ body::after {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-}
-
-.field-input {
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  min-width: 0;
-  width: 100%;
 }
 
 .field-label {
@@ -661,29 +650,6 @@ body::after {
 
 .gear-btn svg { transition: transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1); }
 .gear-btn:hover svg { transform: rotate(60deg); }
-
-.owner-pill {
-  flex: none;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.owner-button {
-  flex: none;
-  border: 1.5px solid var(--border);
-  background: none;
-  color: var(--text);
-  border-radius: 9px;
-  padding: 7px 13px;
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 
 /* ============================================== صفحة الهبوط كلّها */
 /* على الحواسيب تُجمع الصفحة في شاشةٍ واحدة بلا تمرير، وعلى الجوّال تنساب.
@@ -1505,6 +1471,7 @@ body::after {
 
 /* زرّا الحاسبة والإحصائيات: بقامة اللوح نفسها، فيقوم الثلاثة صفًّا واحدًا */
 .side-tool {
+  text-decoration: none;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -2404,6 +2371,7 @@ body::after {
 }
 
 .about-door {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2468,7 +2436,27 @@ body::after {
   gap: 2px;
 }
 
-.series-list li {
+.series-list li { display: block; }
+
+/* المجلَّدُ الناقص على الرفّ: موضعُه فارغٌ منقوط الحدّ، وفيه رقمُه */
+.spine-missing {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border: 1.5px dashed color-mix(in oklch, var(--danger) 55%, var(--border));
+  border-bottom: none;
+  background: color-mix(in oklch, var(--danger) 6%, transparent);
+  text-decoration: none;
+}
+.spine-missing-no {
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.series-link {
+  color: inherit;
+  text-decoration: none;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 12px;
@@ -2478,7 +2466,7 @@ body::after {
   cursor: pointer;
   transition: background 0.14s;
 }
-.series-list li:hover { background: var(--header); }
+.series-link:hover, .series-link:focus-visible { background: var(--header); }
 
 .series-no {
   font-family: var(--heading-font);
@@ -2506,7 +2494,7 @@ body::after {
 
 /* صفُّ المتون: في موضع رقم السلسلة اسمُ الفرع، والاسمُ لا يسع أربعًا
    وأربعين بكسلًا — فيُوسَّع العمودُ ويُردّ الخطُّ إلى مقدار ما يُقرأ. */
-.series-list-filed li { grid-template-columns: 140px minmax(0, 1fr) minmax(0, 0.8fr); }
+.series-list-filed .series-link { grid-template-columns: 140px minmax(0, 1fr) minmax(0, 0.8fr); }
 
 .series-no-text {
   font-size: 12px;
@@ -3036,79 +3024,6 @@ body::after {
   font-weight: 600;
   color: var(--muted);
 }
-
-/* ==================================================== نموذج القيد */
-/*
- * نافذةٌ لا صفحة: الفائدةُ تُكتب وأنت في موضعك من «الفوائد» أو من صفحة الكتاب.
- *
- * وبنيتُها ثلاثةُ أثلاث: ترويسةٌ ثابتة، وجوفٌ هو وحدَه الذي يُمرَّر، وذيلٌ
- * ثابتٌ فيه الحفظ. وكانت ترويسةً وذيلًا «لاصقَين» (`sticky`) في جوفٍ واحد
- * يُمرَّر — فإذا لم تسع النافذةُ الشاشةَ وقع الذيلُ تحت حافّتها فلا يُبلغ
- * زرُّ الحفظ. والقسمةُ ثلاثًا تجعل الذيلَ خارج الممرَّر أصلًا، فلا يغيب.
- */
-
-.perk-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.perk-field-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-/* ما طال من الحقول يأخذ عرضَ الشبكة كلَّه: النصوصُ والاختياراتُ الكثيرة */
-.perk-field-wide { grid-column: 1 / -1; }
-
-/* فاصلٌ يقسم النموذج أقسامًا، وله عنوانُه على خيطٍ يمتدّ إلى آخر السطر */
-.perk-part {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  font-family: var(--heading-font);
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--accent-soft);
-}
-.perk-part::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to left, var(--border), transparent);
-}
-.perk-part:first-child { margin-top: 0; }
-
-.perk-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
-.perk-area {
-  min-height: 132px;
-  line-height: 2;
-  resize: vertical;
-}
-.perk-area-small { min-height: 74px; line-height: 1.9; }
-
-.perk-tokens { display: flex; flex-wrap: wrap; gap: 6px; }
-.perk-token {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--icon-gap);
-  padding: 4px 11px;
-  border: 1px solid var(--accent-soft);
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--accent) 9%, transparent);
-  color: var(--accent-soft);
-  font-size: 12px;
-  font-weight: 600;
-  transition: background 0.15s, color 0.15s;
-}
-.perk-token:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
-.perk-token svg { flex: none; opacity: 0.7; }
-
-.perk-remove {
-  padding: 9px 16px;
-  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
-  border-radius: 9px;
-  background: none;
-  color: var(--danger);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: background 0.16s, color 0.16s;
-}
-.perk-remove:hover { background: var(--danger); color: var(--on-accent); border-color: transparent; }
 
 /* ============================================ صندوق القيود في صفحة الكتاب */
 .book-perks { margin-bottom: 22px; }
@@ -4226,6 +4141,13 @@ a.head-tab-on, a.head-tab-on:hover { color: var(--on-accent); }
   border-inline-start: 4px solid var(--danger);
   box-shadow: var(--shadow-3);
   animation: alert-in 0.28s var(--ease-spring);
+}
+.app-alert-offline {
+  bottom: auto;
+  top: calc(var(--header-h, 64px) + 12px);
+  background: color-mix(in oklch, var(--warn) 14%, var(--surface));
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  border-inline-start-color: var(--warn);
 }
 .app-alert-close {
   flex: none;

@@ -92,7 +92,9 @@ const loadingBox = (
 
 export default function App() {
   const route = useRoute()
-  const { loading, error, setError, isOwner, canEdit, settings, roleReady } = useLibrary()
+  const {
+    loading, error, setError, isOwner, canEdit, settings, roleReady, ownerData, offline,
+  } = useLibrary()
 
   // نصّ حقل البحث السريع في الرأس ينتقل إلى اللوحة عند فتحها
   const [search, setSearch] = useState<{ open: boolean; query: string }>(
@@ -137,13 +139,20 @@ export default function App() {
     if ((route.name === 'authors' || route.name === 'author' || route.name === 'people')
       && !canSeeAuthors) navigate({ name: 'browse' })
     if (route.name === 'stats' && !canSeeStats) navigate({ name: 'browse' })
-  }, [route, canEdit, canSeeAuthors, canSeeStats, roleReady])
+    // والكنّاشُ لمن حُجب عنه بابُ الفوائد يُردّ كذلك، لا يُترك على صفحةٍ تقول
+    // «غير معروضة»
+    if ((route.name === 'perks' || route.name === 'perk' || route.name === 'notebook')
+      && !(isOwner || settings.visibility.perks)) navigate({ name: 'browse' })
+  }, [route, canEdit, canSeeAuthors, canSeeStats, roleReady, isOwner, settings.visibility.perks])
 
   /** مسارٌ قد يكون لصاحب المكتبة وحده ولم يُعرف الدورُ بعد: يُنتظر ولا يُرسم فارغًا */
-  const awaitingRole = !roleReady && (
+  const awaitingRole = (!roleReady && (
     route.name === 'add' || route.name === 'edit' || route.name === 'stats'
     || route.name === 'authors' || route.name === 'author' || route.name === 'people'
-  )
+  ))
+    // وصاحبُ المكتبة ينتظر لقطتَه هو: لقطةُ الزائر تصل قبلها، فيُملأ منها نموذجُ
+    // التعديل ببياناتٍ محجوبة، ويُقال عن كتابه المخفيّ «لم يُعثر عليه»
+    || (roleReady && isOwner && !ownerData && route.name !== 'landing')
 
   // لا تُغلق نافذة الإعدادات عند الخروج: للزائر نافذتُه المبسّطة، والعرض
   // نفسه يتفرّع على isOwner فلا يبقى لغير المالك سبيلٌ إلى إعدادات المكتبة.
@@ -157,6 +166,12 @@ export default function App() {
         onOpenSearch={openSearch}
         onOpenSettings={() => setShowSettings(true)}
       />
+
+      {offline && (
+        <div role="status" className="app-alert app-alert-offline">
+          <span>انقطعت الوصلةُ بالخادم. ما تحفظه ينتظر عودتها، ولا يضيع ما دامت الصفحةُ مفتوحة.</span>
+        </div>
+      )}
 
       {error && (
         <div

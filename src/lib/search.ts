@@ -50,6 +50,10 @@ export function normalizeText(text: unknown, o: SearchOptions): string {
       .replace(/ى/g, 'ي')                     // ى → ي
       .replace(/ة/g, 'ه')                     // ة → ه
   }
+  // والأرقامُ الهنديّة والفارسيّة واللاتينيّة سواء: من كتب «1447» أصاب «١٤٤٧»
+  x = x
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
   return x.replace(/\s+/g, ' ').trim()
 }
 
@@ -155,6 +159,8 @@ const MARKS = '[\u064B-\u0670\u0640]*'
 
 /** ما يُسوّي البحثُ بينه: الحرفُ المُطبَّع وأشكالُه في النصّ كما كُتب */
 const KIN: Record<string, string> = {
+  // والرقمُ يُظلَّل بصوره كلِّها، كما يُطابَق بها
+  ...Object.fromEntries([...'0123456789'].map((d, i) => [d, `[${d}${'٠١٢٣٤٥٦٧٨٩'[i]}${'۰۱۲۳۴۵۶۷۸۹'[i]}]`])),
   'ا': '[اأإآٱ]',
   'و': '[وؤ]',
   'ي': '[يئى]',

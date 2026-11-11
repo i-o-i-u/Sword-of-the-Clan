@@ -7,6 +7,7 @@
 import type { Doc } from './_generated/dataModel'
 import type { QueryCtx, MutationCtx } from './_generated/server'
 import { getAuthUserId } from '@convex-dev/auth/server'
+import { ConvexError } from 'convex/values'
 
 type Ctx = QueryCtx | MutationCtx
 
@@ -100,7 +101,7 @@ export async function isOwner(ctx: Ctx): Promise<boolean> {
 /** يرفع الطلب إن لم يكن الطالب صاحب المكتبة. تُصدَّر للمُحوِّلات. */
 export async function requireOwner(ctx: Ctx): Promise<void> {
   if (!(await isOwner(ctx))) {
-    throw new Error('هذا الإجراء لصاحب المكتبة وحده.')
+    throw new ConvexError('هذا الإجراء لصاحب المكتبة وحده.')
   }
 }
 
@@ -279,12 +280,18 @@ export function redactBook(book: Doc<'books'>, s: Settings) {
     is_collection: book.is_collection ?? false,
     // وما طُبع معه أو فيه يُخفى جملةً بمفتاحٍ واحد: هو خبرٌ واحدٌ في بابه،
     // ولا معنى لعرض عنوانٍ مضمومٍ بلا صاحبه.
-    within_titles: hidden('within')      ? [] : (book.within_titles ?? []).map((t) => ({
-      ...t,
-      contributors: (t.contributors ?? []).filter(
-        (c) => !c.person_id || !s.hidden_author_ids.includes(c.person_id),
-      ),
-    })),
+    // والعنوانُ في تصنيفٍ مخفيّ يُخفى كما يُخفى الكتابُ فيه، ومن حُجب عنه حقلُ
+    // التصنيف لا يرى تصنيفَ ما ضُمَّ إليه ولا علامةَ متنه
+    within_titles: hidden('within')      ? [] : (book.within_titles ?? [])
+      .filter((t) => !s.hidden_categories.includes(t.category ?? '')
+        && !(t.sub_category && s.hidden_categories.includes(t.sub_category)))
+      .map((t) => ({
+        ...t,
+        ...(hidden('category') ? { category: '', sub_category: '', is_matn: false } : {}),
+        contributors: hidden('contributors') ? [] : (t.contributors ?? []).filter(
+          (c) => !c.person_id || !s.hidden_author_ids.includes(c.person_id),
+        ),
+      })),
     within_book_id: hidden('within')     ? null : (book.within_book_id ?? null),
     within_pages: hidden('within')       ? '' : (book.within_pages ?? ''),
     // الكلمات المفتاحية سبيلٌ إلى الكتاب في البحث، لا خبرٌ عنه، فتمرّ كما هي

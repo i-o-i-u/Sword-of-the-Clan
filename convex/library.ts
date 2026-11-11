@@ -99,15 +99,23 @@ function worksOf({ owner, visibleIds }: ReadBase, all: Doc<'book_works'>[]) {
     .map(toClient)
 }
 
-function perksOf({ owner, s, visibleIds }: ReadBase, rows: Doc<'perks'>[]) {
+function perksOf(base: ReadBase, rows: Doc<'perks'>[]) {
+  const { owner, s, visibleIds } = base
   const all = rows.slice().sort((a, b) => a._creationTime - b._creationTime)
   if (owner) return all.map(toClient)
   if (!s.visibility.perks) return []
   // الفائدةُ من كتابٍ ليس في المكتبة لا كتابَ لها يُخفى، فحكمُها حكمُ
   // الباب كلِّه: إن عُرضت الفوائدُ عُرضت معها، وإن حُجبت حُجبت.
+  // وعنوانُها المضموم يسقط عن الزائر إذا حُجب من كتابه ما طُبع فيه: لو بقي
+  // لدلّ على المحجوب
+  const books = new Map(base.shown.map((b) => [b._id as string, b]))
   return all
     .filter((p) => p.book_id === null || visibleIds.has(p.book_id))
-    .map(toClient)
+    .map((p) => {
+      const book = p.book_id ? books.get(p.book_id) : undefined
+      const hideWithin = !!book && bookFieldHidden(book, s, 'within')
+      return toClient(hideWithin ? { ...p, within_title: '' } : p)
+    })
 }
 
 function loansOf({ owner, s, visibleIds }: ReadBase, rows: Doc<'loans'>[]) {
@@ -225,6 +233,9 @@ export const snapshot = query({
       ctx.db.query('categories').collect(),
     ])
     return {
+      // لمن بُنيت هذه اللقطة: الواجهةُ تنتظر لقطةَ صاحب المكتبة قبل أن تحكم
+      // على كتابٍ مخفيّ بأنه «لم يُعثر عليه»، وقبل أن تملأ منها نموذجَ التعديل
+      owner: base.owner,
       books: booksOf(base),
       authors: authorsOf(base, authors),
       works: worksOf(base, works),

@@ -23,6 +23,18 @@ interface Props {
   onClose: () => void
 }
 
+/** امتدادُ الملفّ من نوعه */
+function extOf(type: string): string {
+  const map: Record<string, string> = {
+    'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png',
+    'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/avif': 'avif',
+  }
+  return map[type] ?? 'jpg'
+}
+
+/** أعلى الجهازِ لمسٌ لا فأرة؟ فلا يُقال له «دوِّر العجلة» */
+const TOUCH = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+
 export default function ImageViewer({ url, name, onClose }: Props) {
   const resolved = resolveAsset(url)
   const [zoom, setZoom] = useState(1)
@@ -30,6 +42,13 @@ export default function ImageViewer({ url, name, onClose }: Props) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [busy, setBusy] = useState(false)
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  // الأصابعُ على الشاشة: بإصبعين تُكبَّر الصورةُ وتُصغَّر، كما في كلّ عارض صور
+  const fingers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ dist: number; zoom: number } | null>(null)
+  const spread = () => {
+    const [a, b] = [...fingers.current.values()]
+    return Math.hypot(a.x - b.x, a.y - b.y)
+  }
 
   useScrollLock()
 
@@ -60,7 +79,9 @@ export default function ImageViewer({ url, name, onClose }: Props) {
       const href = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = href
-      a.download = `${name.replace(/[\\/:*?"<>|]/g, '') || 'صورة'}.jpg`
+      // الامتدادُ من نوع الملفّ نفسِه: الصورُ تُصغَّر WebP قبل رفعها، وكانت
+      // تُنزَّل باسمٍ ينتهي بـ.jpg فلا يفتحها بعضُ البرامج
+      a.download = `${name.replace(/[\\/:*?"<>|]/g, '') || 'صورة'}.${extOf(blob.type)}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -123,18 +144,40 @@ export default function ImageViewer({ url, name, onClose }: Props) {
         // عجلةُ الفأرة تكبّر وتصغّر، وهو ما يتوقّعه من نظر في صورة
         onWheel={(e) => zoomTo(zoom + (e.deltaY < 0 ? STEP / 2 : -STEP / 2))}
         onPointerDown={(e) => {
+          fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+          e.currentTarget.setPointerCapture(e.pointerId)
+          if (fingers.current.size === 2) {
+            drag.current = null
+            pinch.current = { dist: spread(), zoom }
+            return
+          }
           if (zoom <= MIN_ZOOM) return
           drag.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
-          e.currentTarget.setPointerCapture(e.pointerId)
         }}
         onPointerMove={(e) => {
+          if (fingers.current.has(e.pointerId)) {
+            fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+          }
+          const p = pinch.current
+          if (p && fingers.current.size === 2) {
+            zoomTo(p.zoom * (spread() / Math.max(1, p.dist)))
+            return
+          }
           const d = drag.current
           if (!d) return
           setPan({ x: d.panX + (e.clientX - d.x), y: d.panY + (e.clientY - d.y) })
         }}
-        onPointerUp={() => { drag.current = null }}
-        onPointerCancel={() => { drag.current = null }}
-        style={{ cursor: zoom > MIN_ZOOM ? 'grab' : 'default' }}
+        onPointerUp={(e) => {
+          fingers.current.delete(e.pointerId)
+          if (fingers.current.size < 2) pinch.current = null
+          drag.current = null
+        }}
+        onPointerCancel={(e) => {
+          fingers.current.delete(e.pointerId)
+          pinch.current = null
+          drag.current = null
+        }}
+        style={{ cursor: zoom > MIN_ZOOM ? 'grab' : 'default', touchAction: 'none' }}
       >
         <img
           src={resolved}
@@ -145,7 +188,9 @@ export default function ImageViewer({ url, name, onClose }: Props) {
       </div>
 
       <div className="viewer-hint" onClick={(e) => e.stopPropagation()}>
-        {zoom > MIN_ZOOM ? 'اسحب الصورة لتُحرِّكها' : 'دَوِّر عجلة الفأرة للتكبير'}
+        {zoom > MIN_ZOOM
+          ? 'اسحب الصورة لتُحرِّكها'
+          : (TOUCH ? 'باعِد بين إصبعين للتكبير' : 'دَوِّر عجلة الفأرة للتكبير')}
       </div>
     </div>,
     document.body,

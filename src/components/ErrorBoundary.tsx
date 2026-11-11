@@ -21,6 +21,12 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { message }
   }
 
+  // الانتقالُ إلى صفحةٍ أخرى يرفع الخطأ: العطبُ في صفحةٍ لا يحبس الموقعَ كلَّه
+  // حتى يُعاد تحميلُه
+  private onHash = () => { if (this.state.message !== null) this.setState({ message: null }) }
+  componentDidMount() { window.addEventListener('hashchange', this.onHash) }
+  componentWillUnmount() { window.removeEventListener('hashchange', this.onHash) }
+
   componentDidCatch(error: unknown, info: ErrorInfo) {
     // سجلُّ المتصفّح يبقى مفصَّلًا لمن يفتحه، والشاشةُ تكتفي بالرسالة
     console.error('انقطع الرسم باستثناء:', error, info.componentStack)

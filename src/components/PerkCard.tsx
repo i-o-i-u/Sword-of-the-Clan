@@ -93,7 +93,10 @@ export default function PerkCard(
   const place = perkLocation(perk)
   // جنسُ المصدر: كتابٌ من خارج الفهرس، أو سماعٌ، أو صفحةُ شبكة، أو منشور،
   // أو تسجيل. ولكلٍّ ألفاظُ حقوله وشارتُه. وما كان من الفهرس فكتابٌ ساكت.
-  const sourceKind = sourceKindOf(perk.source?.kind)
+  // والمصدرُ المكتوب لا يُعرض لفائدةٍ مصدرُها كتابٌ من الفهرس: قد يبقى عليها من
+  // جنسٍ سابق، فيُعرض مجلسُ سماعٍ وتاريخُه بجانب كتابٍ على الرفّ
+  const src = book ? null : perk.source
+  const sourceKind = sourceKindOf(src?.kind)
   // موضعُ الفائدة صفحةٌ في الكتاب ودقيقةٌ في التسجيل، فأيقونتُه أيقونتُهما لا
   // دبّوسُ الخريطة: ذاك «موضعٌ» في الأرض، وكان يُقرأ «ص٣٩٨» كأنّه عنوانُ مكان
   const PlaceIcon = sourceKind.isBook ? PagesIcon : ClockIcon
@@ -266,14 +269,14 @@ export default function PerkCard(
                 <span className="kn-cite-author">
                   {writer}
                   {/* والوفاةُ للكتاب وحدَه: من سُمع منه حيٌّ يُرزق */}
-                  {sourceKind.isBook && perk.source?.death ? ` (${perk.source.death})` : ''}
+                  {sourceKind.isBook && src?.death ? ` (${src.death})` : ''}
                 </span>
               )}
               {/* موضعُه وتاريخُه: مجلسُ السماع، أو الموقعُ الذي نُشر فيه، ومتى */}
-              {perk.source?.venue && <span className="kn-cite-note">{perk.source.venue}</span>}
-              {perk.source?.date && <span className="kn-cite-note">{perk.source.date}</span>}
-              {perk.source?.edition && (
-                <span className="kn-cite-edition">{perk.source.edition}</span>
+              {src?.venue && <span className="kn-cite-note">{src.venue}</span>}
+              {src?.date && <span className="kn-cite-note">{src.date}</span>}
+              {src?.edition && (
+                <span className="kn-cite-edition">{src.edition}</span>
               )}
             </span>
             <span className="kn-cite-tail">
@@ -283,10 +286,10 @@ export default function PerkCard(
                   {place}
                 </span>
               )}
-              {sourceKind.hasUrl && perk.source?.url && /^https?:\/\//i.test(perk.source.url) && (
+              {sourceKind.hasUrl && src?.url && /^https?:\/\//i.test(src.url) && (
                 <a
                   className="kn-cite-url"
-                  href={perk.source.url}
+                  href={src.url}
                   target="_blank"
                   rel="noreferrer noopener"
                 >

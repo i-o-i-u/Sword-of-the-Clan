@@ -34,31 +34,43 @@ const CITATION_VERB: Record<string, string> = {
 export function citationOf(book: Book, author: Author | null): string {
   const parts: string[] = [book.title.trim()]
 
+  // المؤلِّفُ ومن شارَكه في التأليف معطوفين: كان الشريكُ يسقط من العزو
   const name = author?.full_name?.trim() || author?.name?.trim() || book.author_name.trim()
-  if (name) parts.push(name)
+  const names = [name, ...(book.co_authors ?? []).map((c) => c.name.trim())].filter(Boolean)
+  if (names.length) parts.push(names.join(' و'))
 
-  // من عمل في الكتاب، مجموعًا بصفته: «تحقيق فلان وفلان»
-  const byRole = new Map<string, string[]>()
+  // من عمل في الكتاب، مجموعًا بصفته: «تحقيق فلان وفلان». ومتى اختلفت
+  // النطاقاتُ في الصفة الواحدة فُصل بينهم بفاصلةٍ ومع كلٍّ نطاقُه — ليسوا
+  // شركاء في عملٍ واحد، بل لكلٍّ عملُه
+  const byRole = new Map<string, { name: string; scope: string }[]>()
   for (const c of book.contributors ?? []) {
     const who = c.name.trim()
-    if (who) byRole.set(c.role, [...(byRole.get(c.role) ?? []), who])
+    if (who) {
+      byRole.set(c.role, [...(byRole.get(c.role) ?? []), { name: who, scope: (c.scope ?? '').trim() }])
+    }
   }
-  byRole.forEach((names, role) => {
-    parts.push(`${CITATION_VERB[role] ?? role} ${names.join(' و')}`)
+  byRole.forEach((rows, role) => {
+    const split = rows.some((r) => r.scope)
+    const line = split
+      ? rows.map((r) => (r.scope ? `${r.name} (${toArabicDigits(r.scope)})` : r.name)).join('، ')
+      : rows.map((r) => r.name).join(' و')
+    parts.push(`${CITATION_VERB[role] ?? role} ${line}`)
   })
 
-  // دُورُ النشرة كلُّها معطوفةً: الغلافُ يحمل شعارَ الدارَين، فيُذكران معًا
+  // الطبعةُ تُذكر وإن لم تُكتب دارُها، ودُورُ النشرة كلُّها معطوفة: الغلافُ
+  // يحمل شعارَ الدارَين، فيُذكران معًا
   const presses = pressesLine(book)
-  if (presses) {
-    const edition = book.edition.trim()
-      ? `الطبعة ${book.edition_worded ? book.edition.trim() : toArabicDigits(book.edition.trim())}، `
-      : ''
-    parts.push(`${edition}طبعة ${presses}`)
-  }
+  const edition = book.edition.trim()
+    ? `الطبعة ${book.edition_worded ? book.edition.trim() : toArabicDigits(book.edition.trim())}`
+    : ''
+  if (presses) parts.push(`${edition ? `${edition}، ` : ''}طبعة ${presses}`)
+  else if (edition) parts.push(edition)
 
+  // والسنةُ بالأرقام الهنديّة كسائر الأرقام في السطر — عددُ الطبعة وسنةُ
+  // التصوير — فلا يُخلط في سطرٍ واحد رقمان
   const year = book.year_approx
     ? book.year_text.trim()
-    : (book.year != null ? yearLabel(book.year, book.year_era) : '')
+    : (book.year != null ? toArabicDigits(yearLabel(book.year, book.year_era)) : '')
   const place = book.place.trim()
   if (year && place) parts.push(`${year} - ${place}`)
   else if (year) parts.push(year)
@@ -87,7 +99,9 @@ export function citationOf(book: Book, author: Author | null): string {
  */
 export function perkLocation(perk: Perk): string {
   const page = perk.page.trim()
-  if (perk.source && !sourceKindOf(perk.source.kind).isBook) {
+  // المصدرُ المكتوب لا يُقرأ لفائدةٍ مصدرُها كتابٌ من الفهرس: قد يبقى عليها
+  // من جنسٍ سابق، فيُسقط «ص» من موضعها
+  if (!perk.book_id && perk.source && !sourceKindOf(perk.source.kind).isBook) {
     return page ? toArabicDigits(page) : ''
   }
 

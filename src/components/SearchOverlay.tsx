@@ -22,7 +22,7 @@ import {
   ALL_SEARCH_KEYS, QUICK_OPTS, bookRank, matchBook, matchWithin,
 } from '../lib/search'
 import { presetViewState } from '../lib/viewState'
-import { withinTitlesOf } from '../lib/editions'
+import { withinLabelOf, withinTitlesOf } from '../lib/editions'
 import { perkName, searchPerks, sourceTitle } from '../lib/perks'
 import { BOOKS_COUNT, PERKS_COUNT, RESULTS_COUNT, countLabel, formatNumber } from '../lib/types'
 import ImageSlot from './ImageSlot'
@@ -37,7 +37,7 @@ const MAX_PERKS = 12
 export default function SearchOverlay(
   { onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string },
 ) {
-  const { books, perks, bookById, settings, isOwner, perkIndex, wantPerks } = useLibrary()
+  const { books, perks, bookById, settings, isOwner, perkIndex, wantPerks, perksReady } = useLibrary()
   // ما كُتب في حقل الرأس يصل هنا فتبدأ اللوحة بنتائجه، لا فارغةً
   const [query, setQuery] = useState(initialQuery)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -55,14 +55,19 @@ export default function SearchOverlay(
   //
   // وترتيبُها برتبة الإصابة (`bookRank`): ما طابق عنوانُه أوّلًا. وكانت على
   // ترتيب الإدخال، فقد يكون الكتابُ المطلوب بعينه خارج الأربعةَ عشرَ المعروضة.
+  // ومعه العنوانُ المضموم الذي أُصيب، إن لم يُصَب الكتابُ في نفسه: كانت النتيجةُ
+  // تُعرض باسم ضامِّها وحده، فلا يرى الباحثُ عن «الأربعون النووية» ما طلب
   const bookHits = useMemo(
     () => (trimmed
       ? books
-        .filter((b) => matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS)
-          || withinTitlesOf(b).some((t) => matchWithin(t, trimmed, QUICK_OPTS)))
-        .map((b) => ({ b, r: bookRank(b, trimmed) }))
+        .map((b) => ({
+          b,
+          own: matchBook(b, trimmed, QUICK_OPTS, ALL_SEARCH_KEYS),
+          within: withinTitlesOf(b).find((t) => matchWithin(t, trimmed, QUICK_OPTS)),
+        }))
+        .filter((x) => x.own || x.within)
+        .map((x) => ({ ...x, r: x.own ? bookRank(x.b, trimmed) : 3 }))
         .sort((x, y) => x.r - y.r || x.b.title.localeCompare(y.b.title, 'ar'))
-        .map((x) => x.b)
       : []),
     [books, trimmed],
   )
@@ -85,12 +90,29 @@ export default function SearchOverlay(
   )
 
   const total = bookHits.length + perkHits.length
+  /** والفوائدُ في الطريق: لا يُقال «لا شيء يطابق» قبل أن تصل */
+  const perksPending = canSeePerks && !perksReady
 
   function go(to: () => void) { to(); onClose() }
 
+  // الأسهمُ تنقل بين النتائج، وEnter يفتح المختارة — كما في كلّ لوحة بحث. ومن
+  // الحقل يُنزَل بالسهم إلى أوّلها
+  const listRef = useRef<HTMLDivElement>(null)
+  function onArrows(e: React.KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    const rows = [...(listRef.current?.querySelectorAll<HTMLElement>('.search-row, .search-all') ?? [])]
+    if (!rows.length) return
+    e.preventDefault()
+    const at = rows.indexOf(document.activeElement as HTMLElement)
+    if (at < 0) { if (e.key === 'ArrowDown') rows[0].focus(); return }
+    const next = at + (e.key === 'ArrowDown' ? 1 : -1)
+    if (next < 0) inputRef.current?.focus()
+    else rows[Math.min(next, rows.length - 1)].focus()
+  }
+
   return (
     <Overlay onClose={onClose} align="flex-start">
-      <div className="search-panel overlay-sheet">
+      <div className="search-panel overlay-sheet" onKeyDown={onArrows}>
         {/* ------------------------------------------------------ الحقل */}
         <div className="search-head">
           <div className="search-box">
@@ -119,11 +141,15 @@ export default function SearchOverlay(
           <span className="search-guide-key">Esc للإغلاق</span>
         </p>
 
-        <div className="search-results thin-scroll">
+        <div className="search-results thin-scroll" ref={listRef}>
           {!trimmed ? (
             <div className="search-blank">
               <SearchIcon size={26} />
               <p>اكتب كلمةً يُبحث بها في الكتب وفي فوائد الكنّاش جميعًا.</p>
+            </div>
+          ) : total === 0 && perksPending ? (
+            <div className="search-blank">
+              <p>يُبحث في الفوائد…</p>
             </div>
           ) : total === 0 ? (
             <div className="search-blank">
@@ -143,7 +169,7 @@ export default function SearchOverlay(
               {bookHits.length > 0 && (
                 <>
                   <Head label="الكتب" count={bookHits.length} shown={MAX_BOOKS} />
-                  {bookHits.slice(0, MAX_BOOKS).map((book) => (
+                  {bookHits.slice(0, MAX_BOOKS).map(({ b: book, own, within }) => (
                     <button
                       key={book.id}
                       type="button"
@@ -160,10 +186,22 @@ export default function SearchOverlay(
                         />
                       </span>
                       <span className="search-row-body">
-                        <span className="search-row-title">{book.title}</span>
-                        <span className="search-row-sub">
-                          {[book.author_name, book.category].filter(Boolean).join(' · ')}
-                        </span>
+                        {!own && within ? (
+                          <>
+                            <span className="search-row-title">{within.title}</span>
+                            <span className="search-row-sub">
+                              {[within.author_name, `${withinLabelOf(book)} «${book.title}»`]
+                                .filter(Boolean).join(' · ')}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="search-row-title">{book.title}</span>
+                            <span className="search-row-sub">
+                              {[book.author_name, book.category].filter(Boolean).join(' · ')}
+                            </span>
+                          </>
+                        )}
                       </span>
                     </button>
                   ))}
@@ -174,6 +212,10 @@ export default function SearchOverlay(
                     </button>
                   )}
                 </>
+              )}
+
+              {perksPending && (
+                <div className="search-section"><span>الفوائد في الطريق…</span></div>
               )}
 
               {perkHits.length > 0 && (

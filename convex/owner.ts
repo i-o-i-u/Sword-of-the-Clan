@@ -4,7 +4,7 @@
 // صريحٌ داخل المُحوِّل، وهو أوضح وأقوى: لا سباق بين طلبين لأن مُحوِّلات Convex
 // تُنفَّذ في معاملة.
 
-import { v } from 'convex/values'
+import { ConvexError, v } from 'convex/values'
 import { query, mutation } from './_generated/server'
 import { getAuthUserId } from '@convex-dev/auth/server'
 
@@ -31,12 +31,12 @@ export const claimOwnership = mutation({
   args: { display_name: v.string() },
   handler: async (ctx, { display_name }) => {
     const userId = await getAuthUserId(ctx)
-    if (userId === null) throw new Error('لا جلسة مصادقة.')
+    if (userId === null) throw new ConvexError('لا جلسة مصادقة.')
 
     const existing = await ctx.db.query('library_owner').first()
     if (existing !== null) {
       if (existing.user_id === userId) return          // حُجز له من قبل
-      throw new Error('للمكتبة صاحبٌ بالفعل.')
+      throw new ConvexError('للمكتبة صاحبٌ بالفعل.')
     }
 
     await ctx.db.insert('library_owner', {

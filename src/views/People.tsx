@@ -11,7 +11,7 @@
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
 import { deathLabel } from '../lib/hijri'
-import { peopleByRole } from '../lib/people'
+import { contributorsIn, peopleByRole } from '../lib/people'
 import { BOOKS_COUNT, countLabel, formatNumber, roleGroupLabel } from '../lib/types'
 import {
   EmptyState, HourglassIcon, OpenBookIcon, VerifyIcon, cardStyle,
@@ -27,7 +27,7 @@ export default function People() {
     const byId = new Map(authors.map((a) => [a.id, a]))
     // عددُ ما عمل فيه الرجلُ بهذه الصفة، ليُعرض تحت اسمه
     const worksOf = (role: string, id: string) => books.filter(
-      (b) => (b.contributors ?? []).some((c) => c.person_id === id && c.role === role),
+      (b) => contributorsIn(b).some((c) => c.person_id === id && c.role === role),
     ).length
 
     return peopleByRole(books)

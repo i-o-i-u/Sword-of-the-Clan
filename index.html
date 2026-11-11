@@ -9,6 +9,25 @@
       content="فهرس مكتبة سيف العشيرة، بيانات الكتب، ومؤلفيها، ومحققيها، وتوابع الفهرسة، مُسهَّلةً مجموعةً في مكان واحد."
     />
     <link rel="icon" type="image/svg+xml" href="./assets/logo.svg" />
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <!-- لونُ شريط المتصفّح على الجوّال: أرضُ المظهر الدافئ، والداكنُ لمن اختاره نظامُه -->
+    <meta name="theme-color" content="#f6efe4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2b241f" media="(prefers-color-scheme: dark)" />
+
+    <!-- معاينةُ الرابط حين يُشارَك في رسالةٍ أو منشور: كان يُرسَل بلا عنوانٍ ولا
+         صورة. والصورةُ برابطٍ تامّ لأن المعاينات لا تقبل غيره. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ar_SA" />
+    <meta property="og:site_name" content="مكتبة سَيْف العشيرة" />
+    <meta property="og:title" content="مكتبة سَيْف العشيرة" />
+    <meta
+      property="og:description"
+      content="فهرس مكتبة سيف العشيرة: كتبها ومؤلِّفوها ومحقِّقوها وطبعاتها وفوائدها، مجموعةً في مكانٍ واحد."
+    />
+    <meta property="og:url" content="https://i-o-i-u.web.app/" />
+    <meta property="og:image" content="https://i-o-i-u.web.app/assets/library-cover.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!-- أول ما يُطلب بعد الصفحة: وصلة Convex وخطّ «كتاب». تمهيد الوصلة يوفّر
          مصافحة TLS كاملة قبل أول استعلام، وسبقُ الخطّ يمنع ارتجاف النصّ. -->
@@ -36,6 +55,11 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p style="max-width: 560px; margin: 80px auto; padding: 0 20px; text-align: center; line-height: 2; font-family: serif;">
+        فهرسُ مكتبة سيف العشيرة يحتاج إلى تشغيل JavaScript في المتصفّح.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

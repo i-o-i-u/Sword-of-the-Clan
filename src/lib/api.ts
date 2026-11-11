@@ -160,6 +160,8 @@ function toSettings(row: Row): Settings {
  * الهبوط.
  */
 export interface LibrarySnapshot {
+  /** أبُنيت لصاحب المكتبة؟ وقبلها قد تكون لقطةَ زائرٍ وصلت قبل أن تستقرّ الجلسة */
+  owner: boolean
   books: Book[]
   authors: Author[]
   works: BookWork[]
@@ -183,6 +185,7 @@ type SnapshotRow = typeof api.library.snapshot._returnType
 function toSnapshot(r: SnapshotRow): LibrarySnapshot {
   const rows = (x: unknown) => x as Row[]
   return {
+    owner: !!(r as { owner?: boolean }).owner,
     books: rows(r.books).map(toBook),
     authors: r.authors as unknown as Author[],
     works: r.works as unknown as BookWork[],
@@ -287,6 +290,18 @@ export async function updateAuthor(id: string, patch: Partial<Author>): Promise<
   await convex.mutation(api.catalog.updateAuthor, {
     id: id as Id<'authors'>,
     patch: rest as never,
+  })
+}
+
+/** حذفُ اسمٍ يتيمٍ من سجلّ الأشخاص: لا يُحذف من له في المكتبة ذكر */
+export async function removeAuthor(id: string): Promise<void> {
+  await convex.mutation(api.catalog.removeAuthor, { id: id as Id<'authors'> })
+}
+
+/** دمجُ سجلَّين لرجلٍ واحد: ما نُسب إلى `from` يصير إلى `into` */
+export async function mergeAuthors(from: string, into: string): Promise<void> {
+  await convex.mutation(api.catalog.mergeAuthors, {
+    from: from as Id<'authors'>, into: into as Id<'authors'>,
   })
 }
 
@@ -425,6 +440,17 @@ export async function returnLoan(id: string): Promise<void> {
   await convex.mutation(api.catalog.returnLoan, { id: id as Id<'loans'> })
 }
 
+/** تصحيحُ إعارة: المستعيرُ والموعدُ، وردُّها إلى «قيد الإعارة» */
+export async function updateLoan(
+  id: string, patch: { borrower?: string; due_date?: string | null; returned?: boolean },
+): Promise<void> {
+  await convex.mutation(api.catalog.updateLoan, { id: id as Id<'loans'>, patch })
+}
+
+export async function removeLoan(id: string): Promise<void> {
+  await convex.mutation(api.catalog.removeLoan, { id: id as Id<'loans'> })
+}
+
 export async function updateSettings(patch: Record<string, unknown>): Promise<void> {
   await convex.mutation(api.catalog.updateSettings, { patch: patch as never })
 }
@@ -511,6 +537,28 @@ export async function addCategory(
 
 export async function removeCategory(name: string): Promise<void> {
   await convex.mutation(api.catalog.removeCategory, { name })
+}
+
+/** تسميةُ تصنيفٍ من جديد، ويُزامَن اسمُه على فروعه وكتبه */
+export async function renameCategory(name: string, to: string): Promise<void> {
+  await convex.mutation(api.catalog.renameCategory, { name, to })
+}
+
+/**
+ * حالُ الوصلة بالخادم: أهي قائمة، وكم حفظًا ينتظر. وبه يُقال للقارئ إن انقطعت
+ * — وإلّا انتظر الحفظُ بلا نهايةٍ ولا خبر.
+ */
+export function watchConnection(
+  onChange: (state: { online: boolean; pending: boolean }) => void,
+): () => void {
+  const read = () => {
+    const s = convex.connectionState()
+    // الوصلةُ لم تُفتح بعدُ أوّلَ ما يُحمَّل الموقع، وذاك ليس انقطاعًا
+    const online = s.isWebSocketConnected || !s.hasEverConnected
+    onChange({ online, pending: s.hasInflightRequests })
+  }
+  read()
+  return convex.subscribeToConnectionState(read)
 }
 
 export async function addLandingImage(position: number): Promise<void> {

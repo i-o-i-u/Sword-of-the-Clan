@@ -6,6 +6,7 @@
 
 import { Password } from '@convex-dev/auth/providers/Password'
 import { convexAuth } from '@convex-dev/auth/server'
+import { ConvexError } from 'convex/values'
 
 const OwnerPassword = Password({
   profile(params) {
@@ -13,10 +14,10 @@ const OwnerPassword = Password({
     const owner = (process.env.OWNER_EMAIL ?? '').trim().toLowerCase()
 
     if (owner === '') {
-      throw new Error('OWNER_EMAIL غير مضبوط على نشر Convex.')
+      throw new ConvexError('OWNER_EMAIL غير مضبوط على نشر Convex.')
     }
     if (email !== owner) {
-      throw new Error('هذا الموقع مخصّص لمستخدم واحد.')
+      throw new ConvexError('هذا الموقع مخصّص لمستخدم واحد.')
     }
 
     return { email }

@@ -132,7 +132,7 @@ export default function About() {
           {([
             [formatNumber(bookCount(books)), `${BOOKS_COUNT.noun} في الفهرس`],
             [formatNumber(authorCount), `${AUTHORS_COUNT.noun} الذين لهم فيه كتاب`],
-          ] as const).map(([value, caption]) => (
+          ] as const).filter(([value]) => value && value !== '0').map(([value, caption]) => (
             <div key={caption} className="about-figure">
               <span className="about-figure-value">{value}</span>
               <span className="about-figure-label">{caption}</span>

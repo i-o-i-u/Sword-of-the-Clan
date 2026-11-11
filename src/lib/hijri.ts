@@ -12,8 +12,11 @@ export const HIJRI_MONTHS = [
 
 export const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
+// بتوقيت مكّة لا بالتوقيت العالميّ: كان «اليومُ» وتاريخُ تقييد الفائدة يتأخّران
+// يومًا بين منتصف الليل والثالثة فجرًا. والتواريخُ التي يبنيها الحسابُ هنا
+// منتصفُ ليلٍ عالميّ، وهي الثالثةُ فجرًا بمكّة من اليوم نفسه، فلا تتزحزح.
 const HIJRI_FMT = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
-  day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'UTC',
+  day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'Asia/Riyadh',
 })
 
 /** يوحّد كل التقاويم إلى رقمٍ هجريّ للمقارنة والترتيب فقط */
@@ -52,6 +55,43 @@ export function lifeLabel(
  * الوفاة وحدها كما تُعرض: «ت ٨٠٨ هـ»، أو «مُعاصِر» لمن لا وفاة له، أو نصُّ
  * التقريب كما كُتب. وعليها يقوم ترتيب المكتبة، فلا تُخلط بالمولد هنا.
  */
+/** القرونُ بأسمائها، ليُرتَّب التقريبُ المكتوب بالقرن. الأطولُ أوّلًا في المطابقة. */
+const CENTURY_WORDS = [
+  'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع',
+  'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر',
+  'الرابع عشر', 'الخامس عشر',
+]
+
+/**
+ * موضعُ الوفاة من الزمن للترتيب: السنةُ المحقَّقة، ثم رقمُ التقريب إن كان فيه
+ * رقم («نحو ١٠٦٠») أو قرنُه («القرن الرابع») — ثم المعاصِرُ، ثم من لا تُعرف
+ * وفاتُه. وكان التقريبُ يُرمى آخرًا مع الأحياء.
+ */
+export function deathSortKey(a: Author | null | undefined): number {
+  if (!a) return 1e9
+  if (a.alive) return 1e8
+  const exact = toHijriYear(a.death, a.era)
+  if (exact != null) return exact
+  if (a.death_approx) {
+    const text = String(a.death_text ?? '')
+    const digits = text.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)).match(/\d+/)
+    if (digits) return toHijriYear(Number(digits[0]), /ميلاد|\sم\b|م$/.test(text) ? 'م' : a.era) ?? 1e9
+    let found = -1
+    let len = 0
+    CENTURY_WORDS.forEach((w, i) => {
+      if (text.includes(w) && w.length > len) { found = i; len = w.length }
+    })
+    if (found >= 0) return found * 100 + 50
+  }
+  return 1e9
+}
+
+/** قرنُ الوفاة هجريًّا للترشيح، بما يُرتَّب به. صفرٌ لمن لا يُعرف قرنُه. */
+export function deathCentury(a: Author | null | undefined): number {
+  const y = deathSortKey(a)
+  return y >= 1e8 || y <= 0 ? 0 : Math.ceil(y / 100)
+}
+
 export function deathLabel(a: Author | null | undefined): string {
   if (!a) return ''
   if (a.alive) return 'مُعاصِر'
@@ -63,7 +103,8 @@ export function deathLabel(a: Author | null | undefined): string {
 /** «١٤٤٧ هـ» — سنة النشر مع تقويمها */
 export function yearLabel(year: number | null | undefined, era: Era | string | undefined): string {
   if (year === null || year === undefined) return '—'
-  return `${year} ${era || 'م'}`
+  // والأصلُ في هذه المكتبة الهجريّ، كسائر المواضع
+  return `${year} ${era || 'هـ'}`
 }
 
 // --------------------------------------------------- تقويم الركن وساعته

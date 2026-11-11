@@ -1037,10 +1037,38 @@ export function Overlay(
   const pressedOnShade = useRef(false)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  const boxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const id = ++overlaySeq
     overlayStack.push(id)
+
+    // التركيزُ ينتقل إلى النافذة ويُحبس فيها، ويعود عند إغلاقها إلى ما كان
+    // عليه: كان يبقى على الصفحة تحتها، فيسير Tab في ما خلف الظلّ ويضيع
+    // قارئُ الشاشة ومن يسوق بلوحة المفاتيح
+    const before = document.activeElement as HTMLElement | null
+    const focusables = () => [...(boxRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+    ) ?? [])].filter((el) => el.offsetParent !== null || el === document.activeElement)
+    // ما وضع التركيزَ بنفسه (`autoFocus`) يُترك عليه
+    requestAnimationFrame(() => {
+      if (boxRef.current && !boxRef.current.contains(document.activeElement)) {
+        const first = focusables().find((el) => el.tagName !== 'BUTTON') ?? focusables()[0]
+        first?.focus({ preventScroll: true })
+      }
+    })
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || overlayStack[overlayStack.length - 1] !== id) return
+      const list = focusables()
+      if (!list.length) return
+      const first = list[0]
+      const last = list[list.length - 1]
+      const active = document.activeElement
+      if (!boxRef.current?.contains(active)) { e.preventDefault(); first.focus(); return }
+      if (e.shiftKey && active === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onTab)
 
     // قفلُ التمرير مرّةً واحدة لأولى النوافذ، ويُفكّ بإغلاق آخرها
     const root = document.documentElement
@@ -1062,6 +1090,8 @@ export function Overlay(
 
     return () => {
       document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onTab)
+      if (before && document.contains(before)) before.focus({ preventScroll: true })
       const at = overlayStack.indexOf(id)
       if (at >= 0) overlayStack.splice(at, 1)
       if (overlayStack.length === 0) {
@@ -1082,7 +1112,7 @@ export function Overlay(
         if (onShade) closeRef.current()
       }}
     >
-      <div role="dialog" aria-modal="true" aria-label={label} style={{ display: 'contents' }}>
+      <div ref={boxRef} role="dialog" aria-modal="true" aria-label={label} style={{ display: 'contents' }}>
         {children}
       </div>
     </div>,
@@ -1169,17 +1199,25 @@ function useDebouncedField(value: string, onCommit: (v: string) => void, delay: 
   commit.current = onCommit
 
   useEffect(() => { if (!focused.current) setDraft(value) }, [value])
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  // ومن أغلق الموضعَ قبل أن تنقضي المهلة لا يضيع ما كتبه: يُحفظ عند الفكّ.
+  // وكان المؤقّتُ يُمحى بلا حفظ، فيذهب آخرُ ما كُتب بإغلاق النافذة سريعًا
+  const pending = useRef<string | null>(null)
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+    if (pending.current !== null) commit.current(pending.current)
+  }, [])
 
   const onChange = (next: string) => {
     setDraft(next)
+    pending.current = next
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => commit.current(next), delay)
+    timer.current = setTimeout(() => { pending.current = null; commit.current(next) }, delay)
   }
 
   const onBlur = () => {
     focused.current = false
     if (timer.current) clearTimeout(timer.current)
+    pending.current = null
     if (draft !== value) commit.current(draft)
   }
 

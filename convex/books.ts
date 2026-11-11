@@ -195,6 +195,27 @@ export const update = mutation({
 
     if (!before) return
     const after = (await ctx.db.get(id))!
+
+    // والعنوانُ المضموم إذا تبدّل اسمُه في موضعه تُنقل إليه فوائدُه: الفائدةُ
+    // تحمل اسمَه نصًّا (`within_title`)، فلو بقي القديمُ لنُسبت صامتةً إلى
+    // الكتاب نفسه. ويُعرف التبدُّلُ بالموضع إذا بقي عددُ العناوين على حاله.
+    const was = before.within_titles ?? []
+    const now = after.within_titles ?? []
+    if (was.length === now.length) {
+      const renamed = new Map<string, string>()
+      was.forEach((t, i) => {
+        const from = t.title.trim()
+        const to = now[i].title.trim()
+        if (from && to && from !== to) renamed.set(from, to)
+      })
+      if (renamed.size) {
+        for (const p of await ctx.db.query('perks').withIndex('by_book', (q) => q.eq('book_id', id)).collect()) {
+          const to = renamed.get((p.within_title ?? '').trim())
+          if (to) await ctx.db.patch(p._id, { within_title: to })
+        }
+      }
+    }
+
     const shared: Partial<Doc<'books'>> = {}
     if (after.title !== before.title) shared.title = after.title
     if (after.author_name !== before.author_name || after.author_id !== before.author_id) {

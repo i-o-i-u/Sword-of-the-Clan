@@ -8,7 +8,7 @@
 
 import { useMemo } from 'react'
 import { useLibrary } from '../lib/library'
-import { navigate, pressable } from '../lib/router'
+import { linkTo, navigate } from '../lib/router'
 import { BOOKS_COUNT, countLabel, parseNumber, toLatinDigits, type Book } from '../lib/types'
 import {
   BackButton, EmptyState, OpenBookIcon, SeriesIcon, cardStyle,
@@ -89,13 +89,15 @@ export default function Series() {
 
               <ol className="series-list">
                 {group.books.map((book) => (
-                  <li key={book.id} {...pressable(() => navigate({ name: 'book', id: book.id }))}>
+                  <li key={book.id}>
+                    <a className="series-link" {...linkTo({ name: 'book', id: book.id })}>
                     {/* رقمُ الكتاب في السلسلة كما كُتب، أو شرطةٌ إن لم يُكتب */}
                     <span className="series-no">
                       {book.series_no.trim() ? toLatinDigits(book.series_no).trim() : '—'}
                     </span>
                     <span className="series-title">{book.title}</span>
                     <span className="series-author">{book.author_name}</span>
+                    </a>
                   </li>
                 ))}
               </ol>

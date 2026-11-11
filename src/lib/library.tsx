@@ -42,6 +42,14 @@ interface LibraryValue {
   error: string | null
   setError: (msg: string | null) => void
 
+  /**
+   * أهذه بياناتُ صاحب المكتبة؟ أوّلُ ما يصل لقطةُ زائرٍ قبل أن تستقرّ الجلسة،
+   * فلا يُحكم منها على كتابٍ مخفيّ بأنه «لم يُعثر عليه»، ولا يُملأ منها نموذج.
+   */
+  ownerData: boolean
+  /** انقطعت الوصلةُ بالخادم؟ والحفظُ ينتظر عودتها */
+  offline: boolean
+
   // الدور
   isAuthenticated: boolean
   isOwner: boolean
@@ -103,7 +111,7 @@ interface LibraryValue {
   /** يُهمل المعاينةَ ويردّ الإعداداتِ إلى ما في القاعدة */
   discardPreview: () => void
   /** يحفظ الإعدادات كما هي الآن. زرّ الحفظ في النافذة هو الذي يستدعيه. */
-  saveSettings: (next: Settings) => Promise<void>
+  saveSettings: (next: Settings) => Promise<boolean>
   /** ينفّذ حفظًا ويعرض خطأه. `true` إن وقع الحفظ. */
   run: (job: () => Promise<void>) => Promise<boolean>
   /** تعديلُ دار: يسري على الشاشة فورًا، ويُزامَن اسمُها وبلدُها على كتبها */
@@ -166,6 +174,20 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [ownerData, setOwnerData] = useState(false)
+  const [offline, setOffline] = useState(false)
+
+  // حالُ الوصلة: يُقال للقارئ إن انقطعت، فلا ينتظر حفظًا لا يجيء بلا خبر
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const stop = api.watchConnection(({ online }) => {
+      // انقطاعةُ ثانيةٍ أو ثانيتين لا تستحقّ تنبيهًا
+      if (timer) { clearTimeout(timer); timer = null }
+      if (online) setOffline(false)
+      else timer = setTimeout(() => setOffline(true), 2500)
+    })
+    return () => { stop(); if (timer) clearTimeout(timer) }
+  }, [])
 
   const [books, setBooks] = useState<Book[]>([])
   const [authors, setAuthors] = useState<Author[]>([])
@@ -244,6 +266,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const loadSeq = useRef(0)
   /** أَوَصَلت البياناتُ مرّةً؟ ما بعدها يُحمَّل في صمتٍ فلا تُمحى الشاشة */
   const loadedOnce = useRef(false)
+  /** أَالتنبيهُ المعروض إخفاقُ تحميل؟ هو وحده ما يرفعه وصولُ البيانات */
+  const loadFailed = useRef(false)
 
   /** يكتب ما وصل من المكتبة في الحال. يناديه الرصدُ ويناديه `reload` */
   const applySnapshot = useCallback((snap: api.LibrarySnapshot) => {
@@ -253,11 +277,18 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setPerkFigures(snap.perkFigures); setNotebooks(snap.notebooks)
     setPublishers(snap.publishers); setCategories(snap.categories)
     setLandingImages(snap.landingImages); setLandingQuotes(snap.landingQuotes)
+    setOwnerData(snap.owner)
     const st = snap.settings
     // الزائر قد يكون اختار لنفسه مظهرًا وخطًّا وحجمًا، فلا يُلغيها التحميل
     serverSettings.current = st
     setSettings({ ...withViewerPrefs(st, isOwnerRef.current), ...(preview.current ?? {}) })
-    setError(null)
+    // يُرفع تنبيهُ إخفاق التحميل وحده: كان كلُّ وصولٍ يمحو كلَّ تنبيه، و`run`
+    // يُعيد التحميل بعد إخفاق الحفظ — فيُمحى خطأُ الحفظ قبل أن يُرسم، ولم يكن
+    // يُرى خطأُ حفظٍ في الموقع كلِّه.
+    if (loadFailed.current) {
+      loadFailed.current = false
+      setError(null)
+    }
     loadedOnce.current = true
     setLoading(false)
   }, [])
@@ -276,6 +307,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       applySnapshot(snap)
     } catch (e) {
       if (seq !== loadSeq.current) return
+      loadFailed.current = true
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
       loadedOnce.current = true
       setLoading(false)
@@ -293,6 +325,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   useEffect(() => api.watchSnapshot(
     applySnapshot,
     (e) => {
+      loadFailed.current = true
       setError('تعذّر تحميل بيانات المكتبة: ' + describe(e))
       loadedOnce.current = true
       setLoading(false)
@@ -335,6 +368,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setError(null)
       return true
     } catch (e) {
+      loadFailed.current = false
       setError('تعذّر الحفظ: ' + describe(e))
       await reload()
       return false
@@ -424,9 +458,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const saveSettings = useCallback(async (next: Settings) => {
     // ما حُفظ لم يعد معاينةً: يصل من الخادم بعد الحفظ كما حُفظ
-    if (await run(() => api.updateSettings(next as unknown as Record<string, unknown>))) {
-      preview.current = null
-    }
+    const ok = await run(() => api.updateSettings(next as unknown as Record<string, unknown>))
+    if (ok) preview.current = null
+    return ok
   }, [run])
 
   const cycleTheme = useCallback(() => {
@@ -476,7 +510,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   // كل مرّة، ومعها `authorById` و`bookById` دالّتان جديدتان — فيبطل كلُّ
   // `useMemo` في الصفحات يتعلّق بهما ويُعاد حسابُه بلا سبب.
   const value = useMemo<LibraryValue>(() => ({
-    loading, error, setError,
+    loading, error, setError, ownerData, offline,
     isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     canEdit: isOwner && !browseOnly,
     toggleBrowseOnly,
@@ -489,7 +523,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     reload, patchBook, patchAuthor, patchPublisher, patchSettings, cycleTheme,
     setViewerPref, previewSettings, discardPreview, saveSettings, run,
   }), [
-    loading, error, isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
+    loading, error, ownerData, offline, isAuthenticated, isOwner, ownerName, hasOwnerAccount, browseOnly,
     toggleBrowseOnly, signOut, refreshRole, roleReady,
     books, authors, works, perks, loans, publishers, categories, mainCategories,
     perksReady, wantPerks, perkIndex, perkKindList, perkCategoryList,
@@ -513,6 +547,11 @@ export function useNeedPerks(): boolean {
 }
 
 function describe(e: unknown): string {
+  // ما يرميه الخادمُ ليُقرأ (`ConvexError`) نصُّه في `data`؛ وما سواه يُحجب نصُّه
+  // في نشر الإنتاج فلا يبقى منه إلا «Server Error»
+  if (e && typeof e === 'object' && 'data' in e && typeof (e as { data: unknown }).data === 'string') {
+    return (e as { data: string }).data
+  }
   if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message)
   return String(e)
 }
