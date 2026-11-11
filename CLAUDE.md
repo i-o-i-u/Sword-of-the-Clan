@@ -917,6 +917,16 @@ Convex المستندات القائمة ليتحقّق من مطابقتها ل
 المخطّط إلى الإنتاج وحده: الواجهة المنشورة تنادي الدوالّ القديمة، فينزلان
 معًا عبر `convex deploy --cmd`.
 
+**حسابُ خدمة فايربيس يحتاج دورَ «Service Usage Consumer»**: السرُّ
+`FIREBASE_SERVICE_ACCOUNT` هو `firebase-adminsdk-fbsvc@i-o-i-u.iam.gserviceaccount.com`،
+وكان ينشر بدورَي «Firebase Admin SDK Administrator Service Agent» و«Service Account
+Token Creator» وحدهما حتى أكتوبر ٢٠٢٦، ثم صارت أداةُ النشر تسأل عن تفعيل خدمة
+الاستضافة (`serviceusage.services.get`) فأخفقت بـ403 `PERMISSION_DENIED`. فمُنح
+الدورَ الثالث في ١١ نوفمبر ٢٠٢٦ من IAM لمشروع `i-o-i-u`. **وإعادةُ تشغيل وظيفة
+البناء المخفقة (`gh run rerun --failed`) ترفع حزمةَ Pages مرّةً أخرى في التشغيل
+نفسه**، فيُخفق نشرُ Pages بـ«Multiple artifacts named github-pages» — فالإعادةُ
+تشغيلٌ جديد: `gh workflow run deploy.yml --ref main`.
+
 **متغيّرات المصادقة تُضبط على كل نشرٍ على حدة**، ولا تنتقل معه:
 `OWNER_EMAIL` و`JWT_PRIVATE_KEY` و`JWKS` و`SITE_URL`. غياب `JWT_PRIVATE_KEY`
 عطّل الدخول على النشرين معًا، ورسالةُ الواجهة عنه «البريد أو كلمة السر غير
